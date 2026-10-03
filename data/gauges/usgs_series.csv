@@ -1,0 +1,45 @@
+site,name,site_type,what,computation_period_identifier,begin,end,drainage_area_mi2,lon,lat,known
+01411456,Little Ease Run near Clayton NJ,Stream,discharge,Daily,1987-10-28,2016-09-30,9.77,-75.0675,39.6588888888889,
+01411456,Little Ease Run near Clayton NJ,Stream,discharge,Points,1988-02-27,2016-10-01,9.77,-75.0675,39.6588888888889,
+01411456,Little Ease Run near Clayton NJ,Stream,gage height,Points,2007-10-01,2016-10-01,9.77,-75.0675,39.6588888888889,
+01411485,Maurice River at Brotmanville NJ,Stream,discharge,Daily,1992-06-06,1994-10-24,88.1,-75.0733333333333,39.5219444444444,
+01411485,Maurice River at Brotmanville NJ,Stream,discharge,Points,1992-06-06,1994-10-25,88.1,-75.0733333333333,39.5219444444444,
+01411495,Blackwater Branch at Norma NJ,Stream,discharge,Daily,1992-08-12,1994-10-17,12.5,-75.0725,39.5055555555556,
+01411495,Blackwater Branch at Norma NJ,Stream,discharge,Points,1992-08-13,1994-10-18,12.5,-75.0725,39.5055555555556,
+01411500,Maurice River at Norma NJ,Stream,discharge,Points,1981-10-01,2026-10-02,112.0,-75.0769444444444,39.4955555555556,Maurice R. at Norma
+01411500,Maurice River at Norma NJ,Stream,discharge,Daily,1932-10-01,2026-10-01,112.0,-75.0769444444444,39.4955555555556,Maurice R. at Norma
+01411500,Maurice River at Norma NJ,Stream,gage height,Points,2007-10-01,2026-10-02,112.0,-75.0769444444444,39.4955555555556,Maurice R. at Norma
+01411800,Maurice R near Millville NJ,Stream,discharge,Points,1992-09-08,1994-10-05,191.0,-75.0725,39.4477777777778,
+01411800,Maurice R near Millville NJ,Stream,discharge,Daily,1992-08-20,1994-10-04,191.0,-75.0725,39.4477777777778,
+01411878,Maurice R at Union Lake dam at Millville NJ,"Lake, Reservoir, Impoundment",discharge,Points,1993-05-12,1994-10-01,216.0,-75.055,39.4011111111111,
+01412000,Menantico Creek near Millville NJ,Stream,discharge,Points,2019-09-24,2024-11-06,23.2,-74.9658333333333,39.4191666666667,
+01412000,Menantico Creek near Millville NJ,Stream,discharge,Daily,1931-06-01,2024-11-05,23.2,-74.9658333333333,39.4191666666667,
+01412000,Menantico Creek near Millville NJ,Stream,gage height,Points,2019-09-24,2024-11-06,23.2,-74.9658333333333,39.4191666666667,
+01412080,Manumuskin River at Cumberland NJ,Stream,discharge,Daily,2019-10-02,2026-10-01,27.4,-74.9447222222222,39.3730555555556,
+01412080,Manumuskin River at Cumberland NJ,Stream,discharge,Points,2019-10-01,2026-10-02,27.4,-74.9447222222222,39.3730555555556,
+01412080,Manumuskin River at Cumberland NJ,Stream,gage height,Points,2019-10-01,2026-10-02,27.4,-74.9447222222222,39.3730555555556,
+01412150,Maurice River at Bivalve NJ,Estuary,tidal elevation,Daily,2002-12-14,2026-10-01,379.0,-75.0327777777778,39.2325,Maurice R. at Bivalve (tidal)
+01412150,Maurice River at Bivalve NJ,Estuary,tidal elevation,Points,2000-03-08,2026-10-02,379.0,-75.0327777777778,39.2325,Maurice R. at Bivalve (tidal)
+01412800,Cohansey River at Seeley NJ,Stream,discharge,Points,1981-10-01,2026-10-02,28.0,-75.2555555555556,39.4725,Cohansey R. at Seeley
+01412800,Cohansey River at Seeley NJ,Stream,discharge,Daily,1977-10-01,2026-10-01,28.0,-75.2555555555556,39.4725,Cohansey R. at Seeley
+01412800,Cohansey River at Seeley NJ,Stream,gage height,Points,2007-10-01,2026-10-02,28.0,-75.2555555555556,39.4725,Cohansey R. at Seeley
+01413038,Cohansey River at Greenwich NJ,Estuary,tidal elevation,Daily,2000-04-28,2026-10-01,,-75.3502777777778,39.3836111111111,Cohansey R. at Greenwich (tidal)
+01413038,Cohansey River at Greenwich NJ,Estuary,tidal elevation,Points,2000-04-28,2026-10-02,,-75.3502777777778,39.3836111111111,Cohansey R. at Greenwich (tidal)
+01475000,Mantua Creek at Pitman NJ,Stream,discharge,Points,2003-05-03,2006-10-01,6.05,-75.1133333333333,39.7369444444444,
+01475001,Mantua Creek at East Holly Avenue at Pitman NJ,Stream,discharge,Daily,1940-04-05,2026-10-01,6.24,-75.1144444444444,39.7388888888889,Mantua Ck
+01475001,Mantua Creek at East Holly Avenue at Pitman NJ,Stream,discharge,Points,2009-11-01,2026-10-02,6.24,-75.1144444444444,39.7388888888889,Mantua Ck
+01475001,Mantua Creek at East Holly Avenue at Pitman NJ,Stream,gage height,Points,2009-11-01,2026-10-02,6.24,-75.1144444444444,39.7388888888889,Mantua Ck
+01476600,Still Rn near Mickleton NJ,Stream,discharge,Daily,1957-08-01,1966-09-29,3.98,-75.2572222222222,39.7886111111111,
+01477070,Raccoon Creek at Wrights Mill NJ,Stream,discharge,Daily,2020-01-30,2026-10-01,4.23,-75.1844444444445,39.6861111111111,
+01477070,Raccoon Creek at Wrights Mill NJ,Stream,discharge,Points,2020-01-29,2026-10-02,4.23,-75.1844444444445,39.6861111111111,
+01477070,Raccoon Creek at Wrights Mill NJ,Stream,gage height,Points,2020-01-29,2026-10-02,4.23,-75.1844444444445,39.6861111111111,
+01477120,Raccoon Creek near Swedesboro NJ,Stream,discharge,Daily,1966-04-01,2026-10-01,26.9,-75.2591666666667,39.7405555555556,Raccoon Ck
+01477120,Raccoon Creek near Swedesboro NJ,Stream,discharge,Points,1981-10-01,2026-10-02,26.9,-75.2591666666667,39.7405555555556,Raccoon Ck
+01477120,Raccoon Creek near Swedesboro NJ,Stream,gage height,Points,2007-10-01,2026-10-02,26.9,-75.2591666666667,39.7405555555556,Raccoon Ck
+01477500,Oldmans Creek near Woodstown NJ,Stream,discharge,Daily,1931-06-20,1940-09-29,18.5,-75.3177777777778,39.6908333333333,
+01482500,Salem River at Woodstown NJ,Stream,discharge,Daily,1940-04-01,2026-10-01,14.6,-75.3302777777778,39.6438888888889,Salem R. at Woodstown
+01482500,Salem River at Woodstown NJ,Stream,discharge,Points,1981-10-01,2026-10-02,14.6,-75.3302777777778,39.6438888888889,Salem R. at Woodstown
+01482500,Salem River at Woodstown NJ,Stream,gage height,Points,2007-10-01,2026-10-02,14.6,-75.3302777777778,39.6438888888889,Salem R. at Woodstown
+01483000,Alloway Creek at Alloway NJ,Stream,discharge,Daily,1952-10-01,1972-10-25,20.3,-75.3605555555555,39.5655555555556,
+01483050,Alloway Creek at Hancocks Bridge NJ,Estuary,tidal elevation,Points,2018-10-13,2026-10-02,55.5,-75.460556,39.508611,
+01483050,Alloway Creek at Hancocks Bridge NJ,Estuary,tidal elevation,Daily,2018-10-12,2026-10-02,55.5,-75.460556,39.508611,

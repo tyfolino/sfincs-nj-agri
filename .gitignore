@@ -1,0 +1,13 @@
+# Data: ignored wholesale; the small SOURCE files that define the domain are un-ignored.
+# The insurance tables are the ag-econ group's data — never tracked.
+data/*
+!data/*/
+data/*/*
+!data/region/ring.geojson
+!data/region/model_outline.geojson
+!data/gauges/*.csv
+
+logs/
+__pycache__/
+*.pyc
+*.part
