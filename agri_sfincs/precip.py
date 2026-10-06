@@ -1,0 +1,214 @@
+"""Precipitation forcing for any run window, from the hourly year files.
+
+``scripts/fetch_precip_hourly.py`` keeps one file per product and year,
+``data/precip/<product>/<product>_<year>.nc``: ``precip(time, y, x)`` mm in the hour
+ENDING at ``time`` (UTC), plus ``status`` / ``n_nan`` per hour. Those files are not in
+the shape hydromt wants (MRMS has ``y`` / ``x`` dims with 1-D ``lat`` / ``lon`` beside
+them; Stage IV is HRAP polar stereographic with 2-D lat / lon), and they have NaN hours.
+``build_forcing`` cuts a window out of them and writes ONE file hydromt reads like the
+event files (``data/precip/mrms_2023-09.nc``: hour-ending mm on a regular grid), and
+``ensure_catalog_entry`` registers it in the live data catalog.
+
+Products (CLAUDE.md: MRMS where it exists, Stage IV before):
+  mrms    0.01 deg lon/lat, written with ``lat`` / ``lon`` dims (north -> south rows, as
+          the event files), CRS EPSG:4326. Values identical to the event files'.
+  stage4  HRAP ~4.76 km, written on its projected x / y (ascending, regular to < 60 m:
+          scripts/rain_metrics.py ``regular_axis``) with the HRAP proj string as CRS.
+
+Gaps (NaN): MRMS hours are filled from Stage IV (the HRAP cell holding each MRMS cell
+centre, same hour); Stage IV hours from its 6-h totals (rain_metrics ``fill_from_6h``:
+the 6-h remainder spread evenly over the missing hours); anything left is 0. The counts
+go in the file's attributes and are printed: 2023 MRMS has 6 empty hours (2023-07-09
+15-16Z among them) and 2022 has 19.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from agri_sfincs import config
+
+PRODUCTS = ("mrms", "stage4")
+FORCING_DIR = config.PRECIP_DIR / "forcing"
+
+
+def window_hours(t0, t1) -> pd.DatetimeIndex:
+    """Hour-ending times a run from ``t0`` to ``t1`` needs: ``t0`` .. ``t1`` inclusive.
+    hydromt (cumulative_input, time_label="right") shifts each value back one step, so
+    the label ``t0`` carries the hour ending ``t0`` + 1 h; the label ``t0`` itself only
+    keeps the time axis covering the run (otherwise SFINCS warns and uses the nearest)."""
+    return pd.date_range(pd.Timestamp(t0), pd.Timestamp(t1), freq="h")
+
+
+def file_years(hours) -> list[int]:
+    """Year files holding hour-ending ``hours``: the hour ending Jan 1 00:00 is in the
+    previous year's file."""
+    return sorted({(t - pd.Timedelta("1h")).year for t in pd.DatetimeIndex(hours)})
+
+
+def year_files(product: str, hours: pd.DatetimeIndex, required: bool = True) -> list[Path]:
+    """Year files holding ``hours`` (a year file holds the hours ending
+    <year>-01-01T01 .. <year+1>-01-01T00). ``product`` may be ``stage4_6h``."""
+    files = [config.PRECIP_DIR / product / f"{product}_{y}.nc" for y in file_years(hours)]
+    missing = [f for f in files if not f.is_file()]
+    if missing and required:
+        raise FileNotFoundError(f"no hourly {product} file(s): {missing}")
+    return [f for f in files if f.is_file()]
+
+
+def load_window(files: list[Path], hours: pd.DatetimeIndex):
+    """(precip (len(hours), y, x) float32, NaN where absent; one file's Dataset without
+    its time axis, for coordinates and attributes; None if ``files`` is empty)."""
+    import xarray as xr
+
+    arrs, times, ref = [], [], None
+    for f in files:
+        with xr.open_dataset(f) as ds:
+            s = ds.sel(time=slice(hours[0], hours[-1]))
+            arrs.append(s.precip.values.astype("float32"))
+            times.append(pd.DatetimeIndex(s.time.values))
+            ref = ds.drop_vars([v for v in ds.data_vars if v != "precip"]).isel(time=0).load()
+    if ref is None:
+        return None, None
+    t = times[0].append(times[1:]) if len(times) > 1 else times[0]
+    p = np.full((len(hours),) + arrs[0].shape[1:], np.nan, np.float32)
+    k = hours.get_indexer(t)
+    p[k[k >= 0]] = np.concatenate(arrs)[k >= 0]
+    return p, ref
+
+
+def stage4_axes(ds):
+    """(x centres, y centres, proj string) of a Stage IV year file's HRAP grid."""
+    from pyproj import Transformer
+
+    sys.path.insert(0, str(config.ROOT / "scripts"))
+    from rain_metrics import regular_axis
+
+    proj = ds.attrs["crs_proj4"]
+    tr = Transformer.from_crs("EPSG:4326", proj, always_xy=True)
+    X, Y = tr.transform(ds.lon.values, ds.lat.values)
+    x0, dx = regular_axis(X, axis=1, tol=60.0)
+    y0, dy = regular_axis(Y, axis=0, tol=60.0)
+    return x0 + dx * np.arange(X.shape[1]), y0 + dy * np.arange(X.shape[0]), proj
+
+
+def nearest_index(centres: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """Index of the cell of a REGULAR ascending axis ``centres`` holding each ``v``
+    (-1 outside)."""
+    d = centres[1] - centres[0]
+    i = np.floor((v - (centres[0] - d / 2)) / d).astype(int)
+    return np.where((i >= 0) & (i < len(centres)), i, -1)
+
+
+def fill_stage4_gaps(p: np.ndarray, hours: pd.DatetimeIndex) -> int:
+    """Fill NaN Stage IV hours in place from the 6-h totals; returns cells filled."""
+    sys.path.insert(0, str(config.ROOT / "scripts"))
+    from rain_metrics import fill_from_6h
+
+    if not np.isnan(p).any():
+        return 0
+    t6 = pd.date_range(hours[0].ceil("6h"), hours[-1].ceil("6h"), freq="6h")
+    p6, _ = load_window(year_files("stage4_6h", t6, required=False), t6)
+    if p6 is None:
+        return 0
+    flat = p.reshape(len(p), -1)
+    filled, mask = fill_from_6h(flat, hours, p6.reshape(len(p6), -1), t6)
+    flat[:] = filled
+    return int(mask.sum())
+
+
+def build_forcing(product: str, t0, t1, out: Path) -> dict:
+    """Write the run window's precipitation to ``out`` (see module docstring); returns
+    the gap counts."""
+    import xarray as xr
+
+    if product not in PRODUCTS:
+        raise ValueError(f"precip product {product!r}; known: {PRODUCTS}")
+    hours = window_hours(t0, t1)
+    p, ref = load_window(year_files(product, hours), hours)
+    info = {"nan_hours": int(np.isnan(p).all(axis=(1, 2)).sum()),
+            "nan_cell_hours": int(np.isnan(p).sum())}  # fmt: skip
+    if product == "mrms":
+        if info["nan_cell_hours"]:
+            s4, ref4 = load_window(year_files("stage4", hours), hours)
+            info["stage4_filled_from_6h"] = fill_stage4_gaps(s4, hours)
+            xs, ys, proj = stage4_axes(ref4)
+            from pyproj import Transformer
+
+            lon2, lat2 = np.meshgrid(ref.lon.values, ref.lat.values)
+            x, y = Transformer.from_crs("EPSG:4326", proj, always_xy=True).transform(lon2, lat2)
+            ix, iy = nearest_index(xs, x), nearest_index(ys, y)
+            if (ix < 0).any() or (iy < 0).any():
+                raise RuntimeError("an MRMS cell centre falls outside the Stage IV clip")
+            gap = np.isnan(p)
+            donor = s4[:, iy, ix]
+            p[gap] = donor[gap]
+            info["filled_from_stage4"] = int((gap & np.isfinite(donor)).sum())
+        coords = {"time": hours, "lat": ref.lat.values, "lon": ref.lon.values}
+        dims, crs = ("time", "lat", "lon"), "EPSG:4326"
+    else:
+        info["filled_from_6h"] = fill_stage4_gaps(p, hours)
+        xs, ys, proj = stage4_axes(ref)
+        coords = {"time": hours, "y": ys, "x": xs}
+        dims, crs = ("time", "y", "x"), proj
+    info["zero_filled_cell_hours"] = int(np.isnan(p).sum())
+    p = np.nan_to_num(p, nan=0.0)
+    ds = xr.Dataset({"precip": (dims, p)}, coords=coords)
+    ds.precip.attrs = {"units": "mm", "long_name": "1-h accumulation ending at time (UTC)"}
+    ds.attrs = {"title": f"{product} hourly precipitation for a run window",
+                "made_by": "agri_sfincs.precip.build_forcing", "crs_input": crs,
+                **{k: str(v) for k, v in info.items()}}  # fmt: skip
+    import hydromt  # noqa: F401  (registers .raster)
+
+    # The CRS goes INTO the file (spatial_ref): hydromt's catalog cannot serialise a CRS
+    # without an authority code, which the HRAP proj string has none of.
+    ds.raster.set_crs(crs)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".nc.part")
+    ds.to_netcdf(tmp, encoding={"precip": {"zlib": True, "complevel": 4}})
+    tmp.replace(out)
+    print(f"[precip] {product} {hours[0]} .. {hours[-1]} -> {out.name}: {info}")
+    return info
+
+
+def catalog_entry(key: str, uri: str, product: str, crs: str, t0, t1) -> str:
+    """The YAML block for one forcing file (relative ``uri``, as the other entries). The
+    CRS is in the file; EPSG:4326 is repeated here like the event entries'."""
+    crs_yaml = "\n    crs: 4326" if crs == "EPSG:4326" else ""
+    return (f"\n{key}:\n  data_type: RasterDataset\n  uri: {uri}\n"
+            f"  driver: {{name: raster_xarray, options: {{}}}}\n  metadata:\n"
+            f"    category: meteo{crs_yaml}\n    unit: mm per hour ending at time\n"
+            f"    source: {product} hourly year files, {pd.Timestamp(t0):%Y-%m-%d %H:%M}.."
+            f"{pd.Timestamp(t1):%Y-%m-%d %H:%M} (agri_sfincs.precip.build_forcing)\n")  # fmt: skip
+
+
+def catalog_has(text: str, key: str) -> bool:
+    return any(line.rstrip() == f"{key}:" for line in text.splitlines())
+
+
+def ensure_forcing(product: str, t0, t1, key: str, catalog: Path = config.CATALOG) -> str:
+    """Build ``data/precip/forcing/<key>.nc`` (if absent) and add catalog entry ``key``
+    (if absent); returns ``key``. A file is reused only if its time axis is the window."""
+    import xarray as xr
+
+    out = FORCING_DIR / f"{key}.nc"
+    hours = window_hours(t0, t1)
+    if out.is_file():
+        with xr.open_dataset(out) as ds:
+            same = len(ds.time) == len(hours) and pd.Timestamp(ds.time.values[0]) == hours[0]
+        if not same:
+            raise FileExistsError(f"{out} exists for a different window; delete it or rename")
+    else:
+        build_forcing(product, t0, t1, out)
+    text = catalog.read_text()
+    if not catalog_has(text, key):
+        with xr.open_dataset(out) as ds:
+            crs = ds.attrs["crs_input"]
+        uri = out.relative_to(catalog.parent).as_posix()
+        catalog.write_text(text.rstrip("\n") + "\n" + catalog_entry(key, uri, product, crs, t0, t1))
+        print(f"[precip] catalog entry {key!r} added to {catalog}")
+    return key

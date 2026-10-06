@@ -29,12 +29,12 @@ import xarray as xr
 
 from agri_sfincs import config, domain, region
 
-#: ONE pre-merged bed (scripts/build_bed.py), not a first-wins list of tiers: a list
-#: cannot say "CUDEM only where it is deeper than the lidar water surface", and CUDEM's
-#: flat ~0 m inland-water "beds" (Union Lake -0.20 under a 7.56 m surface) must never
-#: reach the model (user 2026-10-02; bight FINDINGS §54a). River beds above head of tide
-#: are NOT in it yet: v0 carries the lidar water surface there (v1 burns channels).
-ELEVATION_LIST = [{"elevation": "bed_merged"}]
+#: The bed is ONE pre-merged raster per model (``StaticConfig.elevation``), not a
+#: first-wins list of tiers: a list cannot say "CUDEM only where it is deeper than the
+#: lidar water surface", and CUDEM's flat ~0 m inland-water "beds" (Union Lake -0.20
+#: under a 7.56 m surface) must never reach the model (user 2026-10-02; bight FINDINGS
+#: §54a). ``bed_merged`` (scripts/build_bed.py, v0) carries the lidar water surface in
+#: rivers above head of tide; ``bed_v1`` adds the river-bed burn (FINDINGS §11).
 #: Water-level boundary on edge faces with bed below this (m NAVD88) ...
 WL_ZMAX = -1.0
 #: ... AND inside OPEN WATER = where the lidar has no data and CUDEM fills the bed
@@ -56,6 +56,10 @@ class StaticConfig:
     hsg: str = "hsg_undrained"  # or "hsg_drained" (dual groups as drained)
     effective: float = 0.5  # initial seff = effective * smax (spin-up adjusts)
     refinement: Path | None = None  # quadtree refinement polygons (later versions)
+    elevation: str = "bed_merged"  # catalog source of the ONE pre-merged bed
+    #: Structure files staged into the model as sfincs.weir / sfincs.drn (FINDINGS §10):
+    #: keys "weirfile" / "drnfile" -> source path. Empty = none (v0).
+    structures: dict = field(default_factory=dict)
     extra: dict = field(default_factory=dict)
 
     @property
@@ -88,7 +92,8 @@ def build_static(cfg: StaticConfig) -> Path:
     print(f"[grid] {sf.quadtree_grid.data.grid.n_face:,} faces at base {cfg.res:.0f} m")
 
     # 2. Face elevation --------------------------------------------------------
-    sf.quadtree_elevation.create(elevation_list=ELEVATION_LIST, buffer_cells=0, nrmax=2000)
+    elevation_list = [{"elevation": cfg.elevation}]
+    sf.quadtree_elevation.create(elevation_list=elevation_list, buffer_cells=0, nrmax=2000)
 
     # 3. Mask: everything inside the outline; water-level BC on deep edge faces --
     sf.quadtree_mask.create_active(include_polygon=outline, all_touched=False)
@@ -111,7 +116,7 @@ def build_static(cfg: StaticConfig) -> Path:
     roughness_list = [{"lulc": "nlcd_2021", "reclass_table": str(ROUGHNESS_TABLE)}]
     sf.quadtree_roughness.create(roughness_list=roughness_list, nrmax=200)
     sf.quadtree_subgrid.create(
-        elevation_list=ELEVATION_LIST,
+        elevation_list=elevation_list,
         roughness_list=roughness_list,
         nr_subgrid_pixels=cfg.nr_subgrid_pixels,
         nrmax=2000,
@@ -135,7 +140,33 @@ def build_static(cfg: StaticConfig) -> Path:
     del sf
     gc.collect()
     patch_infiltration_keys(root)
+    stage_structures(root, cfg.structures)
     return root
+
+
+#: inp key -> the file name a model dir carries it under.
+STRUCTURE_FILES = {"weirfile": "sfincs.weir", "drnfile": "sfincs.drn"}
+
+
+def stage_structures(root: Path, sources: dict | None = None) -> list[str]:
+    """Copy structure files into ``root`` (when ``sources`` names any) and make sure
+    ``sfincs.inp`` carries the key of every structure file the dir holds.
+
+    Call after EVERY ``sf.write()``: hydromt's writer drops keys it does not model, and
+    SFINCS silently ignores a structure file without its key (bight
+    ``model._ensure_weirfile_key``). Returns the keys present."""
+    import shutil
+
+    from agri_sfincs.dikes import ensure_inp_key
+
+    for key, src in (sources or {}).items():
+        if key not in STRUCTURE_FILES:
+            raise KeyError(f"unknown structure key {key!r}; known: {sorted(STRUCTURE_FILES)}")
+        shutil.copyfile(src, Path(root) / STRUCTURE_FILES[key])
+    keys = [k for k, f in STRUCTURE_FILES.items() if ensure_inp_key(root, k, f)]
+    if keys:
+        print(f"[structures] {', '.join(f'{k} = {STRUCTURE_FILES[k]}' for k in keys)}")
+    return keys
 
 
 def open_water_zone(outline):

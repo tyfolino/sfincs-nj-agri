@@ -1,4 +1,4 @@
-"""Download USDA RMA's Summary of Business by state/county/crop/coverage level, NJ only.
+"""Download USDA RMA's Summary of Business by state/county/crop/coverage level, per state.
 
 Source: RMA's public file server, "Summary of Business — State/County/Crop with
 Coverage Level", https://pubfs-rma.fpac.usda.gov/pub/Web_Data_Files/Summary_of_Business/state_county_crop/
@@ -13,24 +13,24 @@ type, net reported quantity (acres when the quantity type is Acres), endorsed ac
 indemnities fetched by scripts/fetch_rma_col.py. RMA re-issues recent years as business
 settles (2022-2027 were re-posted 2026-09-28), so re-fetch recent years with ``--refresh``.
 
-The national files are ~25-30 MB unzipped each; only New Jersey rows (state 34) are
-kept. Writes data/rma/sobcov_<year>_NJ.csv (named columns, whitespace stripped, plus a
-5-digit ``fips``) and the layout PDF. Existing files are skipped.
+The national files are ~25-30 MB unzipped each; only the rows of the requested states
+are kept (default NJ, DE, MD, VA, NC). Writes sobcov_<year>_<ST>.csv per state (named
+columns, whitespace stripped, plus a 5-digit ``fips``): NJ to data/rma/ exactly as
+before, the others to data/rma_states/ (see scripts/fetch_rma_col.py, whose download and
+state split this shares), and the layout PDF. Existing state files are skipped.
 
-Usage:  python scripts/fetch_rma_sob.py [--years 1989-2027] [--refresh]
+Usage:  python scripts/fetch_rma_sob.py [--years 1989-2027] [--states NJ,DE,MD,VA,NC] [--refresh]
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
-import io
 import re
 import zipfile
 
-from fetch_rma_col import parse_years
+from fetch_rma_col import fetch_states, parse_states, parse_years
 
-from agri_sfincs import config, domain
+from agri_sfincs import config
 from agri_sfincs.net import download, get
 
 BASE = "https://pubfs-rma.fpac.usda.gov/pub/Web_Data_Files/Summary_of_Business/state_county_crop/"
@@ -66,41 +66,17 @@ def parse_line(line: str, where: str = "") -> list[str]:
     return f
 
 
-def fetch_year(year: int, refresh: bool) -> str:
-    dest = config.RMA_DIR / f"sobcov_{year}_NJ.csv"
-    if dest.exists() and not refresh:
-        return f"{year}: have {dest.name}"
-    zpath = config.RMA_DIR / f"sobcov_{year}.zip"
-    download(f"{BASE}sobcov_{year}.zip", zpath)
-    n_all = 0
-    rows = []
-    try:
-        with zipfile.ZipFile(zpath) as z:
-            (name,) = [n for n in z.namelist() if n.lower().endswith(".txt")]
-            with z.open(name) as fb:
-                for line in io.TextIOWrapper(fb, encoding="latin-1"):
-                    n_all += 1
-                    if not line.strip():
-                        continue
-                    f = parse_line(line, f"{name} line {n_all}")
-                    if f[1] == domain.STATE_FIPS:
-                        rows.append([f[1] + f[3], *f])
-    finally:
-        zpath.unlink(missing_ok=True)  # the national file is not kept
-    part = dest.with_suffix(".csv.part")
-    with open(part, "w", newline="") as out:
-        w = csv.writer(out)
-        w.writerow(["fips", *COLUMNS])
-        w.writerows(rows)
-    part.rename(dest)
-    return f"{year}: wrote {dest.name} ({len(rows):,} NJ of {n_all:,} rows)"
+def fetch_year(year: int, refresh: bool, states: dict[str, str] | None = None) -> str:
+    return fetch_states("sobcov", BASE, COLUMNS, year, states or {"NJ": "34"}, refresh)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--years", help="e.g. 2000-2025 or 2022,2024 (default: all listed)")
+    ap.add_argument("--states", help="comma list of abbreviations (default: NJ,DE,MD,VA,NC)")
     ap.add_argument("--refresh", action="store_true", help="re-fetch years already present")
     a = ap.parse_args()
+    states = parse_states(a.states)
     config.RMA_DIR.mkdir(parents=True, exist_ok=True)
     for doc in DOCS:
         if not (config.RMA_DIR / doc).exists():
@@ -113,7 +89,7 @@ def main() -> None:
             print(f"{y}: not on the server (it lists {listed[0]}-{listed[-1]})", flush=True)
             continue
         try:
-            print(fetch_year(y, a.refresh), flush=True)
+            print(fetch_year(y, a.refresh, states), flush=True)
         except (OSError, RuntimeError, zipfile.BadZipFile) as e:
             # requests' exceptions are OSErrors; keep going so one bad year
             # does not cost the rest, and say so at the end.

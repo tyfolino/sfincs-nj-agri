@@ -23,6 +23,12 @@ GAUGE_DIR = DATA / "gauges"  # inventories and downloaded series
 INSURANCE_DIR = DATA / "insurance"  # ag-econ loss tables (never published)
 RMA_DIR = DATA / "rma"  # USDA RMA public Cause of Loss files, NJ rows (bulk)
 NWM_DIR = DATA / "nwm"  # National Water Model v3.0 retrospective extracts (bulk)
+PRECIP_DIR = DATA / "precip"  # Stage IV / MRMS hourly clips + county rain metrics (bulk)
+ELEV_DIR = DATA / "elevation"  # the pre-merged bed and the river-bed burn
+CHANNELS_DIR = DATA / "channels"  # ENC soundings, NHDPlus HR, USGS sections, tidal datums (bulk)
+EVAP_DIR = DATA / "evap"  # gridMET daily reference ET (pet) clipped to the BBOX (bulk)
+LANDUSE_DIR = DATA / "landuse"  # NJDEP Land Use/Land Cover editions + farm-to-wetland transitions
+LANDSAT_DIR = DATA / "landsat"  # Landsat C2 L2 per-field per-scene stats (bulk; symlink to /scratch)
 REPORTS = ROOT / "reports"
 CATALOG = DATA / "data_catalog.yml"
 
@@ -38,3 +44,11 @@ SFINCS_BIN = (
 #: Read-only rasters the bight project already holds that cover these counties.
 #: Pointed at, never copied or modified.
 BIGHT_DATA = Path.home() / "nj_bight_sfincs" / "data"
+
+#: Fork 1 (cross-county flood x rain test). Bulk downloads live on scratch under
+#: DATA_BULK/<name>/ and are symlinked into data/; only small derived CSVs stay on /home.
+DATA_BULK = Path("/scratch/tpj8/sfincs-nj-agri/data_bulk")
+RMA_STATES_DIR = DATA / "rma_states"  # RMA COL/SOB rows for the non-NJ states (bulk)
+PRISM_DIR = DATA / "prism"  # PRISM AN 4 km monthly precipitation zips (bulk)
+FLOODPLAIN_DIR = DATA / "floodplain"  # NFHL 1% zones, multi-state CDL, coarse DEM (bulk)
+FORK1_DIR = DATA / "fork1"  # small derived tables: counties, county P, shares, panel

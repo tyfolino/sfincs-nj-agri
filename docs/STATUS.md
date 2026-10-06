@@ -2,19 +2,123 @@
 
 Edit in place; keep it short. When an item closes, its durable fact moves to FINDINGS.
 
-Last updated: **2026-10-02, end of day.**
+Last updated: **End of 2026-10-06 (user: wrap up; nothing queued on SLURM; all work staged, the user commits).**
+- **Goal (user):** a map of current farmland, farmland threatened by sea-level rise, and
+  DIKE-DEPENDENCY. SFINCS same-event scenarios are the main story. The satellite record of
+  fields already lost is supporting evidence (FINDINGS §21-§24). Dike crests vs Sandy: §25.
+- **Done today:**
+  - **Scenario matrix §27:** 25 runs, tide2024oct × {intact, removed, breach_all_farm} × SLR and
+    sandy2012. `plot_scenarios.py` → reports/scenario_matrix.md + figs; GIFs from
+    `animate_scenarios.py`.
+  - **Per-field classes §29 (the user's map):** `field_flood_classes.py` →
+    data/analysis/field_flood_classes.csv, figs/field_flood_classes{,_zoom}.png. 1,117 ha are
+    dike-dependent today.
+  - **Field classifier fixed §28:** OOF accuracy 58.5% → 83.6%.
+  - **Farm → wetland phase 1 §30 (Middle Neck, Durham):**
+    - full re-opening floods the polder's own farms;
+    - the set-back with an inner dike spares them;
+    - outside the bank: < 1 mm on daily tides;
+    - literature check: reports/literature_restoration_neighbours.md.
+    Scripts: make_restore_scenarios.py, setup_scenarios.py --restore, compare_restore.py.
+  - **Conversion pathways synthesis §31:** dikes are not the main recent route.
+  - Useful facts: SFINCS runs are bit-reproducible (repeat run diff = 0). A run is ~1 min per
+    simulated day on 32 threads. Tide-only runs have ZEROED rain (the engine segfaults with cnb
+    and no rain file).
+- **Next, in order:**
+  1. Plan checks: Sandy peak vs the observed interior gauges (Bivalve etc.; the Ship John his
+     point is outside the active cells, NaN); mass balance; where station peaks rise > SLR.
+  2. Per-system breach runs (18 systems), on tide2024oct AND with a scoured sill (MLLW): a
+     marsh-level gap does almost nothing (§27, §30). Gives the farmland each bank protects, for
+     the econ table against repair costs ($0.75-14 M).
+  3. Wetness exposure for the conversion model (§31: the largest recent route is wet-field
+     abandonment, not tides). Ponding under rain events (sep2023 / may2025 / Sandy with rain)
+     per field, plus SSURGO drainage class, joined to field_flood_classes.csv → the
+     plan's data/analysis/farm_units.csv.
+  4. Farm → wetland options (only if the user wants them):
+     - set-back sensitivity: gate placement, a channel to the western strip, a straighter dike;
+     - Middle Neck ground raised to marsh level (subgrid rebuild);
+     - roughness sensitivity;
+     - Sandy with rain;
+     - Durham's lidar marsh bias.
+  5. NAIP validation of v2 exits, ~50 per stratum; re-run field_history.py (§24) on the fixed
+     pieces.
+  6. Check NLD for levee condition / inspection fields.
+- **PSEG special issue read (2026-10-06):** yes, PSEG built upland dikes to protect adjacent
+  properties (FINDINGS §30). PDFs in docs/refs/ (gitignored).
+- **Waiting on the user:**
+  - local tide-gate knowledge, in priority order: LOCATION and the creek each gate drains to
+    (§16: most synthetic valves cannot drain), invert elevation, condition (leaking / stuck),
+    count and size, any pumps. Middle Neck + a few Cumberland necks would do. Not urgent:
+    the tide-only scenario comparisons barely depend on gates; post-storm / rain wetness does.
+  - the user is asking an NJDEP contact (via family) for the "South Jersey Levee Inventory"
+    (NRCS / NJDEP Dam Safety, 2010; cited in the Cumberland Bayshore Recovery Plan 2013).
+- **Tomorrow, first (user, 2026-10-06):** a background agent sweeps public sources for tide-gate
+  data: NRCS post-Sandy repair documents, the NAACC road-crossing / culvert inventory (tide
+  gates), WMA / refuge plans (Abbotts Meadow, Mad Horse Creek, Supawna), Partnership for the
+  Delaware Estuary, county documents. Then continue with Next 1.
+- **Fork 1 done (agent, §26):** null (b2 = 0.01 ± 0.35). The agent ran `ls data/insurance` once
+  (output discarded, no file opened); the user has been told.
 
-## ▶ Resume here
+**Plan revised and approved 2026-10-05: `~/.claude/plans/compressed-humming-eclipse.md`.**
+- **Fork 2 (main): bayshore farm → wetland.**
+  1. Outcome inventory from NJDEP LU/LC editions (classes 2150 / 2140, and ag → 6xxx).
+  2. Pathway of each conversion: easement / public purchase / mitigation / PSEG / passive.
+  3. Exposure covariates per farm unit, static and from SFINCS (typical tide, Sandy 2012,
+     Sep 2023).
+  4. SFINCS same-event scenarios: farmed vs restored, intact vs breached bank, +SLR.
+- **Fork 1 (basic, agent):** cross-county RMA COL × PRISM × static FEMA-floodplain cropland
+  share; PPML / two-part; memo `reports/fork1_flood_rain.md`.
+- Fork 2 step 1, first pass done (FINDINGS §23): NJDEP LU/LC gives 840 ha farm → wetland 1995-2020,
+  mostly inland old fields, and it MISSES recent tidal conversions (sticky class 2140). Next:
+  NAIP-dated field histories of the low-lying farmed / 2140 polygons. Fork 1: agent running.
+- Landsat field histories built (FINDINGS §24): low ground exits farming 5-7× faster than upland
+  (raw); NAIP precision ~40-55% low vs ~12% upland, so roughly 10× after correction, with wide
+  uncertainty. Low fields go to marsh / scrub; upland fields go to development. Next: a
+  multi-class classifier trained on LU/LC classes and a bigger NAIP validation. Bulk Landsat
+  stats live in data/landsat → /scratch.
 
-Stopped after the v0 event runs (FINDINGS §9). The user had not yet picked what comes
-first:
-- **Track B v1:** river channels first; see the "v1 to-do" list below.
-- **Track A:** MRMS / Stage IV rainfall metrics per county-month, then the first
-  predictor-vs-loss test for 2003–2022 with NWM + the loss panel.
+**Direction change (user, 2026-10-05).** The insurance question is a poor fit for SFINCS:
+water losses are 18% of indemnity, 91% "excess moisture", river/coastal flooding ≲ 10–15% of
+water dollars (FINDINGS §20), and county-month data can't resolve gains < ~+0.03 AUC (§13).
+- **SFINCS's role in the loss study = event-scale ponding only** (no multi-year runs; the staged
+  `v1_100m/runs/y2023_zsini{0,m1}` are NOT to be submitted unless the user asks). Diked cropland
+  (~15 km², ~2%) to be reported separately / excluded from ponding features (§19).
+- **NEW lead the user is excited about: saltwater intrusion / tidal inundation of bayshore farmland
+  under sea-level rise and aging meadow banks / tide gates (Cumberland, Salem).** Novel for this
+  area. SFINCS: dikes (§14), tide boundary (§6), burned tidal channels (§11), gates; SLR + storm
+  tide + breach/overtopping scenarios → per-field saltwater frequency/duration. Outcome to
+  measure: cropland → marsh/fallow transitions in CDL 2008–2025 along the bayshore (salinity
+  code 76 never appears in these counties' RMA records, so salt shows up as land leaving
+  production, not claims). Ag-econ angle: land value lost, dike maintenance vs retreat, who pays,
+  easements/buyouts. **Next: look into #1 more deeply** — first quantify bayshore cropland change
+  in CDL, and check the literature on Delaware Bay / Delmarva saltwater intrusion and farmland.
+- **Saltwater lead, step 1 done (FINDINGS §21, `reports/bayshore_exposure.md`, map
+  `reports/figs/bayshore_exposure.png`):** 7 km² of cropland is below today's MHHW (mostly
+  behind NLD dikes, Middle Neck first), 28 / 40 km² below MHHW + 1.0 / 1.5 m (mostly OUTSIDE
+  levees). Imagery check (`reports/imagery_spotcheck.md`): ~1/3 of CDL's low cropland → wetland
+  signal is real (~1.5 km² since 2010). The clearest case is a diked field complex S of Greenwich
+  (NLD "Durham") going to marsh 2013-19. Literature survey done: `reports/literature_saltwater.md`
+  (NJ farmland side unstudied quantitatively; summary in FINDINGS §21). Next: the Greenwich site's history (breach? buyout?), then the SFINCS scenario set.
+- **Colleague (Seowoo, ag-econ) replied 2026-10-05:** no farm-level RMA data exists, and a
+  farmer survey needs a grant. Two forks, user agreed: (1) a BASIC test of
+  Damage ~ P + P × flooded-cropland share (expect null in 3 counties; a cross-county design with
+  a static flood-prone share is the cheap version); (2) the MAIN line: farm-to-wetland via
+  Wetland Reserve Easements + saltwater exposure, with SFINCS for same-event counterfactuals
+  (farmed vs restored). NRCS easements fetched and overlaid: FINDINGS §22. The plan is being
+  rewritten (plan mode).
+- **Bulk data moved off /home (user OK'd, 2026-10-05):** data/elevation/bed_merged.tif,
+  bed_v1.tif, data/nwm/grid and data/channels/ehydro are now symlinks into
+  /scratch/tpj8/sfincs-nj-agri/data_bulk (rebuildable: build_bed.py, merge_bed_v1.py,
+  fetch_nwm_soil.py, fetch_channels.py). If scratch purges them, rebuild.
+- Evaporation agent finished: FINDINGS §17. Works as a bulk ponded-water loss, NOT integrated
+  into `setup_event` (event-scale runs don't need it after the pivot).
+- Shared with colleagues: Claude Doc "Water-related crop-insurance losses, Salem / Cumberland /
+  Gloucester" (https://claude.ai/artifact/P62Vj4zoqFzRJy7BDBb7Xy; private until the user shares).
+  Offered but not done: a one-line AUC gloss and a paragraph on §20 in that doc.
+- DROPPED (user, 2026-10-06: not important): the 235 vs 238 / 240 insurance-cell discrepancy
+  (report vs FINDINGS §5).
 
-Ask before starting. Nothing is running; all work is staged with `git add` (the user
-commits). The v0 model and runs live on /scratch (purged when idle; rebuildable with
-`scripts/build_model.py` + `scripts/setup_event.py`).
+All work staged with `git add` (the user commits). Models/runs on /scratch (purged when idle).
 
 ## Done (step 1)
 

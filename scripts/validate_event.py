@@ -6,7 +6,9 @@ v0 has no cross-sections, so DISCHARGE is not compared yet. What is:
     by any datum offset);
   * stream gauges (00065 gage height, local datum): correlation of de-meaned hourly
     stage, observed vs modelled RISE (max - median), and peak timing for the biggest
-    event in the focus month.
+    event in the focus period (Event.focus: a month, or a year for the y<YYYY> runs).
+
+Observations come from data/gauges/usgs_events/<event>/ (scripts/fetch_usgs_event.py).
 
 Writes <run>/summary/gauges.csv and gauges.png and prints the table.
 
@@ -65,7 +67,7 @@ def main() -> None:
         j = j[j.index >= pd.Timestamp(ev.tstart) + pd.Timedelta(days=3)]  # skip spin-up
         if len(j) < 48:
             continue
-        foc = j[j.index.strftime("%Y-%m") == ev.focus]
+        foc = j[ev.in_focus(j.index)]
         rec = {"site": site, "name": names.get(site, "")[:34], "param": pc, "n_h": len(j),
                "r_demeaned": j.obs.corr(j["mod"]),
                "obs_mean_m": j.obs.mean(), "mod_mean_m": j["mod"].mean()}  # fmt: skip
@@ -81,6 +83,10 @@ def main() -> None:
         rows.append(rec)
         panels.append((site, pc, j))
 
+    if not rows:
+        print(f"no observations to compare in {obs_dir} (run scripts/fetch_usgs_event.py "
+              f"--event {ev.name})")  # fmt: skip
+        return
     t = pd.DataFrame(rows)
     t.to_csv(out / "gauges.csv", index=False)
     with pd.option_context("display.width", 250, "display.max_columns", 30):

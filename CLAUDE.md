@@ -2,12 +2,15 @@
 
 A watershed-bounded **SFINCS** model of the Delaware-draining side of **Salem, Cumberland
 and Gloucester counties, NJ**, built to turn historical rain and tide into flood
-characteristics per **county × month (× crop)**. Rutgers ag-econ collaborators hold
-county-level, monthly crop-insurance indemnity. The question is which flood
-characteristics best predict those losses, and whether they beat monthly rainfall alone.
+characteristics per **county × month (× crop)** for a Rutgers ag-econ crop-insurance study.
+**Since 2026-10-05 the main line is bayshore farmland → wetland** (tidal exposure, dikes and
+tide gates, sea-level rise; which pathway: passive failure, easement, purchase, mitigation).
+SFINCS's job there is the same event under different conditions (farmed vs restored, intact
+vs breached bank, today vs sea-level rise). The insurance question is kept as a basic
+cross-county flood × rain test without SFINCS.
 
-The plan is `~/.claude/plans/dynamic-squishing-heron.md` (approved 2026-10-02). What
-is happening now is in [docs/STATUS.md](docs/STATUS.md); what is believed true is in
+The plan is `~/.claude/plans/compressed-humming-eclipse.md` (approved 2026-10-05; it supersedes
+`dynamic-squishing-heron.md`, 2026-10-02). What is happening now is in [docs/STATUS.md](docs/STATUS.md); what is believed true is in
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
 ## Decisions (user, 2026-10-02)

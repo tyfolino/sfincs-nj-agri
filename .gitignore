@@ -11,3 +11,6 @@ logs/
 __pycache__/
 *.pyc
 *.part
+
+# publisher PDFs (copyright): read locally, never commit
+docs/refs/

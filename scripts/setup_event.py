@@ -1,7 +1,16 @@
 """Stage an event run: copy a static model and add the event's forcing (agri_sfincs.events).
 
-Usage:  python scripts/setup_event.py --model v0_100m --event sep2023 [--name RUN]
-Then:   sbatch hpc/sfincs_run.slurm <printed run dir>
+Usage:  python scripts/setup_event.py --model v1_100m --event sep2023 [--name RUN]
+            [--drn data/structures/dike_gates_hi.drn]   (replaces sfincs.drn in this run)
+            [--zsini -1.0]                              (initial water level, m NAVD88)
+            [--precip stage4]                           (override: product or catalog source;
+                                                         "none" = tide-only)
+            [--weir data/structures/dikes_removed.weir] (replaces sfincs.weir in this run)
+            [--wl-offset 0.6]                           (sea-level rise on the boundary, m)
+Year runs:  python scripts/setup_event.py --model v1_100m --event y2023 --name y2023_zsini0 --zsini 0
+            (the first staging of a window builds data/precip/forcing/<product>_<event>.nc
+            and its data-catalog entry, ~1 min for a year)
+Then:   sbatch hpc/sfincs_run.slurm <printed run dir>   (resumes itself if preempted)
 """
 
 from __future__ import annotations
@@ -9,7 +18,7 @@ from __future__ import annotations
 import argparse
 
 from agri_sfincs import config
-from agri_sfincs.events import EVENTS, setup_event
+from agri_sfincs.events import EVENTS, ZSINI, setup_event
 
 
 def main() -> None:
@@ -17,8 +26,18 @@ def main() -> None:
     ap.add_argument("--model", required=True)
     ap.add_argument("--event", required=True, choices=sorted(EVENTS))
     ap.add_argument("--name", default=None)
+    ap.add_argument("--drn", default=None, help="drainage file for this run only")
+    ap.add_argument("--zsini", type=float, default=ZSINI,
+                    help=f"initial water level, m NAVD88 (default {ZSINI})")  # fmt: skip
+    ap.add_argument("--precip", default=None,
+                    help="precipitation override: mrms | stage4 | a catalog source")  # fmt: skip
+    ap.add_argument("--weir", default=None, help="weir file for this run only (dike scenarios)")
+    ap.add_argument("--wl-offset", type=float, default=0.0, help="sea-level rise, m")
     a = ap.parse_args()
-    run = setup_event(config.MODELS / a.model, EVENTS[a.event], a.name)
+    structures = {k: v for k, v in (("drnfile", a.drn), ("weirfile", a.weir)) if v}
+    run = setup_event(config.MODELS / a.model, EVENTS[a.event], a.name,
+                      structures=structures or None, zsini=a.zsini, precip=a.precip,
+                      wl_offset=a.wl_offset)  # fmt: skip
     print(run)
 
 

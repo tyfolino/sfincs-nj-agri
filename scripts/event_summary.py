@@ -10,15 +10,24 @@ Per day (``timemax`` blocks of dtmaxout = 1 day):
 Then on cropland pixels (that year's CDL, agri_sfincs.cdl.CROPLAND), per county in
 domain.COUNTIES and per crop group (corn, soybeans, wheat, other):
   area_gt_{5,15,30}cm_km2   flooded cropland area that day
-Over the event's focus month:
+Over the event's focus PERIOD (Event.focus: one month, or a year for the y<YYYY> runs):
   max_depth (per pixel) -> written as a GeoTIFF for maps
   wet_days (days with daily max depth > 5 cm, per pixel) -> GeoTIFF + area-days
+Per focus MONTH and county (all crop groups): peak area, area-days and the PERSISTENT
+area (cropland wet > 5 cm on every day of that month the run holds).
+
+A day is the day a zsmax block COVERS: the block ending at ``timemax`` = D 00:00 is day
+D - 1 (until 2026-10-05 the focus mask used the block's END date, so a month's
+focus_*.tif ran from the last day of the previous month to the second-to-last day of
+the month; the CSV dates were already right).
 
 ⚠️ Permanent water inside crop pixels (irrigation ponds mislabelled by CDL) shows as
 "flooded" every day; the ``baseline`` columns (the first spin-up day's area) say how much.
 
-Writes, in <run>/summary/: daily_county_crop.csv, focus_max_depth.tif,
-focus_wet_days.tif, and prints the county totals.
+Writes, in <run>/summary/: daily_county_crop.csv, monthly_county.csv,
+focus_max_depth.tif, focus_wet_days.tif, and prints the county totals.
+
+Reads one zsmax block at a time, so a year run's map (~400 blocks) fits in memory.
 
 Usage:  python scripts/event_summary.py --run <run dir> --event sep2023
 """
@@ -68,10 +77,10 @@ def main() -> None:
     out.mkdir(exist_ok=True)
 
     # SFINCS writes a uniform quadtree's map output on the regular (n, m) grid.
-    with xr.open_dataset(run / "sfincs_map.nc") as mp:
-        zs = mp["zsmax"].values  # (timemax, n, m)
-        tmax = pd.to_datetime(mp["timemax"].values)
-        cx, cy = mp["corner_x"].values, mp["corner_y"].values
+    mp = xr.open_dataset(run / "sfincs_map.nc")
+    tmax = pd.to_datetime(mp["timemax"].values)
+    zshape = mp["zsmax"].shape  # (timemax, n, m)
+    cx, cy = mp["corner_x"].values, mp["corner_y"].values
     x0, y0 = float(cx.min()), float(cy.min())
     dx = float(np.diff(np.unique(cx.round(3)))[0])
 
@@ -84,13 +93,12 @@ def main() -> None:
     py = tr.f + (rows + 0.5) * tr.e
     nn = np.floor((py - y0) / dx).astype(np.int64)
     mm = np.floor((px - x0) / dx).astype(np.int64)
-    inside = (nn >= 0) & (nn < zs.shape[1]) & (mm >= 0) & (mm < zs.shape[2])
-    face = np.where(inside, nn * zs.shape[2] + mm, -1)
-    zs = zs.reshape(zs.shape[0], -1)
+    inside = (nn >= 0) & (nn < zshape[1]) & (mm >= 0) & (mm < zshape[2])
+    face = np.where(inside, nn * zshape[2] + mm, -1)
     del rows, cols, px, py, nn, mm
 
     # CDL of the event year on the dep grid; counties on the dep grid.
-    year = int(ev.focus[:4])
+    year = ev.focus_start.year
     with rasterio.open(config.CDL_DIR / f"CDL_{year}_{domain.STATE_FIPS}.tif") as c:
         with WarpedVRT(c, crs=crs, transform=tr, width=shape[1], height=shape[0],
                        resampling=Resampling.nearest) as v:  # fmt: skip
@@ -103,28 +111,50 @@ def main() -> None:
     sel = (grp > 0) & (cid > 0) & (face >= 0) & np.isfinite(dep)
     f_sel, d_sel, g_sel, c_sel = face[sel], dep[sel], grp[sel], cid[sel]
 
-    focus = tmax.strftime("%Y-%m") == ev.focus
+    day = tmax - pd.Timedelta(days=1)  # the day each block covers
+    focus = ev.in_focus(day)
+    month = day.strftime("%Y-%m")
     rows = []
     max_depth = np.zeros(sel.sum(), dtype="float32")
     wet_days = np.zeros(sel.sum(), dtype="uint16")
+    wet_month: dict[str, np.ndarray] = {}  # per focus month: wet days per pixel
     for k, t in enumerate(tmax):
-        z_k = zs[k][f_sel]
+        z_k = mp["zsmax"][k].values.ravel()[f_sel]
         h = z_k - d_sel
         h = np.where(np.isfinite(h) & (h > 0), h, 0).astype("float32")
         if focus[k]:
             max_depth = np.maximum(max_depth, h)
             wet_days += h > THRESH_M[0]
+            wm = wet_month.setdefault(month[k], np.zeros(sel.sum(), dtype="uint16"))
+            wm += h > THRESH_M[0]
         for ci, crow in cty.iterrows():
             for gi, gname in GROUP_NAMES.items():
                 s = (c_sel == ci + 1) & (g_sel == gi)
-                rec = {"date": (t - pd.Timedelta(days=1)).date(), "fips": crow.fips,
+                rec = {"date": day[k].date(), "fips": crow.fips,
                        "county": crow["name"], "crop_group": gname,
                        "cropland_km2": s.sum() * px_km2}  # fmt: skip
                 for th in THRESH_M:
                     rec[f"area_gt_{int(th * 100)}cm_km2"] = (s & (h > th)).sum() * px_km2
                 rows.append(rec)
+    mp.close()
     df = pd.DataFrame(rows)
     df.to_csv(out / "daily_county_crop.csv", index=False)
+
+    # Per focus month x county (all crop groups)
+    per_day = df.groupby(["county", "date"]).area_gt_5cm_km2.sum().reset_index()
+    per_day["month"] = pd.to_datetime(per_day.date).dt.strftime("%Y-%m")
+    mrows = []
+    for mon, wm in sorted(wet_month.items()):
+        ndays = int((month[focus] == mon).sum())
+        for ci, crow in cty.iterrows():
+            d = per_day[(per_day.county == crow["name"]) & (per_day.month == mon)]
+            mrows.append({"month": mon, "fips": crow.fips, "county": crow["name"],
+                          "n_days": ndays,
+                          "cropland_km2": (c_sel == ci + 1).sum() * px_km2,
+                          "peak_area_gt_5cm_km2": d.area_gt_5cm_km2.max(),
+                          "area_days_gt_5cm": d.area_gt_5cm_km2.sum(),
+                          "persistent_gt_5cm_km2": ((c_sel == ci + 1) & (wm >= ndays)).sum() * px_km2})  # fmt: skip
+    pd.DataFrame(mrows).to_csv(out / "monthly_county.csv", index=False)
 
     prof = dict(driver="GTiff", width=shape[1], height=shape[0], count=1, crs=crs,
                 transform=tr, compress="deflate")  # fmt: skip
@@ -139,8 +169,8 @@ def main() -> None:
                        **prof) as dst:  # fmt: skip
         dst.write(wd, 1)
 
-    # County totals over the focus month
-    fdf = df[pd.to_datetime(df.date).dt.strftime("%Y-%m") == ev.focus]
+    # County totals over the focus period
+    fdf = df[ev.in_focus(df.date)]
     base = df[df.date == df.date.min()].groupby("county")["area_gt_5cm_km2"].sum()
     tot = fdf.groupby("county").agg(
         cropland_km2=("cropland_km2", "first"),
@@ -150,7 +180,7 @@ def main() -> None:
     tot["cropland_km2"] = df[df.date == df.date.min()].groupby("county").cropland_km2.sum()
     tot["peak_area_gt_5cm_km2"] = fdf.groupby(["county", "date"]).area_gt_5cm_km2.sum().groupby("county").max()
     tot["baseline_gt_5cm_km2"] = base
-    print(f"focus month {ev.focus}, county totals (all crop groups):")
+    print(f"focus {ev.focus} ({int(focus.sum())} days), county totals (all crop groups):")
     print(tot.round(2).to_string())
     print(f"wrote {out}")
 

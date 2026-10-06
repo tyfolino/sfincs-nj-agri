@@ -6,9 +6,31 @@ The first two events are the months the ag-econ collaborators flagged (2026-10-0
 Each window starts ~2 weeks early so channels, lakes and the soil store (cnb ``seff``)
 spin up before the month that matters.
 
-Forcing: MRMS Pass2 hourly (hour-ending totals -> ``cumulative_input=True``,
+Dike / sea-level scenario events (2026-10-05, plan §2.4): ``sandy2012`` (Hurricane Sandy;
+the bay peak ~1.9 m NAVD88 is typical of the largest storm tides of 2002-2025),
+``storm2024jan`` (the 2024-01-10 storm tide, ~ a median annual maximum) and ``tide2024oct``
+(a month whose maximum ~ the median monthly maximum: ordinary spring tides). Scenario runs
+add ``wl_offset`` (sea-level rise on the boundary) and may drop rain (``precip="none"``,
+tide-only) or swap in lowered dike crests (``structures``; scripts/make_dike_scenarios.py).
+
+Year runs ``y2003`` .. ``y2025`` (2026-10-05, FINDINGS §16 / §18): the calendar year
+plus December of the year before as spin-up; focus = the whole year. Precipitation is
+MRMS from 2016 (the first year whose spin-up December has MRMS gauge-corrected QPE;
+it starts 2015-05-06) and Stage IV before, built per run window from the hourly year
+files by ``agri_sfincs.precip`` (``Event.precip`` = a product name). Output is thinned
+for a year: a DAILY map snapshot (zs, Seff) instead of hourly, still daily zsmax / twet /
+cumprcp, his every 600 s (``Event.dtmapout``).
+
+``Event.focus`` is the period that matters for reporting: ``"YYYY-MM"`` (one month),
+``"YYYY"`` (a year) or ``"YYYY-MM/YYYY-MM"`` (a span of months, both included);
+``focus_period`` turns it into [start, stop).
+
+Forcing: hour-ending precipitation totals (``cumulative_input=True``,
 ``time_label="right"``), and the gap-filled NAVD88 gauge levels on the water-level
 boundary. No wind, pressure or discharge: the domain is closed watersheds.
+
+Every run writes DAILY restart files (``dtrstout`` = ``dtmaxout`` = 1 day), which is
+what lets hpc/sfincs_run.slurm resume a preempted run (agri_sfincs.restart).
 """
 
 from __future__ import annotations
@@ -27,8 +49,27 @@ from agri_sfincs import config, domain
 #: Gauges within this distance of a water-level boundary face force it (m). Cape May is
 #: ~9 km from the southern bay cut, Reedy Point ~4 km from the mid-river edge.
 WL_BUFFER_M = 15_000.0
-#: Restart + max-output lattice (s). dtmaxout must divide dtrstout (bight restart.py).
+#: Initial water level (m NAVD88). With 0 m every diked field below 0 m started FULL and
+#: could leave only through its check valve (v1, 2026-10-05); at -1 m they start drained,
+#: and channels / the bay refill from the tide boundary within hours of the 2-week spin-up.
+ZSINI = -1.0
+#: Restart + max-output lattice (s). dtmaxout must divide dtrstout (agri_sfincs.restart).
 DAY_S = 86_400.0
+#: First year whose run (from the December before) is all MRMS gauge-corrected QPE.
+MRMS_FIRST_YEAR = 2016
+#: The gap-filled gauge levels end 2025-12-31T23 (data/gauges/waterlevel_forcing_navd88.nc).
+WL_LAST_DAY = "2025-12-31"
+
+
+def focus_period(focus: str) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """[start, stop) of a focus string: "YYYY-MM", "YYYY" or "YYYY-MM/YYYY-MM"."""
+    if "/" in focus:
+        a, b = focus.split("/")
+        return pd.Period(a, "M").start_time, (pd.Period(b, "M") + 1).start_time
+    if len(focus) == 4:
+        return pd.Timestamp(f"{focus}-01-01"), pd.Timestamp(f"{int(focus) + 1}-01-01")
+    p = pd.Period(focus, "M")
+    return p.start_time, (p + 1).start_time
 
 
 @dataclass(frozen=True)
@@ -36,8 +77,36 @@ class Event:
     name: str
     tstart: str
     tstop: str
-    precip: str  # catalog source
-    focus: str  # the month that matters, for reporting
+    #: a data-catalog source, or a product in agri_sfincs.precip.PRODUCTS ("mrms",
+    #: "stage4"): then the window is cut from the hourly year files at staging
+    precip: str
+    focus: str  # the period that matters, for reporting (see focus_period)
+    dtmapout: float = 3600.0  # map snapshots (zs, Seff); zsmax etc. are daily regardless
+
+    @property
+    def focus_start(self) -> pd.Timestamp:
+        return focus_period(self.focus)[0]
+
+    @property
+    def focus_stop(self) -> pd.Timestamp:
+        return focus_period(self.focus)[1]
+
+    def focus_months(self) -> list[str]:
+        """The focus period's months, "YYYY-MM"."""
+        return [str(p) for p in pd.period_range(self.focus_start, self.focus_stop - pd.Timedelta("1s"), freq="M")]
+
+    def in_focus(self, t) -> np.ndarray:
+        """True where times / dates ``t`` fall in [focus_start, focus_stop)."""
+        t = pd.DatetimeIndex(pd.to_datetime(t))
+        return np.asarray((t >= self.focus_start) & (t < self.focus_stop))
+
+
+def year_event(year: int) -> Event:
+    """The calendar year ``year`` with December of the year before as spin-up."""
+    stop = min(pd.Timestamp(f"{year + 1}-01-01"), pd.Timestamp(WL_LAST_DAY))
+    return Event(f"y{year}", f"{year - 1}-12-01 00:00:00", f"{stop:%Y-%m-%d %H:%M:%S}",
+                 "mrms" if year >= MRMS_FIRST_YEAR else "stage4", str(year),
+                 dtmapout=DAY_S)  # fmt: skip
 
 
 EVENTS = {
@@ -45,7 +114,26 @@ EVENTS = {
                      "mrms_2023_09", "2023-09"),
     "may2025": Event("may2025", "2025-04-15 00:00:00", "2025-06-01 00:00:00",
                      "mrms_2025_05", "2025-05"),
+    "sandy2012": Event("sandy2012", "2012-10-15 00:00:00", "2012-11-05 00:00:00",
+                       "stage4", "2012-10/2012-11"),
+    "storm2024jan": Event("storm2024jan", "2023-12-25 00:00:00", "2024-01-22 00:00:00",
+                          "mrms", "2024-01"),
+    "tide2024oct": Event("tide2024oct", "2024-09-24 00:00:00", "2024-11-01 00:00:00",
+                         "mrms", "2024-10"),
 }  # fmt: skip
+EVENTS |= {f"y{y}": year_event(y) for y in range(2003, 2026)}
+
+
+def precip_source(event: Event, precip: str | None = None) -> str:
+    """The catalog source for ``event``'s precipitation (``precip`` overrides the
+    event's choice). A product name builds the window's forcing file and catalog entry
+    ``<product>_<event>`` (agri_sfincs.precip.ensure_forcing)."""
+    from agri_sfincs import precip as pr
+
+    src = precip or event.precip
+    if src not in pr.PRODUCTS:
+        return src
+    return pr.ensure_forcing(src, event.tstart, event.tstop, f"{src}_{event.name}")
 
 
 def obs_points() -> gpd.GeoDataFrame:
@@ -79,26 +167,66 @@ def forcing_gauges():
     return ds
 
 
-def setup_event(static_root: Path, event: Event, run_name: str | None = None) -> Path:
-    """Copy ``static_root`` to config.MODELS/<static>/runs/<run_name> and add forcing."""
+def zero_precip(run: Path) -> None:
+    """Rewrite a staged run's ``sfincs_netampr.nc`` with zero rain (same grid, times,
+    variable name and encoding; temp file + rename, so a hard link is broken)."""
+    import os
+
+    import xarray as xr
+
+    fn = Path(run) / "sfincs_netampr.nc"
+    with xr.open_dataset(fn) as src:
+        ds = src.load()
+    var = "Precipitation"
+    enc = {var: {k: v for k, v in ds[var].encoding.items()
+                 if k in ("dtype", "_FillValue", "zlib", "complevel", "chunksizes", "contiguous")}}  # fmt: skip
+    enc[var]["dtype"] = "float32"
+    tenc = ds["time"].encoding
+    enc["time"] = {k: tenc[k] for k in ("units", "calendar", "dtype") if k in tenc}
+    new = ds.copy()
+    new[var] = (ds[var] * 0).astype("float32")
+    new[var].attrs = {**ds[var].attrs, "agri_sfincs": "zeroed: tide-only run"}
+    tmp = fn.with_suffix(".nc.tmp")
+    new.to_netcdf(tmp, encoding=enc)
+    os.replace(tmp, fn)
+
+
+def setup_event(static_root: Path, event: Event, run_name: str | None = None,
+                structures: dict | None = None, zsini: float = ZSINI,
+                precip: str | None = None, wl_offset: float = 0.0) -> Path:  # fmt: skip
+    """Copy ``static_root`` to config.MODELS/<static>/runs/<run_name> and add forcing.
+
+    ``structures`` ({"drnfile": path} ...) REPLACES the static model's structure files in
+    this run only (e.g. the high gate coefficient). ``zsini`` is the initial water level
+    (m NAVD88; FINDINGS §14 / §16). ``precip`` overrides the event's precipitation
+    source (a catalog source or a product, see precip_source); ``"none"`` = no rain
+    (a tide-only run). ``wl_offset`` (m) is added to the boundary water levels: sea-level
+    rise."""
     from hydromt_sfincs import SfincsModel
 
     run = static_root / "runs" / (run_name or event.name)
     if run.exists():
         raise FileExistsError(f"{run} exists")
+    t0, t1 = pd.Timestamp(event.tstart), pd.Timestamp(event.tstop)
+    if (t1 - t0) % pd.Timedelta(seconds=DAY_S):
+        raise ValueError(f"{event.name}: the window must be whole days (restart lattice)")
+    no_rain = precip == "none"
+    # tide-only still WRITES the event's rain file, then zeroes it: the native build
+    # segfaults at start-up with cnb infiltration and no precipitation file (2026-10-05)
+    precip_src = precip_source(event, None if no_rain else precip)  # may add a catalog entry
     shutil.copytree(static_root, run, ignore=shutil.ignore_patterns("runs", "gis"))
 
     sf = SfincsModel(data_libs=[str(config.CATALOG)], root=str(run), mode="r+")
     sf.read()
-    t0, t1 = pd.Timestamp(event.tstart), pd.Timestamp(event.tstop)
     sf.config.update(
         {
             "tref": t0.to_pydatetime(),
             "tstart": t0.to_pydatetime(),
             "tstop": t1.to_pydatetime(),
             "tspinup": 3600.0,
+            "zsini": float(zsini),
             "advection": 1,
-            "dtmapout": 3600.0,
+            "dtmapout": float(event.dtmapout),
             "dtmaxout": DAY_S,  # daily zsmax and twet
             "dtrstout": DAY_S,
             "dthisout": 600.0,
@@ -107,13 +235,26 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None) ->
             "twet_threshold": 0.05,
         }
     )
-    sf.water_level.create(geodataset=forcing_gauges(), buffer=WL_BUFFER_M, merge=False)
-    sf.precipitation.create(precip=event.precip, cumulative_input=True,
+    gauges = forcing_gauges()
+    if wl_offset:
+        gauges["waterlevel"] = gauges.waterlevel + float(wl_offset)
+    sf.water_level.create(geodataset=gauges, buffer=WL_BUFFER_M, merge=False)
+    sf.precipitation.create(precip=precip_src, cumulative_input=True,
                             time_label="right", aggregate=False)  # fmt: skip
     sf.observation_points.create(locations=obs_points(), merge=False)
     sf.write()
     # sf.write() rewrites sfincs.inp from hydromt's config; re-point infiltration.
-    from agri_sfincs.build import patch_infiltration_keys
+    from agri_sfincs.build import patch_infiltration_keys, stage_structures
 
     patch_infiltration_keys(run)
+    if no_rain:
+        zero_precip(run)
+    # hydromt also RE-WRITES sfincs.weir on read/write, rounding crests to 0.1 m
+    # (2026-10-05): restore the static model's own files, then any per-run override.
+    from agri_sfincs.build import STRUCTURE_FILES
+
+    sources = {k: static_root / f for k, f in STRUCTURE_FILES.items()
+               if (static_root / f).is_file()}  # fmt: skip
+    sources.update(structures or {})
+    stage_structures(run, sources)
     return run

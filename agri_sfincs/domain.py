@@ -114,3 +114,40 @@ USGS_SITES = {
 
 def huc12_codes() -> list[str]:
     return list(HUC12)
+
+
+# fmt: off
+#: Tidal river reaches whose bed is burned from the NOAA chart (ENC) — user, 2026-10-02:
+#: "navigable tidal reaches" (Maurice -> Millville, Cohansey -> Bridgeton, Salem River,
+#: Alloway Creek) plus the other charted tributary mouths in the ring. ``head`` is the
+#: NJDEP head-of-tide point (data/structures/structures.gpkg, njdep_head_of_tide; the
+#: coordinates are copied from it) where the tidal reach starts; the reach runs down the
+#: NHDPlus HR main path to the first "Delaware River/Bay" flowline, and is cut where it
+#: runs out into open water (bed_source 3, lidar NoData) — see build_riverbeds.py.
+#: Above ``head`` the stream is non-tidal and gets the surface-minus-depth rule.
+#: ``ehydro`` = the USACE eHydro channel name whose surveys REPLACE the chart soundings
+#: where they reach (user, 2026-10-05).
+TIDAL_REACHES = {
+    "maurice":    {"river": "Maurice River",   "head": (-75.053997, 39.401027),
+                   "note": "head = Union Lake dam, Millville", "ehydro": "Maurice River"},
+    "cohansey":   {"river": "Cohansey River",  "head": (-75.235098, 39.446669),
+                   "note": "head = Bridgeton"},
+    "salem":      {"river": "Salem River",     "head": (-75.477245, 39.670411),
+                   "note": "head = NJDEP point north of Salem", "ehydro": "Salem River"},
+    "alloway":    {"river": "Alloway Creek",   "head": (-75.360844, 39.564649),
+                   "note": "head = Alloway Lake dam, Alloway"},
+    "stow":       {"river": "Stow Creek",      "head": (-75.361918, 39.465272),
+                   "note": "head = NJDEP point"},
+    "oldmans":    {"river": "Oldmans Creek",   "head": (-75.341584, 39.704183),
+                   "note": "head = NJDEP point above Auburn"},
+    "raccoon":    {"river": "Raccoon Creek",   "head": (-75.276262, 39.742546),
+                   "note": "head = Swedesboro"},
+    "mantua":     {"river": "Mantua Creek",    "head": (-75.155693, 39.786579),
+                   "note": "head = Mantua"},
+    "woodbury":   {"river": "Woodbury Creek",  "head": (-75.150567, 39.842022),
+                   "note": "head = Woodbury"},
+    "big_timber": {"river": "Big Timber Creek", "head": (-75.081778, 39.809432),
+                   "note": "head = NJDEP point on the South Branch (the North "
+                           "Branch is all Camden County)"},
+}
+# fmt: on

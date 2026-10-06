@@ -31,8 +31,10 @@ COLORS = {"Salem": "#1f77b4", "Cumberland": "#d62728", "Gloucester": "#2ca02c"}
 
 def county_rain(event) -> pd.DataFrame:
     """Daily county-mean MRMS rain (mm/day), counties rasterized on the 0.01 deg grid."""
-    src = {"sep2023": "mrms_2023-09.nc", "may2025": "mrms_2025-05.nc"}[event.name]
-    with xr.open_dataset(config.DATA / "precip" / src) as ds:
+    src = config.PRECIP_DIR / "forcing" / f"mrms_{event.name}.nc"  # agri_sfincs.precip
+    if not src.is_file():
+        src = config.PRECIP_DIR / {"sep2023": "mrms_2023-09.nc", "may2025": "mrms_2025-05.nc"}[event.name]
+    with xr.open_dataset(src) as ds:
         p = ds["precip"].load()
     lat, lon = p.lat.values, p.lon.values
     tr = from_origin(lon[0] - 0.005, lat[0] + 0.005, 0.01, 0.01)
@@ -74,9 +76,8 @@ def main() -> None:
     ax1.legend(fontsize=8)
     ax2.set_ylabel("cropland with daily max depth > 5 cm (%)")
     ax2.legend(fontsize=8)
-    f0 = pd.Timestamp(ev.focus + "-01")
     for ax in (ax1, ax2):
-        ax.axvspan(f0, f0 + pd.offsets.MonthEnd(1) + pd.Timedelta(days=1), color="0.92", zorder=0)
+        ax.axvspan(ev.focus_start, ev.focus_stop, color="0.92", zorder=0)
         ax.tick_params(labelsize=8)
     ax1.set_title(f"{ev.name}: SFINCS v0 (smoke test; no river channels burned yet)",
                   fontsize=10, loc="left")  # fmt: skip
