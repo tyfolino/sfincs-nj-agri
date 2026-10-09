@@ -24,6 +24,11 @@ Last updated: **End of 2026-10-06 (user: wrap up; nothing queued on SLURM; all w
   - Useful facts: SFINCS runs are bit-reproducible (repeat run diff = 0). A run is ~1 min per
     simulated day on 32 threads. Tide-only runs have ZEROED rain (the engine segfaults with cnb
     and no rain file).
+- **2026-10-08: sample data for the ag-econ colleague** (one scenario: tide2024oct, dikes intact, +0.6 m):
+  `scripts/field_flood_sample.py` → data/analysis/sample_tide2024oct_intact_slr060/ (fields.gpkg/csv,
+  daily.csv, README.md). Per field: CDL 2024 crop mix + flooded %, first/last date, flood days,
+  longest run (Hazus-style duration: Hazus crop tables use start day + duration, not depth), depth.
+  1,273 fields flood (= §29). Not yet sent; the user shares it.
 - **Next, in order:**
   1. Plan checks: Sandy peak vs the observed interior gauges (Bivalve etc.; the Ship John his
      point is outside the active cells, NaN); mass balance; where station peaks rise > SLR.

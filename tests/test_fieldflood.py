@@ -38,5 +38,13 @@ class TestClassify(unittest.TestCase):
         self.assertEqual(order[-1], ff.SAFE)
 
 
+class TestLongestRun(unittest.TestCase):
+    def test_runs(self):
+        self.assertEqual(ff.longest_run([]), 0)
+        self.assertEqual(ff.longest_run([False, False]), 0)
+        self.assertEqual(ff.longest_run([True, True, False, True, True, True, False]), 3)
+        self.assertEqual(ff.longest_run([True] * 31), 31)
+
+
 if __name__ == "__main__":
     unittest.main()

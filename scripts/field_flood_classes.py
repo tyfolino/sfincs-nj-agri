@@ -156,15 +156,18 @@ def maps(g, crs) -> None:
     plt.close(fig)
 
 
-def main() -> None:
-    runs = ps.RUNS
-    model = runs.parent
-    with rasterio.open(model / "subgrid" / "dep_subgrid_lev0.tif") as d:
-        dep = d.read(1, masked=True).filled(np.nan)
-        tr, crs, shape = d.transform, d.crs, d.shape
-    g = load_fields(crs)
-    ids = rasterize(zip(g.geometry, g.field_id), out_shape=shape, transform=tr, fill=0, dtype="uint32")
+def subgrid_crs():
+    with rasterio.open(ps.RUNS.parent / "subgrid" / "dep_subgrid_lev0.tif") as d:
+        return d.crs
 
+
+def field_pixels(g: gpd.GeoDataFrame):
+    """Every 10 m subgrid pixel of every field: (flat model-cell index, ground elevation,
+    field_id), for pixels inside the model grid with a finite ground."""
+    with rasterio.open(ps.RUNS.parent / "subgrid" / "dep_subgrid_lev0.tif") as d:
+        dep = d.read(1, masked=True).filled(np.nan)
+        tr, shape = d.transform, d.shape
+    ids = rasterize(zip(g.geometry, g.field_id), out_shape=shape, transform=tr, fill=0, dtype="uint32")
     with xr.open_dataset(ps.run_dir(EVENT, "intact", 0) / "sfincs_map.nc") as mp:
         zshape = mp["zsmax"].shape
         x0, y0 = float(mp.corner_x.min()), float(mp.corner_y.min())
@@ -176,7 +179,12 @@ def main() -> None:
     f_sel = (nn * zshape[2] + mm)[ok]
     d_sel = dep[rr, cc][ok]
     fid = ids[rr, cc][ok].astype(np.int64)
-    del dep, ids, rr, cc, nn, mm
+    return f_sel, d_sel, fid
+
+
+def main() -> None:
+    g = load_fields(subgrid_crs())
+    f_sel, d_sel, fid = field_pixels(g)
     n = len(g)
     g["model_px_share"] = np.bincount(fid, minlength=n + 1)[1:] / np.maximum(g.ha.values * 100, 1)
 
@@ -255,7 +263,7 @@ def main() -> None:
     text = "\n".join(lines)
     (config.REPORTS / "field_flood_classes.md").write_text(text + "\n")
     print(text)
-    maps(g[g.cls != "outside model"], crs)
+    maps(g[g.cls != "outside model"], g.crs)
 
 
 if __name__ == "__main__":

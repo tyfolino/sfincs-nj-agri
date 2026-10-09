@@ -59,3 +59,12 @@ def class_order() -> list[str]:
     for lev in LEVELS[1:]:
         out += [f"dike-dependent {_lev(lev)}", f"overtopped {_lev(lev)}", f"exposed {_lev(lev)}"]
     return out + [SAFE]
+
+
+def longest_run(wet) -> int:
+    """Longest run of consecutive True values in a 1-D boolean sequence (days)."""
+    best = cur = 0
+    for w in wet:
+        cur = cur + 1 if w else 0
+        best = max(best, cur)
+    return best
