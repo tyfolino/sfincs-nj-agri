@@ -29,6 +29,23 @@ Last updated: **End of 2026-10-06 (user: wrap up; nothing queued on SLURM; all w
   daily.csv, README.md). Per field: CDL 2024 crop mix + flooded %, first/last date, flood days,
   longest run (Hazus-style duration: Hazus crop tables use start day + duration, not depth), depth.
   1,273 fields flood (= §29). Not yet sent; the user shares it.
+- **2026-10-09: colleague's feedback on the sample, answered in chat (no code changed):**
+  - 1,273 is right, but in area it is 2,036 ha flooded (~2.7% of farm polygons). Of the 1,273:
+    - 761 are LU/LC 2140;
+    - 435 are ≥ 50% cropland (1,159 ha flooded);
+    - 236 already flood today;
+    - 684 are wet all 31 days.
+  - Days per month: October 2024 only. Other months need new runs.
+  - Spring salt flood → that season is lost or replanted; years only on heavy or poorly drained
+    soil, or where water is trapped behind dikes. RMA treated Rita's salt as prevented planting
+    (2006 memo).
+  - 2140 = farmland on mapped wetland: ~54% CDL cropland and sticky after abandonment.
+  - **Pending, the user decides:**
+    - add `cdl2024_pasture_pct` (CDL 176) as a separate column in field_flood_sample.py. Hay
+      36/37 is already cropland. Adding pasture gives flooded ≥ 50% fields 435 → 555 and
+      1,159 → 1,369 ha.
+    - Offered: a Sandy natural experiment. Do fields Sandy flooded in the model show fallow or a
+      crop switch in 2013-14 (CDL / Landsat) and prevented planting in RMA 2013?
 - **Next, in order:**
   1. Plan checks: Sandy peak vs the observed interior gauges (Bivalve etc.; the Ship John his
      point is outside the active cells, NaN); mass balance; where station peaks rise > SLR.
