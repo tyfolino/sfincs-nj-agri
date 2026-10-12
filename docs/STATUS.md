@@ -46,6 +46,12 @@ Last updated: **End of 2026-10-06 (user: wrap up; nothing queued on SLURM; all w
       1,159 → 1,369 ha.
     - Offered: a Sandy natural experiment. Do fields Sandy flooded in the model show fallow or a
       crop switch in 2013-14 (CDL / Landsat) and prevented planting in RMA 2013?
+- **2026-10-12: progress notebook for the ag-econ group** (plots only, viewed on GitHub):
+  notebooks/model_progress_agecon.ipynb, figure code in notebooks/progress_figs.py. New
+  `scripts/field_flood_sandy.py` → data/analysis/field_flood_sandy2012.csv: the §29 per-field numbers
+  for the 13 Sandy runs. Fields flooding (dikes as built, tide only) today / +0.3 / +0.6 / +1.0 m:
+  860 / 1,317 / 1,776 / 2,255 (896 / 2,038 / 3,603 / 5,376 ha under water); with Sandy's rain, today:
+  2,448 fields but only 1,915 ha.
 - **Next, in order:**
   1. Plan checks: Sandy peak vs the observed interior gauges (Bivalve etc.; the Ship John his
      point is outside the active cells, NaN); mass balance; where station peaks rise > SLR.

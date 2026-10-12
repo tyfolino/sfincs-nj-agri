@@ -79,12 +79,12 @@ def load_fields(crs) -> gpd.GeoDataFrame:
         columns={"next": "lulc2020", "label_next": "lulc2020_label"})  # fmt: skip
 
 
-def run_stats(run, f_sel, d_sel, fid, nfield) -> pd.DataFrame:
+def run_stats(run, f_sel, d_sel, fid, nfield, event: str = EVENT) -> pd.DataFrame:
     """Per field: share of pixels flooded (> 5 cm month max), mean wet days, mean max depth
-    over flooded pixels."""
+    over flooded pixels, over ``event``'s focus period."""
     with xr.open_dataset(run / "sfincs_map.nc") as mp:
         day = pd.to_datetime(mp["timemax"].values) - pd.Timedelta(days=1)
-        focus = EVENTS[EVENT].in_focus(day)
+        focus = EVENTS[event].in_focus(day)
         maxd = np.zeros(f_sel.size, "float32")
         wet = np.zeros(f_sel.size, "uint16")
         for k in np.flatnonzero(focus):
