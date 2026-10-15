@@ -3,26 +3,34 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-10-15** (repo tidy-up after the Amarel maintenance; nothing on SLURM).
+Last updated: **2026-10-15** (Sandy validation done; nothing on SLURM).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent. It comes
 from SFINCS same-event scenarios (FINDINGS §27, §29-§31); the plan is
 `~/.claude/plans/compressed-humming-eclipse.md`.
+**Proposed (2026-10-15, ag-econ + advisor):** field-level land-use response to flooding, maybe
+NJ-VA, event-based. Gate: does modeled Sandy flooding explain crop change beyond elevation
+(Epanchin-Niell et al. 2023, `docs/refs/27000.pdf`)? If yes, Delaware Bay (both shores) next.
 
 ## Resume here
-- Per-field classes are done (§29, `data/analysis/field_flood_classes.csv`). Sandy per field
-  and the colleague's sample are done too (§32).
-- The progress notebook for the ag-econ group: `notebooks/model_progress_agecon.ipynb`
-  (figures from `notebooks/progress_figs.py`).
+- Sandy run validated against the interior gauges (§33). MOTF is a bathtub rival, not truth.
+- Panel built: `data/analysis/sandy_panel/` (fields.csv, field_year.csv = CDL 2008-25 group
+  shares, README). It has a survivorship flaw, though: fields = LU/LC farm in 2015 AND 2020, so
+  2013-19 exits are missing.
+- The progress notebook for the ag-econ group: `notebooks/model_progress_agecon.ipynb`.
 
 ## Next, in order
+0. **Sandy land-use test:**
+   - Rebuild the panel on fields farmed in 2012 (`data/landuse/njlulc_2007_2012.gpkg` /
+     `field_units.gpkg`). They need their own Sandy per-field stats (fieldflood.run_stats on
+     the intact, removed and rain runs), plus MOTF share as the bathtub alternative.
+   - Then plot corn / idle / exit share by year, flooded vs dry within height bands, and hand
+     the table to the colleague. Duration stays out (§16).
 1. **Tide gates from public sources** (background agent): NRCS post-Sandy repair documents,
    NAACC culvert inventory, WMA / refuge plans (Abbotts Meadow, Mad Horse Creek, Supawna),
    Partnership for the Delaware Estuary, county documents.
-2. **Plan checks:**
-   - Sandy peak vs the observed interior gauges (Bivalve etc.; the Ship John point is outside
-     the active cells, NaN);
+2. **Plan checks** (Sandy vs the interior gauges is done, §33):
    - mass balance;
    - where station peaks rise by more than the SLR.
 3. **Per-system breach runs** (18 systems), on tide2024oct and with a scoured sill (MLLW). A
@@ -45,8 +53,8 @@ from SFINCS same-event scenarios (FINDINGS §27, §29-§31); the plan is
 
 ## Pending decisions (user)
 - Add a `cdl2024_pasture_pct` column to field_flood_sample.py? (§32: 435 → 555 fields.)
-- A Sandy natural experiment? Do fields Sandy flooded in the model show fallow or a crop switch
-  in 2013-14 (CDL / Landsat), and prevented planting in RMA 2013?
+- Soil drainage class for the panel? `fetch_ssurgo.py` gets only HSG / ksat; the panel uses HSG D
+  share as a stand-in.
 
 ## Waiting on
 - **The user's local tide-gate knowledge.** In priority order: location and the creek each gate

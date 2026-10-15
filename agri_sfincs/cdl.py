@@ -4,6 +4,9 @@ Codes follow the standard CDL legend (NASS). "Cropland" here = annual and perenn
 crops, double crops, fallow/idle cropland, hay, sod and tree/berry crops — what crop
 insurance can cover. Grass/Pasture (176) is kept SEPARATE: it is agricultural but
 mostly uninsured row-crop-wise, and in NJ it is often lawn-like open land.
+
+``GROUPS`` = the land-cover groups for per-field shares; ``polygon_pixels`` + ``zone_cover``
+turn polygons and a CDL year into those shares (scripts/build_sandy_panel.py).
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from agri_sfincs import config, domain
 
@@ -59,6 +63,32 @@ CROPLAND = frozenset(
     c for c in NAMES if 1 <= c <= 61 or 66 <= c <= 80 or 204 <= c <= 254
 )
 PASTURE = frozenset({176})
+DOUBLE_CROPS = frozenset(c for c, n in NAMES.items() if n.startswith("Dbl Crop"))
+#: Sorghum, barley, the wheats, other small grains, rye, oats, millet, speltz, triticale.
+SMALL_GRAINS = frozenset({4, 21, 22, 23, 24, 25, 27, 28, 29, 30, 205})
+
+#: Land-cover groups for per-field shares, in column order. The six crop groups split
+#: CROPLAND exactly (other_crops = the rest of it); every code in no group is OTHER (barren,
+#: aquaculture, background, ...). Pre-2010 legend codes (63/64 forest/shrub, 82 developed,
+#: 83 water) sit with their modern twins; 87 (generic wetlands) has no twin and is OTHER.
+_CROP_GROUPS = {
+    "corn": frozenset({1, 12, 13}),
+    "soybeans": frozenset({5}),
+    "other_grains": SMALL_GRAINS | DOUBLE_CROPS,
+    "hay": frozenset({36, 37}),
+    "idle": frozenset({61}),
+}
+GROUPS = {
+    **_CROP_GROUPS,
+    "other_crops": CROPLAND - frozenset().union(*_CROP_GROUPS.values()),
+    "pasture": PASTURE,
+    "herb_wetland": frozenset({195}),
+    "woody_wetland": frozenset({190}),
+    "forest_shrub": frozenset({63, 64, 141, 142, 143, 152}),
+    "developed": frozenset({82, 121, 122, 123, 124}),
+    "water": frozenset({83, 111}),
+}
+OTHER = "other"
 
 
 def name(code: int) -> str:
@@ -79,3 +109,59 @@ def read(year: int, win) -> np.ndarray:
 
     with rasterio.open(path(year)) as c:
         return c.read(1, window=win, boundless=True, fill_value=0)
+
+
+def polygon_pixels(geoms, shape, transform) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Which pixels of a grid (``shape``, ``transform``) belong to which polygon: pixel CENTRE
+    inside (rasterio default; overlaps go to the later polygon). A polygon that holds no
+    centre gets the one pixel under its representative point, as
+    ``exposure.add_exposure`` does. Returns (``zone``, ``flat``, ``fallback``): 1-based
+    polygon number (order of ``geoms``) and flat pixel index, one entry per (polygon, pixel)
+    pair, and the polygon numbers that took the fallback pixel (dropped from ``zone`` when
+    that pixel is off the grid)."""
+    from rasterio.features import rasterize
+
+    geoms = list(geoms)
+    lab = np.zeros(shape, dtype="int64")
+    for k in range(0, len(geoms), 5000):  # chunks, as exposure.add_exposure
+        sub = geoms[k : k + 5000]
+        r = rasterize([(g, k + i + 1) for i, g in enumerate(sub)], out_shape=shape,
+                      transform=transform, fill=0, dtype="int64")  # fmt: skip
+        lab = np.where(r > 0, r, lab)
+    flat = np.flatnonzero(lab)
+    zone = lab.ravel()[flat]
+    miss = np.setdiff1d(np.arange(1, len(geoms) + 1), zone)
+    if miss.size:
+        pts = [geoms[i - 1].representative_point() for i in miss]
+        col = np.floor([(p.x - transform.c) / transform.a for p in pts]).astype(int)
+        row = np.floor([(p.y - transform.f) / transform.e for p in pts]).astype(int)
+        ok = (row >= 0) & (row < shape[0]) & (col >= 0) & (col < shape[1])
+        zone = np.concatenate([zone, miss[ok]])
+        flat = np.concatenate([flat, row[ok] * shape[1] + col[ok]])
+    return zone, flat, miss
+
+
+def zone_cover(zone: np.ndarray, code: np.ndarray, n: int, groups=None) -> pd.DataFrame:
+    """Per zone 1..``n``: pixel count ``n_px``, the share of its pixels in each group of
+    ``groups`` (default ``GROUPS``; columns ``share_<group>``, then ``share_other`` for
+    every code in no group) and the dominant class ``dom_code`` (most pixels; ties -> the
+    lowest code). ``zone`` and ``code`` are aligned per pixel (``code`` 0..255). A zone with
+    no pixel gets n_px 0, NaN shares and dom_code -1."""
+    groups = GROUPS if groups is None else groups
+    zone = np.asarray(zone, dtype="int64")
+    code = np.asarray(code, dtype="int64")
+    counts = np.bincount(zone * 256 + code, minlength=(n + 1) * 256).reshape(n + 1, 256)[1:]
+    npx = counts.sum(axis=1)
+    onehot = np.zeros((256, len(groups) + 1))
+    onehot[:, -1] = 1.0
+    for j, codes in enumerate(groups.values()):
+        idx = [c for c in codes if 0 <= c < 256]
+        onehot[idx, :] = 0.0
+        onehot[idx, j] = 1.0
+    with np.errstate(invalid="ignore", divide="ignore"):
+        sh = (counts @ onehot) / npx[:, None]
+    out = pd.DataFrame(sh, columns=[f"share_{g}" for g in [*groups, OTHER]],
+                       index=pd.RangeIndex(1, n + 1, name="zone"))  # fmt: skip
+    out.insert(0, "n_px", npx)
+    out["dom_code"] = np.where(npx > 0, counts.argmax(axis=1), -1)
+    return out

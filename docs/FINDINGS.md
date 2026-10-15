@@ -925,3 +925,37 @@ area; holds NRCS RCPP-WRE 330636, 7.5 ha; the most dike-dependent farmland, §29
 - **Sandy, per field** (`data/analysis/field_flood_sandy2012.csv`; dikes as built, tide only):
   fields flooding today / +0.3 / +0.6 / +1.0 m = 860 / 1,317 / 1,776 / 2,255 (896 / 2,038 /
   3,603 / 5,376 ha under water). With Sandy's rain, today: 2,448 fields but only 1,915 ha.
+
+## 33. The Sandy run passes the gauge check; FEMA's MOTF footprint floods ~4× more farm field area (2026-10-15; `reports/sandy_validation.md`, `scripts/validate_sandy.py`)
+
+For the Sandy land-use test (does modeled flooding explain crop change beyond elevation?).
+Run: `sandy2012_intact_slr000` (dikes as built, tide only).
+- **No Sandy high-water marks on the NJ bayshore.** USGS STN event 24 has 4 marks inside the
+  ring, all on the Delaware at Chester, PA. The STN API moved: the old
+  `stn.wim.usgs.gov/STNServices` routes 301 to the web app; the new root is
+  `api.waterdata.usgs.gov/stnservices/` (`events/24/sites/`, `hwms/?site=<id>`; the
+  `hwms/filteredhwms/` query 502s).
+- **Interior gauges, Bivalve (Maurice) and Greenwich (Cohansey):**
+  - both are out Oct 29 04:00 to Oct 31 04:00 UTC, the two peak tides;
+  - model high tides, Oct 20 - Nov 4: Bivalve −0.04 m mean (−0.02 on the five highest),
+    Greenwich −0.11 m. Greenwich's larger hourly RMSE (0.30 m) is low tides staying too high,
+    the §16 marsh-creek bias;
+  - peak, estimated as Ship John's observed 1.90 m plus each gauge's offset from Ship John on
+    the two highest tides before the gap: Bivalve 1.79 m (model 1.73), Greenwich 1.68 m
+    (model 1.68).
+- **FEMA MOTF surge extent** (read from nj_bight_sfincs `validation_v4`) is HWM-interpolated
+  over lidar, with no dikes. Its flood edge sits on ground of 1.85-2.0 m almost everywhere,
+  which is the bay peak carried up the creeks flat, ~0.2 m above the gauge-based peaks there.
+  - Off-field ground at 0-3 m NAVD88: 83% agreement. The model is almost never wet where MOTF
+    is dry (1 km²).
+  - Farm fields: MOTF 23.9 km² wet against the model's 4.9.
+    - Dikes removed (Sandy, today): 34% of MOTF's field area is covered.
+    - Today's dikes at +0.3 m: 41%. At +0.6 m: 65%.
+  - Per field (≥ 10% wet): MOTF floods 994 fields; the model floods 383, every one also wet in
+    MOTF.
+  - So on flat bayshore fields, ~0.2 m of peak plus overland routing over a short peak
+    decides most of the difference. A bathtub at the bay peak overstates the field footprint;
+    without an interior peak observation the exact split can't be settled.
+- **For the land-use test:** treat the two footprints as rival exposure measures (physics vs
+  bathtub vs elevation) rather than one as truth. Model extent and depth are usable. Duration
+  is not (§16).

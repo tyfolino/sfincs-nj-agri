@@ -1,0 +1,263 @@
+"""Data table for a cheap test: does modelled Hurricane Sandy (Oct 2012) flooding explain farm
+land-use change better than ground height alone? Assembles the table only (no model fits).
+
+Fields = the 13,699 NJDEP LU/LC farm polygons (farm in 2015 AND 2020) of data/analysis/field_flood_classes.gpkg
+(scripts/field_flood_classes.py), same field_id.
+
+fields.csv (one row per field, static):
+  attributes        county, ha, lulc2020(_label), behind_levee (field_flood_classes.csv)
+  height            m_above_mhhw, leveed_share (agri_sfincs.exposure.add_exposure, FINDINGS §21)
+  Sandy             sandy2012_intact_slr000 (dikes as built, tide only) from
+                    data/analysis/field_flood_sandy2012.csv: sandy_share, sandy_maxd_m,
+                    sandy_flooded (share > 0); the same three for the Sandy + Stage IV rain run
+                    (sandy_rain_*). wetdays left out (duration not trusted, FINDINGS §16)
+  soil              SSURGO DRAINAGE CLASS IS NOT ON DISK (scripts/fetch_ssurgo.py keeps only
+                    hydgrp + ksat). Stand-in from data/soils/ssurgo_mapunits.gpkg (dominant
+                    component per map unit): hsg_dominant (soil group covering most of the
+                    field) and hsg_wet_share (share in D or dual A/D, B/D, C/D = water table
+                    within ~60 cm when undrained)
+  CDL pixels        n_cdl_px, cdl_px_fallback (field holds no 30 m pixel centre: one pixel
+                    under its representative point stands in)
+
+field_year.csv (one row per field x CDL year 2008-2025): share of the field's CDL pixels in
+each agri_sfincs.cdl.GROUPS group + other, cropland (= sum of the six crop groups =
+cdl.CROPLAND), and the dominant class dom_code / dom_name. Pixel-to-field = pixel centre in
+polygon on the NJ CDL grid (as scripts/field_flood_sample.py), agri_sfincs.cdl.polygon_pixels.
+
+Writes data/analysis/sandy_panel/{fields.csv, field_year.csv, README.md}.
+Usage:  python scripts/build_sandy_panel.py
+"""
+
+from __future__ import annotations
+
+import time
+
+import geopandas as gpd
+import pandas as pd
+import rasterio
+from rasterio.windows import from_bounds
+
+from agri_sfincs import cdl, config, exposure
+
+OUT = config.ANALYSIS_DIR / "sandy_panel"
+YEARS = range(2008, 2026)
+RUNS = {"sandy": "intact_slr000", "sandy_rain": "intact_rain_slr000"}
+WET_HSG = ("D", "A/D", "B/D", "C/D")
+
+
+def sandy_columns(fid: pd.Series) -> pd.DataFrame:
+    s = pd.read_csv(config.ANALYSIS_DIR / "field_flood_sandy2012.csv").set_index("field_id")
+    out = {}
+    for pre, run in RUNS.items():
+        if f"share_{run}" not in s:
+            print(f"  {run} not in field_flood_sandy2012.csv: no {pre}_* columns")
+            continue
+        out[f"{pre}_share"] = s[f"share_{run}"]
+        out[f"{pre}_maxd_m"] = s[f"maxd_{run}"]
+        out[f"{pre}_flooded"] = (s[f"share_{run}"] > 0).astype("boolean").mask(s[f"share_{run}"].isna())
+    return pd.DataFrame(out).reindex(fid.values)
+
+
+def soil_columns(g: gpd.GeoDataFrame) -> pd.DataFrame:
+    """hsg_dominant and hsg_wet_share by area of SSURGO map-unit polygons."""
+    bbox = tuple(g.to_crs(4326).total_bounds)
+    mu = gpd.read_file(config.SOILS_DIR / "ssurgo_mapunits.gpkg", bbox=bbox, columns=["hsg"])
+    mu = mu.to_crs(g.crs)
+    mu["hsg"] = mu.hsg.fillna("").replace("", "none")
+    x = gpd.overlay(g[["field_id", "geometry"]], mu[["hsg", "geometry"]], how="intersection",
+                    keep_geom_type=True)  # fmt: skip
+    x["a"] = x.area
+    a = x.groupby(["field_id", "hsg"]).a.sum().reset_index()
+    tot = a.groupby("field_id").a.sum()
+    dom = a.sort_values(["field_id", "a"], ascending=[True, False]).drop_duplicates("field_id")
+    wet = a[a.hsg.isin(WET_HSG)].groupby("field_id").a.sum().reindex(tot.index).fillna(0)
+    out = pd.DataFrame({"hsg_dominant": dom.set_index("field_id").hsg, "hsg_wet_share": wet / tot})
+    return out.reindex(g.field_id.values)
+
+
+def cdl_panel(g: gpd.GeoDataFrame) -> tuple[pd.DataFrame, pd.DataFrame, list[int]]:
+    """Per field: n_cdl_px, cdl_px_fallback. Per field x year: group shares, cropland,
+    dom_code, dom_name. Also the CDL years not on disk."""
+    with rasterio.open(cdl.path(2025)) as c:
+        gg = g.to_crs(c.crs)
+        win = from_bounds(*gg.total_bounds, transform=c.transform).round_offsets().round_lengths()
+        tr, shape = c.window_transform(win), (int(win.height), int(win.width))
+    zone, flat, fallback = cdl.polygon_pixels(gg.geometry, shape, tr)
+    n, fid = len(g), g.field_id.values
+    crop_cols = [f"share_{k}" for k in ("corn", "soybeans", "other_grains", "hay", "idle", "other_crops")]
+    rows, missing = [], []
+    for y in YEARS:
+        if not cdl.path(y).exists():
+            missing.append(y)
+            continue
+        t = cdl.zone_cover(zone, cdl.read(y, win).ravel()[flat], n)
+        t.insert(0, "field_id", fid)
+        t.insert(1, "year", y)
+        t["cropland"] = t[crop_cols].sum(axis=1, min_count=1)
+        t["dom_name"] = t.dom_code.map(lambda c: cdl.name(c) if c >= 0 else "")
+        rows.append(t)
+    fy = pd.concat(rows, ignore_index=True)
+    fy = fy[[c for c in fy.columns if c not in ("dom_code", "dom_name")] + ["dom_code", "dom_name"]]
+    static = pd.DataFrame({"n_cdl_px": rows[0].n_px.values, "cdl_px_fallback": False}, index=fid)
+    static.loc[fid[fallback - 1], "cdl_px_fallback"] = True
+    return static, fy.drop(columns="n_px"), missing
+
+
+def _shift(fy: pd.DataFrame, f: pd.DataFrame) -> str:
+    """A few product-level jumps in the field-average CDL shares, for the caveats."""
+    w = fy.merge(f[["field_id", "n_cdl_px"]], on="field_id")
+    cols = ["cropland", "share_developed", "share_idle", "share_pasture"]
+    m = w[cols].mul(w.n_cdl_px, axis=0).groupby(w.year).sum().div(w.groupby("year").n_cdl_px.sum(), axis=0)
+    p = lambda c, y: f"{100 * m.loc[y, c]:.0f}" if y in m.index else "?"  # noqa: E731
+    return (f"cropland {p('cropland', 2023)}% in 2023 vs {p('cropland', 2024)}% in 2024; developed "
+            f"{p('share_developed', 2023)}% vs {p('share_developed', 2024)}%; idle {p('share_idle', 2011)}% "
+            f"in 2011 but {p('share_idle', 2016)}% from 2016; pasture {p('share_pasture', 2012)}% in 2012, "
+            f"{p('share_pasture', 2013)}% in 2013")  # fmt: skip
+
+
+def readme(f: pd.DataFrame, fy: pd.DataFrame, missing: list[int]) -> str:
+    groups = "\n".join(
+        f"| share_{k} | {', '.join(str(c) for c in sorted(v)) if len(v) <= 12 else 'see note'} |"
+        for k, v in cdl.GROUPS.items()
+    )
+    other_crops = ", ".join(str(c) for c in sorted(cdl.GROUPS["other_crops"]))
+    grains = ", ".join(str(c) for c in sorted(cdl.GROUPS["other_grains"]))
+    rain = "sandy_rain_share" in f
+    yrs = f"{fy.year.min()}-{fy.year.max()}" + (f" (missing: {missing})" if missing else "")
+    return f"""# Sandy panel: per-field Sandy flooding, height and CDL land use 2008-2025
+
+Data table for testing whether modelled Hurricane Sandy (October 2012) flooding explains farm
+land-use change better than ground height alone. Built by `scripts/build_sandy_panel.py`; no
+model fits here.
+
+- `fields.csv`: {len(f):,} fields, one row each (static attributes).
+- `field_year.csv`: {len(fy):,} rows, one per field per CDL year {yrs}.
+
+Join on `field_id` (the same ids as `data/analysis/field_flood_classes.{{csv,gpkg}}`; the
+polygons are in that gpkg, EPSG:32618).
+
+## Fields
+
+NJDEP Land Use/Land Cover 2020 farm polygons (codes 2100 / 2140 / 2200 / 2300 / 2400) in
+Salem, Cumberland and Gloucester, Delaware-draining side only. **Every field was farmland in
+BOTH LU/LC 2015 and LU/LC 2020** (`scripts/fetch_njlulc.py` keeps polygons farmed in 2015;
+`scripts/field_flood_classes.py` keeps those still farm in 2020). Land that LU/LC shows
+leaving farming before 2020 (to wetland, forest, urban) is NOT in the table, nor are fields
+first farmed in 2016-20. So the land-use change visible here is what CDL sees inside polygons
+LU/LC still mapped as farm in 2020 (including 2140, farmed wetland); the sample is
+conditioned on survival to 2020 in LU/LC.
+
+## `fields.csv`
+
+| column | meaning |
+|---|---|
+| field_id | field id |
+| county | Salem, Cumberland or Gloucester |
+| ha | field area, hectares |
+| lulc2020, lulc2020_label | NJDEP LU/LC 2020 code and label; 2140 = agricultural wetland (farmed mapped wetland) |
+| behind_levee | at least half the field inside a USACE National Levee Database leveed area |
+| m_above_mhhw | median ground height of the field above recent high tide (MHHW of 2021-25 observed bay gauges, spread between gauges), metres; 30 m cells of the lidar bed |
+| leveed_share | share of the field's 30 m cells inside an NLD leveed area |
+| sandy_share | share of the field's 10 m pixels deeper than 5 cm at Sandy's peak (modelled, SFINCS run `sandy2012_intact_slr000`: dikes as built, today's sea level, tide and surge only, no rain) |
+| sandy_maxd_m | mean peak depth over those flooded pixels, metres (blank when none flooded) |
+| | sandy_* are blank for the {int(f.sandy_share.isna().sum())} fields with no pixel in the model grid (outside the model domain) |
+| sandy_flooded | sandy_share > 0 (any pixel > 5 cm; blank when sandy_share is). The repo's usual rule elsewhere is share >= 0.10 |
+{"| sandy_rain_share, sandy_rain_maxd_m, sandy_rain_flooded | the same for the run with Sandy's rain added (Stage IV radar, `sandy2012_intact_slr000_rain`) |" if rain else ""}
+| hsg_dominant | SSURGO hydrologic soil group covering most of the field (dominant soil component of each map unit); `none` = no group (water, urban, pits) |
+| hsg_wet_share | share of the field in soil group D or a dual group (A/D, B/D, C/D). NOT the drainage class (see caveats); dual groups mark a seasonal high water table when undrained |
+| n_cdl_px | number of 30 m CDL pixels whose centre lies in the field |
+| cdl_px_fallback | True when the field holds no pixel centre: its CDL values come from the ONE pixel under the field's representative point (n_cdl_px = 1) |
+
+## `field_year.csv`
+
+Per field and year: the share of the field's CDL pixels (30 m, pixel centre in the field) in
+each group below, then `cropland`, `dom_code`, `dom_name`. The shares of a row sum to 1.
+
+| column | CDL codes |
+|---|---|
+{groups}
+| share_other | every code in no group (mostly barren 131) |
+| cropland | sum of the six crop groups = all CDL cropland codes (`agri_sfincs.cdl.CROPLAND`; grass/pasture excluded) |
+| dom_code, dom_name | the CDL class with the most pixels in the field (ties: lowest code) |
+
+- share_other_grains: sorghum, barley, the wheats, other small grains, rye, oats, millet,
+  speltz, triticale, and every double crop (codes {grains}). Double crops containing corn or
+  soybeans are counted here, not as corn or soybeans.
+- share_other_crops: the rest of CDL cropland (codes {other_crops}): vegetables, fruit,
+  orchards, berries, sod, clover, switchgrass and so on.
+- share_hay = alfalfa (36) + other hay (37); share_pasture = grass/pasture (176);
+  share_idle = fallow/idle cropland (61).
+
+## Sources
+
+- Fields: `data/analysis/field_flood_classes.gpkg` (`scripts/field_flood_classes.py`).
+- Sandy flooding: `data/analysis/field_flood_sandy2012.csv` (`scripts/field_flood_classes.py
+  --event sandy2012`; FINDINGS §32).
+- Height above MHHW, leveed share: `agri_sfincs.exposure.add_exposure` (FINDINGS §21).
+- Soil group: `data/soils/ssurgo_mapunits.gpkg` (`scripts/fetch_ssurgo.py`, USDA SSURGO).
+- Land use: USDA NASS Cropland Data Layer, NJ, `data/cdl/` (`scripts/fetch_cdl.py`).
+
+## Caveats
+
+- **Sandy is modelled, not observed.** Dikes and banks are as they stand in today's model
+  (NLD alignments, lidar crests), not as they stood in 2012; banks that failed or were
+  repaired since are not represented as of 2012. Depth is the peak over the event; flood
+  DURATION (wet days) is left out because the model's ponded water does not drain properly
+  between storms yet (FINDINGS §16). No MOTF / gate operations beyond the model's check valves.
+- **CDL accuracy varies by year and class.** NJ CDL is less accurate in the early years
+  (2008-2010) and for minor crops, hay, pasture, idle and wetland classes than for corn and
+  soybeans. Classes jump at product refreshes (notably 2019 and 2024 here, FINDINGS §21), and
+  CDL calls abandoned grassy fields "Other Hay" (FINDINGS §24). Visible in this table
+  (pixel-weighted over all fields, {_shift(fy, f)}). Year-to-year changes in a
+  single field are noisy; small fields and field edges are mixed pixels.
+- **Small fields.** About {int(f.cdl_px_fallback.sum()):,} fields hold no 30 m pixel centre
+  and get one pixel; {int((f.n_cdl_px < 5).sum()):,} have fewer than 5 pixels.
+- **Soil drainage class is not included.** SSURGO `drainagecl` is not on disk; the soil group
+  columns are a stand-in. Getting it means extending `scripts/fetch_ssurgo.py` to read
+  `component.drainagecl` (same dominant-component rule).
+- **Height.** {int(f.m_above_mhhw.isna().sum())} fields have no height. High tide is spread
+  between bay gauges, so tide amplification up the creeks is missing.
+"""
+
+
+def main() -> None:
+    t0 = time.time()
+    attrs = pd.read_csv(config.ANALYSIS_DIR / "field_flood_classes.csv",
+                        usecols=["field_id", "county", "ha", "lulc2020", "lulc2020_label", "behind_levee"])  # fmt: skip
+    geo = gpd.read_file(config.ANALYSIS_DIR / "field_flood_classes.gpkg", columns=["field_id"])
+    g = geo.merge(attrs, on="field_id", validate="1:1").sort_values("field_id").reset_index(drop=True)
+    print(f"{len(g):,} fields; height and leveed share ...", flush=True)
+    g = exposure.add_exposure(g)
+    print(f"  {time.time() - t0:.0f} s; soils ...", flush=True)
+    soil = soil_columns(g)
+    print(f"  {time.time() - t0:.0f} s; CDL ...", flush=True)
+    static, fy, missing = cdl_panel(g)
+    f = pd.DataFrame(g.drop(columns="geometry")).set_index("field_id")
+    f = f.join(sandy_columns(g.field_id).set_axis(f.index)).join(soil.set_axis(f.index))
+    f = f.join(static).reset_index()
+    f["ha"] = f.ha.round(4)
+
+    OUT.mkdir(parents=True, exist_ok=True)
+    f.to_csv(OUT / "fields.csv", index=False, float_format="%.6g")
+    fy.to_csv(OUT / "field_year.csv", index=False, float_format="%.6g")
+    (OUT / "README.md").write_text(readme(f, fy, missing))
+
+    # sanity counts
+    print(f"\nfields.csv {len(f):,} rows; field_year.csv {len(fy):,} rows "
+          f"({fy.year.nunique()} years); missing CDL years: {missing or 'none'}")  # fmt: skip
+    print(f"NaN m_above_mhhw: {int(f.m_above_mhhw.isna().sum())}; NaN hsg: {int(f.hsg_dominant.isna().sum())}; "
+          f"CDL fallback fields: {int(f.cdl_px_fallback.sum())}")  # fmt: skip
+    # rounded as written, so 1/3 + 1/6 counts as 0.5 here as in the csv
+    c11 = fy[fy.year == 2011].set_index("field_id").cropland.reindex(f.field_id).round(6).values
+    low = f[(c11 >= 0.5) & (f.m_above_mhhw < 1.5)]
+    print(f">= 50% cropland 2011 and < 1.5 m above MHHW: {len(low)} fields; "
+          f"sandy_flooded {int((low.sandy_flooded == True).sum())}, not {int((low.sandy_flooded == False).sum())}; "  # noqa: E712
+          f"share >= 0.10: {int((low.sandy_share >= 0.10).sum())}; no Sandy value: "
+          f"{int(low.sandy_share.isna().sum())}")  # fmt: skip
+    if "sandy_rain_flooded" in low:
+        print(f"  with rain: flooded {int((low.sandy_rain_flooded == True).sum())}")  # noqa: E712
+    print(f"wrote {OUT} in {time.time() - t0:.0f} s")
+
+
+if __name__ == "__main__":
+    main()
