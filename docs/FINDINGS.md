@@ -959,3 +959,29 @@ Run: `sandy2012_intact_slr000` (dikes as built, tide only).
 - **For the land-use test:** treat the two footprints as rival exposure measures (physics vs
   bathtub vs elevation) rather than one as truth. Model extent and depth are usable. Duration
   is not (§16).
+
+## 34. Sandy land-use first look: a hint of corn → soybeans, nothing on leaving farming (2026-10-15; `reports/sandy_panel.md`, `scripts/build_sandy_panel.py`, `scripts/plot_sandy_panel.py`)
+
+Descriptive only (no model fits). Panel: `data/analysis/sandy_panel/`.
+- **Fields:** the 12,726 LU/LC polygons farmed in 2012, before Sandy (`njlulc_2012_2015.gpkg`
+  prev code). The 2015+2020 survivor set of §29 would hide 2013-19 exits.
+- **Comparison groups:** fields < 1.5 m above MHHW and ≥ 50% cropland in 2008-12.
+  - 428 are flooded by the model (≥ 10% of the field);
+  - 169 are wet only in MOTF;
+  - 324 are dry, reweighted to the flooded fields' height mix (effective n ≈ 75).
+- **Leaving farming is too rare to test here:** only 27 of 839 low crop fields left farming in
+  LU/LC by 2020 (13 flooded, 14 dry).
+- **Change from each group's own 2008-12 mean, flooded − dry (pp of area):**
+  - **Cropland:** −2.1 in 2013-16. The gap was already open in 2012 (−4.8), and CDL 2012 is the
+    summer before Sandy, so it is not Sandy. Gone from 2015.
+  - **Corn:** −3.1 in 2013-16 [−7.3, +1.3] and −3.0 in 2017-25 [−8.3, +1.7]. Near zero before
+    (except 2011), negative in most years after.
+  - **Soybeans:** +5.5 in 2013-16 [+1.0, +10.5]. This is the corn → soy direction that
+    Epanchin-Niell et al. report on low Delmarva fields.
+  - **Grass and vegetation:** small and inside the noise.
+- **Reading:** "something in between". The direction fits salt-sensitive corn being avoided,
+  but it is one storm with about 75 effective dry fields, and CDL's product jumps (pasture
+  2012 → 2013, 2024) move every group.
+- **Cheapest power gain:** more storms rather than more area. The 2016-01-23 (1.92 m at Ship
+  John) and 2021-10-29 (1.87 m) storm tides are Sandy-class (§25). Event runs of those would
+  give repeated exposure per field.

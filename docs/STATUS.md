@@ -15,18 +15,17 @@ NJ-VA, event-based. Gate: does modeled Sandy flooding explain crop change beyond
 
 ## Resume here
 - Sandy run validated against the interior gauges (§33). MOTF is a bathtub rival, not truth.
-- Panel built: `data/analysis/sandy_panel/` (fields.csv, field_year.csv = CDL 2008-25 group
-  shares, README). It has a survivorship flaw, though: fields = LU/LC farm in 2015 AND 2020, so
-  2013-19 exits are missing.
+- Panel on 2012 farm fields: `data/analysis/sandy_panel/` (fields.csv/.gpkg, field_year.csv,
+  README); first look in `reports/sandy_panel.md` (§34).
 - The progress notebook for the ag-econ group: `notebooks/model_progress_agecon.ipynb`.
 
 ## Next, in order
-0. **Sandy land-use test:**
-   - Rebuild the panel on fields farmed in 2012 (`data/landuse/njlulc_2007_2012.gpkg` /
-     `field_units.gpkg`). They need their own Sandy per-field stats (fieldflood.run_stats on
-     the intact, removed and rain runs), plus MOTF share as the bathtub alternative.
-   - Then plot corn / idle / exit share by year, flooded vs dry within height bands, and hand
-     the table to the colleague. Duration stays out (§16).
+0. **Sandy land-use test, next round** (first look §34: a corn → soy hint, underpowered).
+   Options for the group to choose from:
+   - event runs of the 2016-01 and 2021-10 storm tides (Sandy-class, §25), giving repeated exposure;
+   - EN-style 3-year corn-rotation outcome;
+   - farm-clustered intervals.
+   Show the colleague and the advisor `reports/sandy_panel.md` first.
 1. **Tide gates from public sources** (background agent): NRCS post-Sandy repair documents,
    NAACC culvert inventory, WMA / refuge plans (Abbotts Meadow, Mad Horse Creek, Supawna),
    Partnership for the Delaware Estuary, county documents.

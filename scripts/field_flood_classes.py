@@ -48,12 +48,10 @@ from pyproj import Transformer  # noqa: E402
 
 from agri_sfincs import (  # noqa: E402
     config,
-    dikes,
     domain,
     fieldflood,
     landuse,
     maps,
-    region,
     runs,
 )
 from agri_sfincs.report import md_table  # noqa: E402
@@ -76,17 +74,7 @@ def color(cls: str) -> str:
 
 def load_fields(crs) -> gpd.GeoDataFrame:
     g = gpd.read_file(config.LANDUSE_DIR / "njlulc_2015_2020.gpkg")
-    g = g[g.next.map(landuse.is_farmed)].to_crs(crs).reset_index(drop=True)
-    cty = region.load_counties().to_crs(crs)
-    cty = cty[cty.fips.isin(domain.COUNTIES)][["name", "geometry"]].rename(columns={"name": "county"})
-    pts = g[["geometry"]].copy()
-    pts["geometry"] = g.representative_point()
-    g["county"] = gpd.sjoin(pts, cty, how="left", predicate="within").groupby(level=0).county.first()
-    g = g[g.county.notna()].reset_index(drop=True)
-    lev = dikes.leveed_areas(crs)
-    inter = gpd.overlay(g[["geometry"]].reset_index(names="fid"), lev[["geometry"]], how="intersection")
-    share = inter.assign(a=inter.area).groupby("fid").a.sum() / g.area
-    g["behind_levee"] = share.reindex(g.index).fillna(0).values >= 0.5
+    g = fieldflood.add_county_levee(g[g.next.map(landuse.is_farmed)].to_crs(crs).reset_index(drop=True))
     g["field_id"] = np.arange(1, len(g) + 1)
     g["ha"] = g.area / 1e4
     return g[["field_id", "county", "next", "label_next", "ha", "behind_levee", "geometry"]].rename(
