@@ -8,7 +8,8 @@ Runs, on the v1 model (dikes as weirs, check-valve gates, burned beds), TIDE-ONL
   sandy2012    intact, SLR 0, WITH Stage IV rain     (how much rain adds behind the banks)
   --storms:    the other Sandy-class storm tides (storm2012dec, storm2016jan, storm2021oct) x
                {intact, removed} at SLR 0, plus intact WITH rain: repeated exposure for the
-               land-use test (FINDINGS §34)
+               land-use test (FINDINGS §34); and the planting-season / harvest storm tides
+               (SPRING_STORMS) x intact, tide only and WITH rain (flood timing)
   --breaches:  sandy2012 x each farm system breached alone (data/structures/scenarios/breach/)
   --restore:   farm -> wetland phase 1 (2026-10-06, scripts/make_restore_scenarios.py): per site,
                the outlet re-opened to MLLW over 100 / 300 m and its gate removed, tide2024oct x
@@ -41,6 +42,8 @@ DIKES = {"intact": None, "removed": SC / "dikes_removed.weir", "breach_all_farm"
 
 
 STORMS = ["storm2012dec", "storm2016jan", "storm2021oct"]
+SPRING_STORMS = ["storm2010mar", "storm2011apr", "storm2012jun", "storm2014apr", "storm2018sep",
+                 "storm2022apr", "storm2023jun", "storm2024spr"]
 RESTORE = SC / "restore"
 RESTORE_SITES = ["middle_neck", "durham"]
 
@@ -84,6 +87,9 @@ def matrix(breaches: bool, restore: bool = False, storms: bool = False) -> list[
         for ev in STORMS:
             for d in ("intact", "removed"):
                 runs.append({"event": ev, "dikes": d, "weir": DIKES[d], "slr": 0.0, "precip": "none"})
+            runs.append({"event": ev, "dikes": "intact", "weir": None, "slr": 0.0, "precip": None})
+        for ev in SPRING_STORMS:
+            runs.append({"event": ev, "dikes": "intact", "weir": None, "slr": 0.0, "precip": "none"})
             runs.append({"event": ev, "dikes": "intact", "weir": None, "slr": 0.0, "precip": None})
     for r in runs:
         r["name"] = (f"{r['event']}_{r['dikes']}_slr{int(round(100 * r['slr'])):03d}"

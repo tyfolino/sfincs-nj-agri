@@ -33,7 +33,14 @@ each agri_sfincs.cdl.GROUPS group + other, cropland (= sum of the six crop group
 cdl.CROPLAND), and the dominant class dom_code / dom_name. Pixel-to-field = pixel centre in
 polygon on the NJ CDL grid (as scripts/field_flood_sample.py), agri_sfincs.cdl.polygon_pixels.
 
-Writes data/analysis/sandy_panel/{fields.csv, fields.gpkg, field_year.csv, README.md}.
+field_event.csv (one row per field x storm): every Sandy-class or planting-season storm tide
+with a finished run (STORMS; scripts/setup_scenarios.py --storms), dikes as built: peak (Ship
+John's peak hour), peak_month, first_cdl_year (the first CDL season whose planting can respond:
+the peak's year for Jan-Jun, the next year for Jul-Dec), tide_share / tide_maxd_m (tide only)
+and rain_share / rain_maxd_m (tide + rain), as the Sandy columns. Rows only for fields wet in
+either run (share > 0); a missing field-storm pair means dry.
+
+Writes data/analysis/sandy_panel/{fields.csv, fields.gpkg, field_year.csv, field_event.csv, README.md}.
 Usage:  python scripts/build_sandy_panel.py
 """
 
@@ -45,10 +52,12 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+import xarray as xr
 from rasterio.features import rasterize
 from rasterio.windows import from_bounds
 
 from agri_sfincs import cdl, config, domain, exposure, fieldflood, landuse, runs
+from agri_sfincs.events import EVENTS
 
 OUT = config.ANALYSIS_DIR / "sandy_panel"
 YEARS = range(2008, 2026)
@@ -57,6 +66,10 @@ RUNS = {"sandy": ("intact", ""), "sandy_nodikes": ("removed", ""), "sandy_rain":
 MOTF = config.BIGHT_DATA / "validation_v4" / "sandy_motf_extent_v4.tif"
 MOTF_VALID = config.BIGHT_DATA / "validation_v4" / "sandy_motf_valid_nj_v4.tif"
 WET_HSG = ("D", "A/D", "B/D", "C/D")
+#: every storm tide in field_event.csv (FINDINGS §25, §34): Sandy and the other Sandy-class ones,
+#: then the planting-season (Mar-Jun) ones and Sep 2018
+STORMS = ["sandy2012", "storm2012dec", "storm2016jan", "storm2021oct", "storm2010mar", "storm2011apr",
+          "storm2012jun", "storm2014apr", "storm2018sep", "storm2022apr", "storm2023jun", "storm2024spr"]
 
 
 def load_fields() -> gpd.GeoDataFrame:
@@ -77,10 +90,10 @@ def load_fields() -> gpd.GeoDataFrame:
     return g[["field_id", "county", "ha", "behind_levee", "lulc2012", "lulc2015", "lulc2020", "geometry"]]
 
 
-def sandy_columns(g: gpd.GeoDataFrame) -> pd.DataFrame:
+def sandy_columns(g: gpd.GeoDataFrame, px) -> pd.DataFrame:
     """Per field, from each run in RUNS: share, maxd_m, flooded (share > 0); NaN when the field
-    has no pixel in the model grid."""
-    f_sel, d_sel, fid = fieldflood.field_pixels(g.to_crs(rasterio.open(runs.subgrid_dep()).crs))
+    has no pixel in the model grid. ``px`` = fieldflood.field_pixels(g)."""
+    f_sel, d_sel, fid = px
     out = {}
     for pre, (dk, suffix) in RUNS.items():
         st = fieldflood.run_stats(runs.run_dir(EVENT, dk, 0, suffix), f_sel, d_sel, fid, len(g), EVENT)
@@ -90,6 +103,43 @@ def sandy_columns(g: gpd.GeoDataFrame) -> pd.DataFrame:
         print(f"  {pre}: {int((st.share > 0).sum())} fields wet, {int((st.share >= fieldflood.SHARE).sum())} "
               f">= {fieldflood.SHARE:.0%}", flush=True)  # fmt: skip
     return pd.DataFrame(out).reindex(g.field_id.values)
+
+
+def storm_peaks() -> dict[str, pd.Timestamp]:
+    """Ship John's peak hour in each storm's focus period."""
+    with xr.open_dataset(config.GAUGE_DIR / "waterlevel_forcing_navd88.nc") as ds:
+        sj = ds["waterlevel"].sel(stations=domain.SHIP_JOHN).to_series()
+    out = {}
+    for ev in STORMS:
+        e = EVENTS[ev]
+        w = sj[e.focus_start : e.focus_stop - pd.Timedelta("1h")]
+        out[ev] = w.idxmax()
+    return out
+
+
+def event_table(g: gpd.GeoDataFrame, px) -> pd.DataFrame:
+    """field_event.csv (docstring): fields wet in either run of each finished storm."""
+    f_sel, d_sel, fid = px
+    peaks, rows = storm_peaks(), []
+    for ev in STORMS:
+        tide, rain = runs.run_dir(ev, "intact", 0), runs.run_dir(ev, "intact", 0, "_rain")
+        if not (runs.finished(tide) and runs.finished(rain)):
+            print(f"  {ev}: runs not finished, left out", flush=True)
+            continue
+        st = {k: fieldflood.run_stats(r, f_sel, d_sel, fid, len(g), ev) for k, r in (("tide", tide), ("rain", rain))}
+        t = pd.DataFrame({"field_id": g.field_id.values, "tide_share": st["tide"].share.values,
+                          "tide_maxd_m": st["tide"].maxd.values, "rain_share": st["rain"].share.values,
+                          "rain_maxd_m": st["rain"].maxd.values})  # fmt: skip
+        t = t[(t.tide_share > 0) | (t.rain_share > 0)]
+        pk = peaks[ev]
+        t.insert(1, "event", ev)
+        t.insert(2, "peak", pk.strftime("%Y-%m-%d %H:00"))
+        t.insert(3, "peak_month", pk.month)
+        t.insert(4, "first_cdl_year", pk.year if pk.month <= 6 else pk.year + 1)
+        rows.append(t)
+        print(f"  {ev} (peak {pk:%Y-%m-%d}): {int((t.tide_share >= fieldflood.SHARE).sum())} fields >= "
+              f"{fieldflood.SHARE:.0%} tide only, {int((t.rain_share >= fieldflood.SHARE).sum())} with rain", flush=True)  # fmt: skip
+    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
 def motf_share(g: gpd.GeoDataFrame) -> pd.Series:
@@ -166,7 +216,7 @@ def _shift(fy: pd.DataFrame, f: pd.DataFrame) -> str:
             f"{p('share_pasture', 2013)}% in 2013")  # fmt: skip
 
 
-def readme(f: pd.DataFrame, fy: pd.DataFrame, missing: list[int]) -> str:
+def readme(f: pd.DataFrame, fy: pd.DataFrame, missing: list[int], fe: pd.DataFrame) -> str:
     groups = "\n".join(
         f"| share_{k} | {', '.join(str(c) for c in sorted(v)) if len(v) <= 12 else 'see note'} |"
         for k, v in cdl.GROUPS.items()
@@ -175,6 +225,8 @@ def readme(f: pd.DataFrame, fy: pd.DataFrame, missing: list[int]) -> str:
     grains = ", ".join(str(c) for c in sorted(cdl.GROUPS["other_grains"]))
     rain = "sandy_rain_share" in f
     yrs = f"{fy.year.min()}-{fy.year.max()}" + (f" (missing: {missing})" if missing else "")
+    evs = ", ".join(f"{e} ({p[:10]})" for e, p in fe.groupby("event").peak.first().sort_values().items()) if len(fe) else "none yet"
+    gone = [e for e in STORMS if e not in set(fe.get("event", []))]
     return f"""# Sandy panel: per-field Sandy flooding, height and CDL land use 2008-2025
 
 Data table for testing whether modelled Hurricane Sandy (October 2012) flooding explains farm
@@ -241,6 +293,22 @@ each group below, then `cropland`, `dom_code`, `dom_name`. The shares of a row s
 - share_hay = alfalfa (36) + other hay (37); share_pasture = grass/pasture (176);
   share_idle = fallow/idle cropland (61).
 
+## `field_event.csv`
+
+One row per field and storm tide, for fields the storm wet in either run (a missing pair means
+dry). Storms in this file: {evs}.{f" Not yet run or finished: {', '.join(gone)}." if gone else ""}
+All are SFINCS runs with the dikes as built and today's sea level; Sandy's rows repeat the
+`sandy_*` / `sandy_rain_*` columns of `fields.csv`.
+
+| column | meaning |
+|---|---|
+| field_id, event | field and storm (run name prefix) |
+| peak | hour of the storm tide's peak at Ship John Shoal (UTC) |
+| peak_month | its month: planting season is roughly Mar-Jun, harvest Sep-Nov |
+| first_cdl_year | the first CDL season whose planting can respond: the peak's year for Jan-Jun peaks, the next year for Jul-Dec peaks (a June flood after planting may show as replanting or a switch the same season) |
+| tide_share, tide_maxd_m | tide-only run: share of the field's 10 m pixels deeper than 5 cm at the peak, mean peak depth over them (m) |
+| rain_share, rain_maxd_m | the same with the storm's rain (Stage IV before 2016, MRMS from 2016) |
+
 ## Sources
 
 - Fields and land use: NJDEP LU/LC 2012-2015 and 2015-2020 layers, `data/landuse/`
@@ -278,7 +346,10 @@ def main() -> None:
     t0 = time.time()
     g = load_fields()
     print(f"{len(g):,} fields ({time.time() - t0:.0f} s); Sandy runs and MOTF ...", flush=True)
-    sandy = sandy_columns(g).join(motf_share(g))
+    px = fieldflood.field_pixels(g.to_crs(rasterio.open(runs.subgrid_dep()).crs))
+    sandy = sandy_columns(g, px).join(motf_share(g))
+    print(f"  {time.time() - t0:.0f} s; storms ...", flush=True)
+    fe = event_table(g, px)
     print(f"  {time.time() - t0:.0f} s; height and leveed share ...", flush=True)
     g = exposure.add_exposure(g)
     print(f"  {time.time() - t0:.0f} s; soils ...", flush=True)
@@ -294,7 +365,8 @@ def main() -> None:
     f.to_csv(OUT / "fields.csv", index=False, float_format="%.6g")
     g[["field_id", "geometry"]].to_file(OUT / "fields.gpkg", driver="GPKG")
     fy.to_csv(OUT / "field_year.csv", index=False, float_format="%.6g")
-    (OUT / "README.md").write_text(readme(f, fy, missing))
+    fe.to_csv(OUT / "field_event.csv", index=False, float_format="%.6g")
+    (OUT / "README.md").write_text(readme(f, fy, missing, fe))
 
     # sanity counts
     print(f"\nfields.csv {len(f):,} rows; field_year.csv {len(fy):,} rows "
