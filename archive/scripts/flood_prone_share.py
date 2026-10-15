@@ -2,7 +2,7 @@
 
 Fork 1 identifies "does flooding add damage beyond rain" from counties that differ in a
 FIXED flood-prone cropland share. This computes that share for every county in
-data/fork1/counties.gpkg (scripts/fork1_counties.py).
+data/fork1/counties.gpkg (archive/scripts/fork1_counties.py).
 
 Sources (all public, fetched once and cached on scratch under data/floodplain/):
 * **FEMA NFHL** (hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer):
@@ -17,12 +17,12 @@ Sources (all public, fetched once and cached on scratch under data/floodplain/):
 * **Relief proxy** ("low-lying", a cheap HAND stand-in): USGS 3DEP elevation
   (elevation.nationalmap.gov ImageServer exportImage) at 90 m on a grid aligned with
   the CDL (3 x 3 CDL pixels per DEM cell); relative elevation = DEM minus the lowest
-  DEM value within 1 km (``agri_sfincs.panel.relative_elevation``); NoData (open water
+  DEM value within 1 km (``archive/scripts/panel.py.relative_elevation``); NoData (open water
   offshore) counts as 0 m. ``share_low2m`` = cropland < 2 m above that local low,
   ``share_low1m`` likewise. It marks valley bottoms AND broad flats, so it is a
   robustness variant, not a floodplain map.
 
-Per county (``agri_sfincs.panel.cropland_shares``):
+Per county (``archive/scripts/panel.py.cropland_shares``):
   crop_km2         cropland area
   nfhl_coverage    share of cropland inside the NFHL availability footprint
   share_sfha       cropland in the 1% SFHA / all cropland
@@ -38,7 +38,7 @@ Writes:
   data/floodplain/nfhl_sfha_<ST>.gpkg, nfhl_availability.gpkg, dem90/<fips>.tif (bulk)
   data/fork1/flood_prone_share.csv
 
-Usage:  python scripts/flood_prone_share.py [--cdl-year 2023] [--coverage-min 0.9]
+Usage:  python archive/scripts/flood_prone_share.py [--cdl-year 2023] [--coverage-min 0.9]
 """
 
 from __future__ import annotations
@@ -51,14 +51,13 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
-from fetch_cdl import cdl_path
 from rasterio import features
 from rasterio.io import MemoryFile
 from rasterio.windows import Window
 
 from agri_sfincs import cdl, config
 from agri_sfincs.net import get
-from agri_sfincs.panel import cropland_shares, relative_elevation
+from panel import cropland_shares, relative_elevation
 
 NFHL = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer"
 DEM = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage"
@@ -207,7 +206,7 @@ def main() -> None:
         abbr = cs.state_abbr.iloc[0]
         sfha = fetch_sfha(st, abbr)
         dates.append(panel_dates(st))
-        with rasterio.open(cdl_path(a.cdl_year, st)) as src:
+        with rasterio.open(cdl.path(a.cdl_year, st)) as src:
             cs = cs.to_crs(src.crs)
             for c in cs.itertuples():
                 rows.append(county_row(c, src, sfha, avail))

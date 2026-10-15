@@ -28,6 +28,7 @@ import geopandas as gpd
 import pandas as pd
 
 from agri_sfincs import config, domain, region, usgs_ogc
+from agri_sfincs.cli import parse_years
 from agri_sfincs.net import get
 
 NOAA_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
@@ -38,11 +39,6 @@ USGS_PARAMS = {
     "63160": "stream elevation NAVD88",
     "72279": "tidal elevation",
 }
-
-
-def parse_years(s: str) -> list[int]:
-    a, b = s.split("-")
-    return list(range(int(a), int(b) + 1))
 
 
 # ── NOAA ──────────────────────────────────────────────────────────────────────

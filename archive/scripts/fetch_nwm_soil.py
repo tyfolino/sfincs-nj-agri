@@ -46,7 +46,7 @@ increment is its end-of-day value. ACCET legitimately falls on dew days; keep it
 negative increments.
 Years already on disk are skipped; the county CSV is rebuilt from them every run.
 
-Usage:  python scripts/fetch_nwm_soil.py [--years 2002-2023] [--workers 4] [--county-only]
+Usage:  python archive/scripts/fetch_nwm_soil.py [--years 2002-2023] [--workers 4] [--county-only]
 """
 
 from __future__ import annotations
@@ -55,13 +55,21 @@ import argparse
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
 from agri_sfincs import cdl, config, domain
+from agri_sfincs.cli import parse_years
+from cropweights import (
+    CDL_PX,
+    SKIP_CDL,
+    Grid,
+    bin_pixels,
+    nearest_year,
+    weighted_mean,
+)
 
 BUCKET = "noaa-nwm-retrospective-3-0-pds/CONUS/zarr"
 #: The NWM grids' CRS (from the stores' ``proj4`` attribute).
@@ -79,10 +87,6 @@ PONDED_MM = {"ponded_frac": 0.0, "ponded10_frac": 9.5}
 #: zwattablrt only takes the soil-layer tops 0, 0.1, 0.4, 1.0 m, or 2.0 (= nothing
 #: saturated). Shares of cropland whose daily min is at or above each depth.
 SAT_DEPTHS = {"sat_0cm_frac": 0.0, "sat_10cm_frac": 0.1, "sat_40cm_frac": 0.4}
-#: CDL years not used for weights (FINDINGS §1: CDL 2010 calls ~100 km2 extra
-#: cropland in Gloucester, a classification artifact until shown otherwise).
-SKIP_CDL = {2010}
-CDL_PX = 30.0 * 30.0
 #: Decimal digits kept in the gridded files (the sources are packed at 0.01 m3/m3,
 #: 0.01 mm, 1 mm and 0.1 m, so this loses nothing that was there).
 LSD = {**{f"soil_m{i}": 4 for i in range(1, 5)}, "sneqv": 2, "qrain": 3,
@@ -109,27 +113,6 @@ STORES = {
 
 
 # ---------------------------------------------------------------- pure helpers
-
-
-@dataclass(frozen=True)
-class Grid:
-    """A window of a regular grid with ascending y: cell (iy, ix) spans
-    [x0 + ix*dx, x0 + (ix+1)*dx) x [y0 + iy*dy, y0 + (iy+1)*dy)."""
-
-    x0: float  # west edge of the window
-    y0: float  # south edge of the window
-    dx: float
-    dy: float
-    nx: int
-    ny: int
-
-    @property
-    def x(self) -> np.ndarray:
-        return self.x0 + (np.arange(self.nx) + 0.5) * self.dx
-
-    @property
-    def y(self) -> np.ndarray:
-        return self.y0 + (np.arange(self.ny) + 0.5) * self.dy
 
 
 def window(xc: np.ndarray, yc: np.ndarray, bounds) -> tuple[slice, slice, Grid]:
@@ -197,43 +180,9 @@ def accum_increment(eod: np.ndarray, days) -> np.ndarray:
     return d
 
 
-def weighted_mean(v: np.ndarray, w: np.ndarray) -> np.ndarray:
-    """Weighted mean over the last two axes of ``v`` (day, ny, nx) with ``w`` (ny, nx),
-    ignoring NaN cells (their weight drops out). All-NaN -> NaN."""
-    ok = np.isfinite(v)
-    num = np.where(ok, v, 0.0).astype(np.float64) * w
-    den = ok * w
-    s = den.sum(axis=(-2, -1))
-    with np.errstate(invalid="ignore", divide="ignore"):
-        return np.where(s > 0, num.sum(axis=(-2, -1)) / s, np.nan)
-
-
 def share(v: np.ndarray, cond: np.ndarray) -> np.ndarray:
     """``cond`` as 0/1 where ``v`` is finite, NaN elsewhere (for weighted shares)."""
     return np.where(np.isfinite(v), cond.astype(np.float32), np.nan)
-
-
-def nearest_year(year: int, years) -> int:
-    """The available year nearest ``year`` (ties go to the earlier year)."""
-    ys = sorted(years)
-    return min(ys, key=lambda y: (abs(y - year), y))
-
-
-def bin_pixels(xs, ys, county_idx, grid: Grid, n_county: int) -> np.ndarray:
-    """Counts of points per (county, cell); points outside the grid are dropped."""
-    ix = np.floor((np.asarray(xs) - grid.x0) / grid.dx).astype(np.int64)
-    iy = np.floor((np.asarray(ys) - grid.y0) / grid.dy).astype(np.int64)
-    ok = (ix >= 0) & (ix < grid.nx) & (iy >= 0) & (iy < grid.ny)
-    flat = (np.asarray(county_idx)[ok] * grid.ny + iy[ok]) * grid.nx + ix[ok]
-    n = np.bincount(flat, minlength=n_county * grid.ny * grid.nx)
-    return n.reshape(n_county, grid.ny, grid.nx)
-
-
-def parse_years(s: str) -> list[int]:
-    if "-" in s:
-        a, b = s.split("-")
-        return list(range(int(a), int(b) + 1))
-    return [int(y) for y in s.split(",")]
 
 
 # ---------------------------------------------------------------- remote reads
@@ -373,7 +322,7 @@ def fetch_year(store: Store, key: str, year: int, ys, xs, grid: Grid, workers: i
         coords={"time": dd, "y": grid.y, "x": grid.x},
         attrs={"source": f"s3://{store.path}", "crs_proj4": PROJ4,
                "day": "D = the 3-hourly instants D 03Z .. D+1 00Z (UTC)",
-               "made_by": "scripts/fetch_nwm_soil.py"},
+               "made_by": "archive/scripts/fetch_nwm_soil.py"},
     )  # fmt: skip
     enc = {n: {"zlib": True, "complevel": 4, "shuffle": True, "dtype": "float32"}
            | ({} if LSD[n] is None else {"least_significant_digit": LSD[n]})

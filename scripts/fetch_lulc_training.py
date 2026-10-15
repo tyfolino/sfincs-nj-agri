@@ -6,7 +6,7 @@ NJDEP Land_Use_2020 layer whose code did NOT change between 2015 and 2020 (LU15 
 least MIN_ACRES in size, inside the model domain's bounding box, grouped into CLASSES.
 
 From each polygon, inset by INSET_M, up to PER_POLY 120 m squares (old field: CLASS_OPTS) on the Landsat-aligned grid
-(scripts/build_field_cells.py: fishnet) that lie wholly inside are drawn at random, up to
+(agri_sfincs.landuse.fishnet) that lie wholly inside are drawn at random, up to
 PER_CLASS squares per class. Squares overlapping a NAIP-checked sample are dropped, so the
 validation stays independent.
 
@@ -20,9 +20,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 
-from agri_sfincs import config, domain, region
-from build_field_cells import fishnet
-from fetch_njlulc import AGOL20, post
+from agri_sfincs import config, domain, landuse, net, region
 
 OUT = config.LANDUSE_DIR / "lulc_training_squares.gpkg"
 MIN_ACRES, INSET_M, CELL_M = 5, 15.0, 120.0
@@ -49,7 +47,7 @@ def fetch_class(codes, bbox, min_acres=MIN_ACRES) -> gpd.GeoDataFrame:
             "outFields": "LU20,LABEL20,ACRES", "orderByFields": "OBJECTID"}  # fmt: skip
     feats, off = [], 0
     while True:
-        d = post(AGOL20, {**base, "resultOffset": off, "resultRecordCount": 1000})
+        d = net.arcgis_form_query(landuse.LULC2020_URL, {**base, "resultOffset": off, "resultRecordCount": 1000})
         f = d.get("features", [])
         feats += f
         if len(f) < 1000:
@@ -64,7 +62,7 @@ def main() -> None:
     bbox = tuple(outline.to_crs(4326).total_bounds)
     held = []
     for f in ("spotcheck_samples.csv", "lulc_samples.csv", "exit_samples_cells.csv"):
-        p = config.DATA / "imagery" / f
+        p = config.IMAGERY_DIR / f
         if p.exists():
             s = pd.read_csv(p)
             held.append(gpd.GeoSeries(gpd.points_from_xy(s.lon, s.lat), crs=4326).to_crs(domain.EPSG).buffer(300))
@@ -76,8 +74,8 @@ def main() -> None:
         g = g[g.intersects(outline.union_all())]
         g["geometry"] = g.buffer(-INSET_M)
         g = g[~g.geometry.is_empty].reset_index(drop=True)
-        net = fishnet(g.total_bounds, o.get("cell_m", CELL_M), g.crs)
-        j = gpd.sjoin(net, g[["LU20", "LABEL20", "geometry"]], predicate="within").reset_index(drop=True)
+        cells = landuse.fishnet(g.total_bounds, o.get("cell_m", CELL_M), g.crs)
+        j = gpd.sjoin(cells, g[["LU20", "LABEL20", "geometry"]], predicate="within").reset_index(drop=True)
         if held is not None:
             j = j[~j.intersects(held)]
         j = j.sample(frac=1.0, random_state=int(rng.integers(1 << 31)))

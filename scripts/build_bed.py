@@ -45,7 +45,7 @@ LOW_M = 1.0
 DEEPER_M = 0.5
 TILE = 4096
 NODATA = -9999.0
-OUT_DIR = config.DATA / "elevation"
+OUT_DIR = config.ELEV_DIR
 LIDAR = config.BIGHT_DATA / "elevation_v4/nj_10ft_dem_v4.tif"
 OTHERS = {  # src code -> path, in fall-through order
     3: config.BIGHT_DATA / "elevation_v4/cudem_delaware_v4.vrt",

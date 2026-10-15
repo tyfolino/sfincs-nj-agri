@@ -23,8 +23,7 @@ import geopandas as gpd
 import pandas as pd
 import xarray as xr
 
-import bayshore_exposure as be
-from agri_sfincs import config
+from agri_sfincs import config, domain, exposure
 from agri_sfincs.report import md_table
 
 SANDY = ("2012-10-25", "2012-11-03")
@@ -33,13 +32,13 @@ SPACING_KM = 0.005
 
 
 def main() -> None:
-    c = gpd.read_file(config.DATA / "structures" / "dikes_built.gpkg", layer="crest_points")
+    c = gpd.read_file(config.STRUCT_DIR / "dikes_built.gpkg", layer="crest_points")
     with xr.open_dataset(config.GAUGE_DIR / "waterlevel_forcing_navd88.nc") as ds:
         peak = ds.waterlevel.sel(time=slice(*SANDY)).max("time")
         st = pd.DataFrame({"lon": ds.lon.values, "lat": ds.lat.values, "v": peak.values},
-                          index=ds.stations.values.astype(str)).drop("8536110")  # fmt: skip
-    p = c.to_crs(32618)
-    c["sandy"] = be.idw(st, "v", p.geometry.x.values, p.geometry.y.values, "EPSG:32618")
+                          index=ds.stations.values.astype(str)).drop(domain.CAPE_MAY)  # fmt: skip
+    p = c.to_crs(domain.EPSG)
+    c["sandy"] = exposure.idw(st, "v", p.geometry.x.values, p.geometry.y.values, f"EPSG:{domain.EPSG}")
     c["free"] = c.crest - c.sandy
 
     def summary(d):

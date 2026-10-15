@@ -1,6 +1,6 @@
 # A4 first test: do cheap wetness predictors beat season + monthly rain?
 
-Made by `scripts/a4_first_test.py` from the RMA loss panel (`data/rma/`), Stage IV rain (`data/precip/`) and the NWM v3.0 retrospective (`data/nwm/`). Tables: `data/analysis/a4_*.csv`. The collaborators' file in `data/insurance/` is not read.
+Made by `archive/scripts/a4_first_test.py` from the RMA loss panel (`data/rma/`), Stage IV rain (`data/precip/`) and the NWM v3.0 retrospective (`data/nwm/`). Tables: `data/analysis/a4_*.csv`. The collaborators' file in `data/insurance/` is not read.
 
 **Bottom line.**
 
@@ -20,7 +20,7 @@ Made by `scripts/a4_first_test.py` from the RMA loss panel (`data/rma/`), Stage 
 ## 1. Design
 
 - **Cells:** 3 counties × 2003–2022 × 12 months = 720; 30 dropped because Stage IV misses > 5% of a county's cropland in that month or the one before (2004-02, 2005-02, 2005-07, 2005-12, 2007-07 and their following months).
-- **Targets:** any wet indemnity > $1k (lead) or > $0, under causes 31 + 51 (lead) or the broad water set (`reports/loss_panel.md`); crop group "all" for county × month (binary, so the 2014 "other" liability break does not matter), and corn, soybeans, wheat separately. Continuous: log10 wet indemnity and the corn + soy + wheat wet loss ratio, among loss months.
+- **Targets:** any wet indemnity > $1k (lead) or > $0, under causes 31 + 51 (lead) or the broad water set (`archive/reports/loss_panel.md`); crop group "all" for county × month (binary, so the 2014 "other" liability break does not matter), and corn, soybeans, wheat separately. Continuous: log10 wet indemnity and the corn + soy + wheat wet loss ratio, among loss months.
 - **Predictors:** Stage IV cropland-mean rain metrics and NWM daily cropland-weighted states aggregated to the month (list in the script docstring), for the same and the previous month. In models they enter as normal-score anomalies within county × calendar month, so the season is handled only by the dummies. Max 1/3 h are blanked where > 5% of the month's cropland hours were spread from 6-h files (Jun–Jul 2003, Jan–Apr 2005, Oct 2015–Feb 2016, Feb 2004).
 - **Models:** ridge logistic (λ = 1, standardized on training years). S = month + county dummies. B = S + log(1 + Stage IV monthly total) this month and last month: the strongest of the simple rain baselines tried (table 2; an exposure term, log liability, made both S and B worse out of sample). B + X adds one predictor; S + X puts X (both lags) in place of rain. Selection-aware: forward selection of 1 or 3 predictors from all 47 by training log-likelihood, redone inside each of the 20 leave-one-year-out folds (missing anomalies set to 0, the median).
 - **Scores:** pooled out-of-fold AUC and Brier; CIs from 2000 bootstrap draws of whole years over the out-of-fold predictions (the models are not refitted per draw, so CIs are somewhat narrow). `p_boot` = share of draws with no gain.

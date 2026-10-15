@@ -1,9 +1,9 @@
 """Field-scale flooding on cropland from an event run: depth per 10 m subgrid pixel,
 per day, summarised by county x crop.
 
-Works for UNIFORM quadtree models (v0), whose map output SFINCS writes on the regular
-(n, m) grid: each 10 m pixel of ``subgrid/dep_subgrid_lev0.tif`` is matched to its cell
-by coordinates. A refined model needs hydromt's downscale_floodmap.
+Works for UNIFORM quadtree models (every model so far), whose map output SFINCS writes on
+the regular (n, m) grid: each 10 m pixel of ``subgrid/dep_subgrid_lev0.tif`` is matched to
+its cell by coordinates (agri_sfincs.runs). A refined model needs hydromt's downscale_floodmap.
 
 Per day (``timemax`` blocks of dtmaxout = 1 day):
   depth = zsmax[face of pixel] - dep[pixel], kept where > 0
@@ -45,7 +45,7 @@ from rasterio.enums import Resampling
 from rasterio.features import rasterize
 from rasterio.vrt import WarpedVRT
 
-from agri_sfincs import cdl, config, domain, region
+from agri_sfincs import cdl, domain, region, runs
 from agri_sfincs.events import EVENTS
 
 THRESH_M = (0.05, 0.15, 0.30)
@@ -79,27 +79,17 @@ def main() -> None:
     # SFINCS writes a uniform quadtree's map output on the regular (n, m) grid.
     mp = xr.open_dataset(run / "sfincs_map.nc")
     tmax = pd.to_datetime(mp["timemax"].values)
-    zshape = mp["zsmax"].shape  # (timemax, n, m)
-    cx, cy = mp["corner_x"].values, mp["corner_y"].values
-    x0, y0 = float(cx.min()), float(cy.min())
-    dx = float(np.diff(np.unique(cx.round(3)))[0])
+    grid = runs.MapGrid.from_map(mp)
 
     dep_f = model / "subgrid" / "dep_subgrid_lev0.tif"
     with rasterio.open(dep_f) as d:
         dep = d.read(1, masked=True).filled(np.nan)
         tr, crs, shape = d.transform, d.crs, d.shape
-    rows, cols = np.indices(shape)
-    px = tr.c + (cols + 0.5) * tr.a
-    py = tr.f + (rows + 0.5) * tr.e
-    nn = np.floor((py - y0) / dx).astype(np.int64)
-    mm = np.floor((px - x0) / dx).astype(np.int64)
-    inside = (nn >= 0) & (nn < zshape[1]) & (mm >= 0) & (mm < zshape[2])
-    face = np.where(inside, nn * zshape[2] + mm, -1)
-    del rows, cols, px, py, nn, mm
+    face = grid.face(*runs.pixel_centres(tr, *np.indices(shape)))
 
     # CDL of the event year on the dep grid; counties on the dep grid.
     year = ev.focus_start.year
-    with rasterio.open(config.CDL_DIR / f"CDL_{year}_{domain.STATE_FIPS}.tif") as c:
+    with rasterio.open(cdl.path(year)) as c:
         with WarpedVRT(c, crs=crs, transform=tr, width=shape[1], height=shape[0],
                        resampling=Resampling.nearest) as v:  # fmt: skip
             grp = crop_group(v.read(1))
@@ -111,7 +101,7 @@ def main() -> None:
     sel = (grp > 0) & (cid > 0) & (face >= 0) & np.isfinite(dep)
     f_sel, d_sel, g_sel, c_sel = face[sel], dep[sel], grp[sel], cid[sel]
 
-    day = tmax - pd.Timedelta(days=1)  # the day each block covers
+    day = runs.block_days(mp)
     focus = ev.in_focus(day)
     month = day.strftime("%Y-%m")
     rows = []
@@ -119,9 +109,7 @@ def main() -> None:
     wet_days = np.zeros(sel.sum(), dtype="uint16")
     wet_month: dict[str, np.ndarray] = {}  # per focus month: wet days per pixel
     for k, t in enumerate(tmax):
-        z_k = mp["zsmax"][k].values.ravel()[f_sel]
-        h = z_k - d_sel
-        h = np.where(np.isfinite(h) & (h > 0), h, 0).astype("float32")
+        h = runs.depth(mp, k, f_sel, d_sel)
         if focus[k]:
             max_depth = np.maximum(max_depth, h)
             wet_days += h > THRESH_M[0]

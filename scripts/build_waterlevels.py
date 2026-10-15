@@ -22,15 +22,11 @@ import pandas as pd
 import xarray as xr
 
 from agri_sfincs import config, domain, waterlevel
+from agri_sfincs.cli import parse_years
 
 NOAA_DIR = config.GAUGE_DIR / "noaa"
 OUT = config.GAUGE_DIR / "waterlevel_forcing_navd88.nc"
 STATIONS = {s["id"]: s for s in domain.NOAA_STATIONS}
-
-
-def parse_years(s: str) -> list[int]:
-    a, b = s.split("-")
-    return list(range(int(a), int(b) + 1))
 
 
 def observed(st: str) -> pd.Series:

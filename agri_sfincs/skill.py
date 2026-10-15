@@ -1,5 +1,5 @@
 """Small, dependency-light skill-score helpers for the A4 loss-predictor tests
-(``scripts/a4_first_test.py``): AUC, Brier, a ridge-penalized logistic regression
+(``archive/scripts/a4_first_test.py``): AUC, Brier, a ridge-penalized logistic regression
 fitted by Newton steps, leave-one-group-out prediction, a group (year) bootstrap and
 a within-group normal-score anomaly. numpy + pandas only, so the stdlib tests run fast.
 """

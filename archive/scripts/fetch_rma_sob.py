@@ -10,16 +10,16 @@ type, net reported quantity (acres when the quantity type is Acres), endorsed ac
 **liability**, total premium, subsidies, indemnity and loss ratio. The record layout is
 ``SOB_State_County_Crop_with_Coverage_Level_1989_Forward.pdf`` (saved alongside, "as of
 5/28/2026"). This is the denominator (liability, premium, acres) for the Cause of Loss
-indemnities fetched by scripts/fetch_rma_col.py. RMA re-issues recent years as business
+indemnities fetched by archive/scripts/fetch_rma_col.py. RMA re-issues recent years as business
 settles (2022-2027 were re-posted 2026-09-28), so re-fetch recent years with ``--refresh``.
 
 The national files are ~25-30 MB unzipped each; only the rows of the requested states
 are kept (default NJ, DE, MD, VA, NC). Writes sobcov_<year>_<ST>.csv per state (named
 columns, whitespace stripped, plus a 5-digit ``fips``): NJ to data/rma/ exactly as
-before, the others to data/rma_states/ (see scripts/fetch_rma_col.py, whose download and
+before, the others to data/rma_states/ (see archive/scripts/fetch_rma_col.py, whose download and
 state split this shares), and the layout PDF. Existing state files are skipped.
 
-Usage:  python scripts/fetch_rma_sob.py [--years 1989-2027] [--states NJ,DE,MD,VA,NC] [--refresh]
+Usage:  python archive/scripts/fetch_rma_sob.py [--years 1989-2027] [--states NJ,DE,MD,VA,NC] [--refresh]
 """
 
 from __future__ import annotations
@@ -28,10 +28,10 @@ import argparse
 import re
 import zipfile
 
-from fetch_rma_col import fetch_states, parse_states, parse_years
-
 from agri_sfincs import config
+from agri_sfincs.cli import parse_years
 from agri_sfincs.net import download, get
+from rma import fetch_states, parse_states
 
 BASE = "https://pubfs-rma.fpac.usda.gov/pub/Web_Data_Files/Summary_of_Business/state_county_crop/"
 DOCS = ["SOB_State_County_Crop_with_Coverage_Level_1989_Forward.pdf"]

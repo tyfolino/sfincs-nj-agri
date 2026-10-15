@@ -54,7 +54,7 @@ DEPTH_CM = 100.0
 
 HSG_CODE = {"A": 1, "B": 6, "C": 5, "D": 3, "A/D": 2, "B/D": 7, "C/D": 8}
 NO_HSG = 4
-SOILS = config.DATA / "soils"
+SOILS = config.SOILS_DIR
 
 
 def sda(sql: str) -> list[list]:

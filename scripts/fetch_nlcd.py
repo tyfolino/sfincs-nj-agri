@@ -30,7 +30,7 @@ from agri_sfincs.net import download
 WCS = "https://www.mrlc.gov/geoserver/ows"
 COVERAGE = "mrlc_download__NLCD_2021_Land_Cover_L48"
 PAD_M = 1000.0
-OUT = config.DATA / "landcover" / "nlcd_2021.tif"
+OUT = config.LANDCOVER_DIR / "nlcd_2021.tif"
 
 
 def main() -> None:

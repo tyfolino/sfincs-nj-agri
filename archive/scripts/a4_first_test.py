@@ -2,10 +2,10 @@
 losses (RMA Cause of Loss) per county x month, and does anything beat season + monthly
 rainfall alone?  Out-of-sample by leave-one-year-out (LOYO), 2003-2022.
 
-Runs in the shared sfincs env:  python scripts/a4_first_test.py  (~2-4 min)
+Runs in the shared sfincs env:  python archive/scripts/a4_first_test.py  (~2-4 min)
 
 Inputs (all built earlier; nothing is fetched):
-  data/rma/loss_panel_county_month.csv    RMA COL x SOB panel (reports/loss_panel.md)
+  data/rma/loss_panel_county_month.csv    RMA COL x SOB panel (archive/reports/loss_panel.md)
   data/precip/rain_county_month.csv       Stage IV (primary) monthly metrics, local months
   data/nwm/nwm_soil_daily_county.csv      NWM v3.0 retrospective daily, to 2023-01-31
   data/insurance/ is NEVER read.
@@ -59,7 +59,7 @@ Writes data/analysis/:
   a4_oof_predictions.csv        out-of-fold probabilities of S, R0, B, SEL1, SEL3 (lead)
 The report's wording was written against the 2026-10-03 numbers; the tables are live.
   a4_flagged_months.csv         Cumberland 2023-09 and Salem 2025-05 (descriptive)
-reports/a4_first_test.md, reports/figs/a4_delta_auc.png, reports/figs/a4_season_roc.png
+archive/reports/a4_first_test.md, archive/reports/figs/a4_delta_auc.png, archive/reports/figs/a4_season_roc.png
 """
 
 from __future__ import annotations
@@ -71,17 +71,17 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from agri_sfincs import config  # noqa: E402
+from agri_sfincs import config, domain  # noqa: E402
 from agri_sfincs import skill as S  # noqa: E402
 from agri_sfincs.report import md_table  # noqa: E402
 
-OUT = config.DATA / "analysis"
-FIGS = config.REPORTS / "figs"
+OUT = config.ANALYSIS_DIR
+FIGS = config.ARCHIVE_REPORTS / "figs"
 YEARS = (2003, 2022)
 LAM = 1.0
 N_BOOT = 2000
 ROWCROPS = ["corn", "soybeans", "wheat"]
-COUNTIES = {34011: "Cumberland", 34015: "Gloucester", 34033: "Salem"}
+COUNTIES = {int(k): v for k, v in domain.COUNTIES.items()}
 
 RAIN_VARS = {  # column -> label
     "total_mm": "rain total",
@@ -671,7 +671,7 @@ def write_report(allc, n_drop, uni, ladder, crop_ladder, inc, sel, freq, cont, f
     lines = [
         "# A4 first test: do cheap wetness predictors beat season + monthly rain?",
         "",
-        "Made by `scripts/a4_first_test.py` from the RMA loss panel (`data/rma/`), Stage IV "
+        "Made by `archive/scripts/a4_first_test.py` from the RMA loss panel (`data/rma/`), Stage IV "
         "rain (`data/precip/`) and the NWM v3.0 retrospective (`data/nwm/`). Tables: "
         "`data/analysis/a4_*.csv`. The collaborators' file in `data/insurance/` is not read.",
         "",
@@ -741,7 +741,7 @@ def write_report(allc, n_drop, uni, ladder, crop_ladder, inc, sel, freq, cont, f
         "Stage IV misses > 5% of a county's cropland in that month or the one before "
         "(2004-02, 2005-02, 2005-07, 2005-12, 2007-07 and their following months).",
         "- **Targets:** any wet indemnity > $1k (lead) or > $0, under causes 31 + 51 (lead) "
-        "or the broad water set (`reports/loss_panel.md`); crop group \"all\" for county × "
+        "or the broad water set (`archive/reports/loss_panel.md`); crop group \"all\" for county × "
         "month (binary, so the 2014 \"other\" liability break does not matter), and corn, "
         "soybeans, wheat separately. Continuous: log10 wet indemnity and the corn + soy + "
         "wheat wet loss ratio, among loss months.",
@@ -874,7 +874,7 @@ def write_report(allc, n_drop, uni, ladder, crop_ladder, inc, sel, freq, cont, f
         "- **2003–2022 only** (NWM). Rain-only models could use 2003–2025.",
         "",
     ]
-    (config.REPORTS / "a4_first_test.md").write_text("\n".join(lines))
+    (config.ARCHIVE_REPORTS / "a4_first_test.md").write_text("\n".join(lines))
 
 
 if __name__ == "__main__":

@@ -40,12 +40,11 @@ import xarray as xr
 from shapely.geometry import LineString, Point
 from shapely.ops import substring
 
-from agri_sfincs import config, domain, region
-from agri_sfincs.dikes import write_drn
+from agri_sfincs import config, dikes, domain, region, runs
+from agri_sfincs.dikes import C_HI, C_LO, Bed, lines_of, write_drn
 from agri_sfincs.report import md_table
-from build_dikes import C_HI, C_LO, Bed, lines_of
 
-STRUCT = config.DATA / "structures"
+STRUCT = config.STRUCT_DIR
 DEDUP_M = 150.0
 IN_RMIN, IN_RMAX = 120.0, 600.0
 OUT_MAX_M = 3000.0
@@ -63,14 +62,12 @@ class LowTide:
         with xr.open_dataset(run / "sfincs_map.nc") as mp:
             zs = mp["zs"].values[-24 * 30:]
             self.zb = mp["zb"].values
-            self.x0, self.y0 = float(mp.corner_x.min()), float(mp.corner_y.min())
+            self.grid = runs.MapGrid.from_map(mp)
         self.p10 = np.nanpercentile(zs, 10, axis=0)
         self.wet = (self.p10 - self.zb) > WET_LOW_M
 
     def at(self, x, y):
-        n = np.floor((np.asarray(y) - self.y0) / 100).astype(int)
-        m = np.floor((np.asarray(x) - self.x0) / 100).astype(int)
-        ok = (n >= 0) & (n < self.zb.shape[0]) & (m >= 0) & (m < self.zb.shape[1])
+        n, m, ok = self.grid.index(np.asarray(x), np.asarray(y))
         p, w = np.full(n.shape, np.nan), np.zeros(n.shape, bool)
         p[ok], w[ok] = self.p10[n[ok], m[ok]], self.wet[n[ok], m[ok]]
         return p, w
@@ -118,14 +115,13 @@ def main() -> None:
     ap.add_argument("--ref", default="v1_100m/sep2023", help="<model>/<run> for low tide")
     a = ap.parse_args()
     crs = domain.EPSG
-    model, run = a.ref.split("/")
-    lt = LowTide(config.MODELS / model / "runs" / run)
+    lt = LowTide(runs.resolve(a.ref))
     bed = Bed()
     outline = region.load_outline().to_crs(crs).geometry.union_all()
 
     gpkg = STRUCT / "structures.gpkg"
     al = gpd.read_file(gpkg, layer="nld_alignment").to_crs(crs)
-    la = gpd.read_file(gpkg, layer="nld_leveed_areas").to_crs(crs)
+    la = dikes.leveed_areas(crs)
     pg = gpd.read_file(gpkg, layer="nld_pipe_gates").to_crs(crs)
     v1 = gpd.read_file(STRUCT / "dikes_built.gpkg", layer="gates")
     crest = gpd.read_file(STRUCT / "dikes_built.gpkg", layer="crest_points")

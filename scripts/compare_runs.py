@@ -31,7 +31,7 @@ import rasterio
 import xarray as xr
 from rasterio.features import rasterize
 
-from agri_sfincs import config, domain, region
+from agri_sfincs import config, domain, region, runs
 from agri_sfincs.events import EVENTS
 from agri_sfincs.report import md_table
 
@@ -68,12 +68,12 @@ def main() -> None:
     ap.add_argument("--out", default=None, help="report path (default reports/compare_<event>.md)")
     a = ap.parse_args()
     ev = EVENTS[a.event]
-    runs = {r: config.MODELS / r.split("/")[0] / "runs" / r.split("/")[1] for r in a.runs}
+    run_dirs = {r: runs.resolve(r) for r in a.runs}
     ndays = (ev.focus_stop - ev.focus_start).days
 
-    gf = {k: p / "summary" / "gauges.csv" for k, p in runs.items()}
+    gf = {k: p / "summary" / "gauges.csv" for k, p in run_dirs.items()}
     gf = {k: f for k, f in gf.items() if f.is_file()}  # none for runs with no USGS window
-    order = list(runs)
+    order = list(run_dirs)
 
     def by_run(df, index, values):
         """rows = (index, metric), columns = run, in the order the runs were given."""
@@ -95,7 +95,7 @@ def main() -> None:
                        md_table(stm.round(2)), ""]  # fmt: skip
 
     rows = []
-    for k, p in runs.items():
+    for k, p in run_dirs.items():
         d = pd.read_csv(p / "summary" / "daily_county_crop.csv")
         d = d[ev.in_focus(d.date)]
         ndays = min(ndays, d.date.nunique())  # a run may stop before the focus does (y2025)
@@ -107,17 +107,17 @@ def main() -> None:
     crop = by_run(pd.DataFrame(rows), "county", ["peak_km2", "area_days", "persistent_km2"])
 
     lines = [f"# Run comparison: {a.event} (focus {ev.focus})", "",
-             "Runs: " + ", ".join(f"`{r}`" for r in runs), "", *gauge_lines,
+             "Runs: " + ", ".join(f"`{r}`" for r in run_dirs), "", *gauge_lines,
              "## Cropland wet > 5 cm in the focus period (km², km²·days)", "",
              md_table(crop.round(2), floatfmt="{:.2f}"), ""]  # fmt: skip
     if len(ev.focus_months()) > 1:
         m = pd.concat({k: pd.read_csv(p / "summary" / "monthly_county.csv")
-                       for k, p in runs.items()}, names=["run"]).reset_index(level=0)  # fmt: skip
+                       for k, p in run_dirs.items()}, names=["run"]).reset_index(level=0)  # fmt: skip
         m["key"] = m.county + " " + m.month
         bym = by_run(m, "key", ["area_days_gt_5cm", "persistent_gt_5cm_km2"])
         lines += ["## Cropland wet > 5 cm by month (km²·days; km² wet every day of the month)",
                   "", md_table(bym.round(2), floatfmt="{:.2f}"), ""]  # fmt: skip
-    vols = {k: gate_volumes(p) for k, p in runs.items()}
+    vols = {k: gate_volumes(p) for k, p in run_dirs.items()}
     vols = {k: v for k, v in vols.items() if v is not None and len(v)}
     if vols:
         gv = pd.DataFrame({k: [v.sum() / 1e6, (v > 1e3).sum(), len(v)] for k, v in vols.items()},

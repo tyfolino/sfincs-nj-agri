@@ -18,7 +18,8 @@ import fetch_rma_col  # noqa: E402
 import fork1_panel  # noqa: E402
 
 from agri_sfincs import config  # noqa: E402
-from agri_sfincs import panel as pn  # noqa: E402
+import rma  # noqa: E402
+import panel as pn  # noqa: E402
 
 
 def _col_line(state: str, county: str, indemnity: str = "100") -> str:
@@ -32,7 +33,7 @@ class TestRmaStates(unittest.TestCase):
     def test_split_keeps_requested_states_only(self):
         lines = [_col_line("34", "033"), _col_line("10", "001"), "\n",
                  _col_line("42", "001"), _col_line("37", "095", "7")]  # fmt: skip
-        keep, n = fetch_rma_col.split_states(lines, ["34", "37"], len(fetch_rma_col.COLUMNS))
+        keep, n = rma.split_states(lines, ["34", "37"], len(fetch_rma_col.COLUMNS))
         self.assertEqual(n, 4)  # the blank line is not a record
         self.assertEqual(sorted(keep), ["34", "37"])
         self.assertEqual([r[0] for r in keep["34"]], ["34033"])
@@ -41,19 +42,19 @@ class TestRmaStates(unittest.TestCase):
 
     def test_wrong_field_count_raises(self):
         with self.assertRaisesRegex(RuntimeError, "layout"):
-            fetch_rma_col.split_states(["2020|34|NJ\n"], ["34"], len(fetch_rma_col.COLUMNS))
+            rma.split_states(["2020|34|NJ\n"], ["34"], len(fetch_rma_col.COLUMNS))
 
     def test_paths_keep_nj_where_it_was(self):
-        self.assertEqual(fetch_rma_col.state_csv("colsom", 2020, "NJ"),
+        self.assertEqual(rma.state_csv("colsom", 2020, "NJ"),
                          config.RMA_DIR / "colsom_2020_NJ.csv")  # fmt: skip
-        self.assertEqual(fetch_rma_col.state_csv("sobcov", 2020, "VA"),
+        self.assertEqual(rma.state_csv("sobcov", 2020, "VA"),
                          config.RMA_STATES_DIR / "sobcov_2020_VA.csv")  # fmt: skip
 
     def test_parse_states(self):
-        self.assertEqual(list(fetch_rma_col.parse_states(None)), ["NJ", "DE", "MD", "VA", "NC"])
-        self.assertEqual(fetch_rma_col.parse_states("nj, nc"), {"NJ": "34", "NC": "37"})
+        self.assertEqual(list(rma.parse_states(None)), ["NJ", "DE", "MD", "VA", "NC"])
+        self.assertEqual(rma.parse_states("nj, nc"), {"NJ": "34", "NC": "37"})
         with self.assertRaises(SystemExit):
-            fetch_rma_col.parse_states("PA")
+            rma.parse_states("PA")
 
 
 class TestShares(unittest.TestCase):

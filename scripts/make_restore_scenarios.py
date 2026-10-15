@@ -38,13 +38,11 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-import bayshore_exposure as be
-import make_dike_scenarios as mds
-from agri_sfincs import config, dikes
+from agri_sfincs import config, dikes, domain, exposure, runs
 
-STRUCT = config.DATA / "structures"
+STRUCT = config.STRUCT_DIR
 OUT = STRUCT / "scenarios" / "restore"
-CRS = "EPSG:32618"
+CRS = f"EPSG:{domain.EPSG}"
 #: Middle Neck (Salem): the system behind the most dike-dependent farmland (FINDINGS §29) and
 #: around NRCS RCPP-WRE 330636 (§22). Durham (Cumberland): went to marsh 2013-19 (§21).
 SITES = ["Middle Neck", "Durham"]
@@ -58,7 +56,7 @@ GATE_SEARCH_M, GATE_C = 150.0, 1.5  # GATE_C as dike_gates_lo
 def mllw_stations() -> pd.DataFrame:
     """Forcing gauges with MLLW = mean daily minimum of observed levels 2021-25 (m NAVD88)."""
     rows = []
-    with xr.open_dataset(config.DATA / "gauges" / "waterlevel_forcing_navd88.nc") as ds:
+    with xr.open_dataset(config.GAUGE_DIR / "waterlevel_forcing_navd88.nc") as ds:
         for s in ds.stations.values:
             w = ds.waterlevel.sel(stations=s).to_series()
             src = ds.source.sel(stations=s).to_series()
@@ -66,17 +64,17 @@ def mllw_stations() -> pd.DataFrame:
             d = x.resample("D").min()[x.resample("D").count() >= 20]
             rows.append({"id": str(s), "lon": float(ds.lon.sel(stations=s)),
                          "lat": float(ds.lat.sel(stations=s)), "mllw": d.mean()})  # fmt: skip
-    return pd.DataFrame(rows).set_index("id").loc[be.FORCING]
+    return pd.DataFrame(rows).set_index("id").loc[exposure.FORCING]
 
 
 def setback(system: str, gates, st) -> dict:
     import rasterio
-    from shapely.geometry import LineString, Point
+    from shapely.geometry import Point
 
-    sl = mds.slug(system)
-    lev = gpd.read_file(STRUCT / "structures.gpkg", layer="nld_leveed_areas").to_crs(CRS)
+    sl = dikes.slug(system)
+    lev = dikes.leveed_areas(CRS)
     L = lev[lev.SYSTEM_NAME == system].union_all()
-    fields = gpd.read_file(config.DATA / "analysis" / "field_flood_classes.gpkg").to_crs(CRS)
+    fields = gpd.read_file(config.ANALYSIS_DIR / "field_flood_classes.gpkg").to_crs(CRS)
     farms = fields[fields.representative_point().within(L)]
     g = gates[gates.system == system].iloc[0]
     out = Point(g.x_site, g.y_site)
@@ -93,7 +91,7 @@ def setback(system: str, gates, st) -> dict:
         weir.append((f"setback_{sl}_{k}", np.interp(si, s_, x), np.interp(si, s_, y), np.full(si.size, SETBACK_CREST_M)))
     dikes.write_weir(OUT / f"{sl}_setback.weir", weir)
     # new gate: lowest farm-side ground near the dike -> lowest R ground near that point
-    with rasterio.open(config.MODELS / "v1_100m" / "subgrid" / "dep_subgrid_lev0.tif") as d:
+    with rasterio.open(runs.subgrid_dep()) as d:
         zb, tr = d.read(1, masked=True).filled(np.nan), d.transform
     x0, y0, x1, y1 = L.bounds
     gx, gy = np.meshgrid(np.arange(x0, x1, 30.0), np.arange(y0, y1, 30.0))
@@ -143,7 +141,7 @@ def main() -> None:
         if g.empty:
             raise KeyError(system)
         xs, ys = float(g.x_site.iloc[0]), float(g.y_site.iloc[0])
-        sill = float(be.idw(st, "mllw", np.array([xs]), np.array([ys]), CRS)[0])
+        sill = float(exposure.idw(st, "mllw", np.array([xs]), np.array([ys]), CRS)[0])
         idx = [i for i, ln in enumerate(lines) if sysof.get(ln[0]) == system]
         # the system's crest vertex nearest the outlet
         i_line, j = min(((i, int(np.argmin(np.hypot(lines[i][1] - xs, lines[i][2] - ys)))) for i in idx),
@@ -154,13 +152,13 @@ def main() -> None:
             zn = dikes.breach(x, y, z, j, w, sill)
             one = list(lines)
             one[i_line] = (name, x, y, zn)
-            dikes.write_weir(OUT / f"{mds.slug(system)}_mllw{int(w)}.weir", one)
-            rows.append({"system": system, "slug": mds.slug(system), "arm": f"mllw{int(w)}", "polyline": name,
+            dikes.write_weir(OUT / f"{dikes.slug(system)}_mllw{int(w)}.weir", one)
+            rows.append({"system": system, "slug": dikes.slug(system), "arm": f"mllw{int(w)}", "polyline": name,
                          "x": float(x[j]), "y": float(y[j]), "outlet_dist_m": dist, "sill_m": sill,
                          "crest_before_min": float(z[zn < z].min()), "crest_before_max": float(z[zn < z].max()),
                          "vertices_lowered": int((zn < z).sum())})  # fmt: skip
         keep = [ln for ln, s in zip(drn, gates.system) if s != system]
-        (OUT / f"{mds.slug(system)}_nogate.drn").write_text("\n".join(keep) + "\n")
+        (OUT / f"{dikes.slug(system)}_nogate.drn").write_text("\n".join(keep) + "\n")
         print(f"{system}: outlet {dist:.0f} m from the bank vertex, sill {sill:+.2f} m, "
               f"{len(drn) - len(keep)} gate(s) removed")  # fmt: skip
     for system in SETBACK_SITES:

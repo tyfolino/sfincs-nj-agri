@@ -1,6 +1,6 @@
 # RMA Cause of Loss: can we build the loss data ourselves?
 
-Checked 2026-10-02. Data: `data/rma/colsom_<year>_NJ.csv` from `scripts/fetch_rma_col.py`
+Checked 2026-10-02. Data: `data/rma/colsom_<year>_NJ.csv` from `archive/scripts/fetch_rma_col.py`
 (all 38 commodity years 1989–2026; NJ rows only, 1.8 MB). Collaborators' sample: `data/insurance/insurance.csv`
 (read locally only; no sample values are quoted here, only match statistics).
 

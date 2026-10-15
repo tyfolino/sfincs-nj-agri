@@ -28,8 +28,7 @@ import numpy as np
 import pandas as pd
 from pyproj import Transformer
 
-import imagery_spotcheck as isc
-from agri_sfincs import config, landuse
+from agri_sfincs import config, landuse, naip
 
 N_CONV, N_STAY, SEED = 24, 24, 20261006
 HALF, RES = 300, 2.0
@@ -51,7 +50,7 @@ def main() -> None:
     s["id"] = [f"{k}{i:02d}" for i, k in enumerate(s.kind)]
     cen = s.to_crs(4326).representative_point()
     s["lon"], s["lat"] = cen.x.values, cen.y.values
-    token = isc.http_json(isc.SAS)["token"]
+    token = naip.http_json(naip.SAS)["token"]
     to_utm = Transformer.from_crs(s.crs, "EPSG:26918", always_xy=True)
     per = 12
     for k in range(0, len(s), per):
@@ -66,9 +65,9 @@ def main() -> None:
             rings = [geom] if geom.geom_type == "Polygon" else list(getattr(geom, "geoms", []))
             for t, yr in enumerate(YEARS[int(r.y0)]):
                 ax = axs[j // 3, (j % 3) * 2 + t]
-                href = isc.naip_item(r.lon, r.lat, yr)
+                href = naip.naip_item(r.lon, r.lat, yr)
                 if href:
-                    ax.imshow(isc.chip(href, token, r.lon, r.lat, half=HALF, res=RES))
+                    ax.imshow(naip.chip(href, token, r.lon, r.lat, half=HALF, res=RES))
                 for poly in rings:
                     if poly.geom_type != "Polygon":
                         continue
@@ -87,7 +86,7 @@ def main() -> None:
         print(f"wrote {out}")
     cols = ["id", "kind", "y0", "y1", "county", "prev", "next", "label_next", "ha", "m_above_mhhw",
             "leveed_share", "lon", "lat"]  # fmt: skip
-    s[cols].to_csv(config.DATA / "imagery" / "lulc_samples.csv", index=False)
+    s[cols].to_csv(config.IMAGERY_DIR / "lulc_samples.csv", index=False)
     print(s[cols].round(2).to_string())
 
 

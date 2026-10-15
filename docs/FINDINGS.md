@@ -98,7 +98,7 @@ files in `data/gauges/noaa/`, in MLLW):
     empty, so lake levels must come from the DEM or the dam heights.
   - **Head of tide:** 96 points (NJDEP).
 
-## 5. Insurance data: RMA Cause of Loss (2026-10-02, `reports/rma_cause_of_loss.md`)
+## 5. Insurance data: RMA Cause of Loss (2026-10-02, `archive/reports/rma_cause_of_loss.md`)
 
 - **The collaborators' sample IS RMA's public Cause of Loss (COL) file:** commodity years
   2022–2025, aggregated to county × year of loss × month of loss. `indemnity_wet` = cause
@@ -107,7 +107,7 @@ files in `data/gauges/noaa/`, in MLLW):
     240/240. Both total misses are commodity-year edge cases at the end of 2025.
   - Negative values and wet > total cells are in COL itself (indemnity is signed).
   - Cape May has no COL rows after 2006, which is why it is all zeros.
-- **We can build it ourselves for 1989–2026** (`scripts/fetch_rma_col.py`, `data/rma/`),
+- **We can build it ourselves for 1989–2026** (`archive/scripts/fetch_rma_col.py`, `data/rma/`),
   with crop, cause, stage (prevented planting) and month detail. Year of loss is blank
   before 2003.
 - **Study counties, all years:**
@@ -166,7 +166,8 @@ files in `data/gauges/noaa/`, in MLLW):
     bed (Cohansey at Greenwich keeps lidar −0.43, not CUDEM +0.17).
   - **River beds above head of tide are NOT burned yet**; v0 carries the lidar water
     surface there.
-- **v0_100m** (`/scratch/tpj8/sfincs-nj-agri/models/v0_100m`): uniform 100 m quadtree,
+- **v0_100m** (`/scratch/tpj8/sfincs-nj-agri/models/v0_100m`; deleted 2026-10-15, rebuild with
+  `build_model.py --name v0_100m`): uniform 100 m quadtree,
   10 m subgrid, 346,156 active faces, 1,353 water-level boundary faces (bed −17.9 to
   −1.0 m), built in ~4 min.
   - **Water-level boundary** = edge faces with bed < −1 m inside OPEN WATER (bed_source
@@ -181,7 +182,7 @@ files in `data/gauges/noaa/`, in MLLW):
   - **Cost:** 6 h simulated in 14 s on 32 threads (dt ≈ 3.6 s). The 47-day event windows
     take ~65 min on 16 threads.
 
-## 8. Track A data (2026-10-02, agent; `reports/nwm_soil.md`, `reports/loss_panel.md`)
+## 8. Track A data (2026-10-02, agent; `archive/reports/nwm_soil.md`, `archive/reports/loss_panel.md`)
 
 - **NWM v3.0 retrospective:** anonymous zarr on AWS, **1979-02 → 2023-01-31 only**, so it
   covers NEITHER flagged event (Sep 2023, May 2025).
@@ -200,8 +201,10 @@ files in `data/gauges/noaa/`, in MLLW):
 
 ## 9. v0 event runs (2026-10-02; smoke test, NOT for collaborators)
 
-Runs at `/scratch/tpj8/sfincs-nj-agri/models/v0_100m/runs/{sep2023,may2025}`; `summary/`
-holds gauges.csv/.png, daily_county_crop.csv, focus_max_depth.tif, event.png.
+Runs were at `/scratch/tpj8/sfincs-nj-agri/models/v0_100m/runs/{sep2023,may2025}` (deleted
+2026-10-15 with the v0 model; the compare_{sep2023,may2025}.md reports keep their numbers); `summary/`
+held gauges.csv/.png, daily_county_crop.csv, focus_max_depth.tif, event.png (from
+plot_event.py, retired 2026-10-15).
 - Both windows ran clean (rc 0) in 66–73 min on 16 threads; average dt 3.6 s.
 - **Tide into the lower Maurice is right:** Bivalve r 0.99, RMSE 0.09–0.10 m, bias +0.02 m
   (USGS 72279 there behaves as NAVD88).
@@ -296,9 +299,9 @@ Lower-only; merged ONCE by `scripts/merge_bed_v1.py` = `fmin(bed_merged, burn)` 
   Woodstown's published datum (+5.7 m vs the lidar surface; unusable) and Manumuskin (lidar
   1.0 m BELOW measured stage). 47 of 120 measurement sites publish NGVD29 datums.
 
-## 12. Radar rainfall, Stage IV + MRMS (2026-10-03, agent; `reports/rain_metrics.md`)
+## 12. Radar rainfall, Stage IV + MRMS (2026-10-03, agent; `archive/reports/rain_metrics.md`)
 
-`scripts/fetch_precip_hourly.py` (grib env) → `scripts/rain_metrics.py` → `scripts/rain_compare.py`.
+`scripts/fetch_precip_hourly.py` (grib env) → `archive/scripts/rain_metrics.py` → `archive/scripts/rain_compare.py`.
 - **Sources:** Stage IV hourly + 6-h from IEM
   `mesonet.agron.iastate.edu/archive/data/YYYY/MM/DD/stage4/ST4.YYYYMMDDHH.{01h,06h}.grib`,
   complete 2002–2025 (mtarchive has NO stage4). GRIB1 to ~2019, GRIB2 after, same HRAP grid
@@ -323,9 +326,9 @@ Lower-only; merged ONCE by `scripts/merge_bed_v1.py` = `fmin(bed_merged, burn)` 
 - **Use Stage IV for 2003–2022** (one homogeneous product); MRMS as a check and for 1 km
   peak intensity.
 
-## 13. A4 first test: cheap predictors vs season + monthly rain (2026-10-03, agent; `reports/a4_first_test.md`)
+## 13. A4 first test: cheap predictors vs season + monthly rain (2026-10-03, agent; `archive/reports/a4_first_test.md`)
 
-`scripts/a4_first_test.py` (helpers `agri_sfincs/skill.py`) → `data/analysis/a4_*.csv`.
+`archive/scripts/a4_first_test.py` (helpers `agri_sfincs/skill.py`) → `data/analysis/a4_*.csv`.
 - **Design:** 3 counties × 2003–2022 × 12 months; 690 county-months (30 dropped: Stage IV
   > 5% missing that month or the one before). Lead target: any wet loss (31+51) > $1k, all
   crops (162 positives). Ridge logistic, leave-one-year-out AUC; 95% CIs from a 2,000-draw
@@ -696,7 +699,7 @@ Findings:
   Sheppard Farms raised 2 ft, `reports/literature_saltwater.md`). An hourly peak overtopping
   briefly is not a breach; SFINCS gives the volumes.
 
-## 26. Fork 1: cross-county flood × rain test is null (2026-10-05, agent; `reports/fork1_flood_rain.md`)
+## 26. Fork 1: cross-county flood × rain test is null (2026-10-05, agent; `archive/reports/fork1_flood_rain.md`)
 
 - **Data:** NJ / DE / MD / VA / NC, 233 insured counties × 2003-2025 months. RMA water
   indemnity offset by liability; PRISM rain over cropland; FEMA NFHL 1% share of cropland (NFHL
@@ -708,8 +711,8 @@ Findings:
 - **Inference:** sandwich SEs are too small (the top 1% of county-months hold 52% of dollars,
   mostly NC hurricanes), so SEs are year-jackknife. MDE80 b2 ≈ 1.0.
 - **Reading:** not evidence against flood damage. A static FEMA share cannot see month-to-month
-  ponding (§20). Code: `agri_sfincs/panel.py`, `scripts/fork1_*.py`, `fetch_prism_monthly.py`,
-  `flood_prone_share.py`; bulk data in /scratch data_bulk/{rma_states,prism,floodplain}.
+  ponding (§20). Code (archived 2026-10-15): `archive/scripts/{panel,fork1_*,fetch_prism_monthly,
+  flood_prone_share}.py`; bulk data in /scratch data_bulk/{rma_states,prism,floodplain}.
 
 ## 27. Dike × sea-level-rise scenarios: today's dikes keep ordinary tides off the fields; by +0.6 m they mostly don't (2026-10-06; `reports/scenario_matrix.md`)
 
@@ -719,6 +722,8 @@ breach_all_farm} × SLR, plus Sandy with rain. All finished clean. The boundary 
 exactly the SLR. "Removed" = every NLD crest dropped to ~marsh level (0.9 m); "breach_all_farm"
 = one 100 m gap at each farm system's lowest crest vertex, gates kept. Flooded = > 5 cm on CDL
 cropland of the event year (566 km² in 2024), the ponds CDL calls crops subtracted (0.4-0.6 km²).
+Hourly animations (`scripts/animate_scenarios.py`): `reports/figs/anim_sandy2012_intact_slr000_vs_intact_slr100.gif`,
+`reports/figs/anim_tide2024oct_intact_slr030_vs_removed_slr030.gif`.
 
 - **Ordinary tide month, peak cropland flooded (km²):**
 
@@ -893,3 +898,30 @@ area; holds NRCS RCPP-WRE 330636, 7.5 ha; the most dike-dependent farmland, §29
   dikes" class of §29.
 - **For the conversion model:** the dike × SLR runs cover the tidal routes. The largest recent
   route needs WETNESS exposure (ponding under rain, drainage class), not tides.
+
+## 32. Per-field sample for the ag-econ colleague, and their questions (2026-10-08 to 10-12; `scripts/field_flood_sample.py`, `field_flood_classes.py --event sandy2012`)
+
+- **Sample** (one scenario: tide2024oct, dikes intact, +0.6 m):
+  `data/analysis/sample_tide2024oct_intact_slr060/` (fields.gpkg/csv, daily.csv, README.md).
+  Per field: CDL 2024 crop mix + flooded %, first/last flood date, flood days, longest run,
+  depth. The longest run is there because Hazus crop tables key on start day + duration, not
+  depth.
+- **1,273 fields flood (= §29), 2,036 ha under water (~2.7% of farm-polygon area).** Of the
+  1,273:
+  - 761 are LU/LC 2140;
+  - 435 are ≥ 50% CDL cropland (1,159 ha flooded);
+  - 236 already flood today;
+  - 684 are wet on all 31 days.
+- **Adding CDL pasture (176)** to cropland would give 555 fields ≥ 50% (1,369 ha). Hay (36/37)
+  already counts as cropland.
+- **Days per month** exist for October 2024 only. Other months need new runs.
+- **LU/LC 2140** is farmland on mapped wetland: ~54% CDL cropland, and the class is sticky after
+  abandonment (§23).
+- **Salt flood, agronomy (answered in chat, not literature-checked):**
+  - a spring salt flood loses or replants that season;
+  - the damage lasts years only on heavy or poorly drained soil, or where water is trapped
+    behind dikes;
+  - RMA treated Hurricane Rita's salt as prevented planting (2006 memo).
+- **Sandy, per field** (`data/analysis/field_flood_sandy2012.csv`; dikes as built, tide only):
+  fields flooding today / +0.3 / +0.6 / +1.0 m = 860 / 1,317 / 1,776 / 2,255 (896 / 2,038 /
+  3,603 / 5,376 ha under water). With Sandy's rain, today: 2,448 fields but only 1,915 ha.

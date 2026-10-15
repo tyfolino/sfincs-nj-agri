@@ -1,4 +1,4 @@
-"""Burn river beds (v1 to-do 1-2): a raster of river-bed elevations on the bed grid,
+"""Burn river beds (FINDINGS §11): a raster of river-bed elevations on the bed grid,
 to be MERGED into ``bed_merged.tif`` by a later step (never stacked on top of it).
 
     python scripts/build_riverbeds.py [--da-min 10] [--min-width 10] [--no-raster]
@@ -95,7 +95,6 @@ from __future__ import annotations
 import argparse
 import re
 import warnings
-from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
@@ -107,7 +106,7 @@ from pyproj import Transformer
 from rasterio.features import geometry_mask
 from rasterio.windows import Window, from_bounds
 
-from agri_sfincs import config, domain, riverbed
+from agri_sfincs import config, domain, region, riverbed
 
 warnings.filterwarnings("ignore", message=".*geographic CRS.*")
 
@@ -313,7 +312,7 @@ def ehydro_profile(channel: str, line, chan, grid, mllw):
 # ── geometry helpers ──────────────────────────────────────────────────────────
 def hot_points(flow: gpd.GeoDataFrame) -> dict[int, float]:
     """{hydroseq: station (m) of the most upstream head-of-tide point on it}."""
-    h = gpd.read_file(config.DATA / "structures" / "structures.gpkg", layer="njdep_head_of_tide").to_crs(EPSG)
+    h = gpd.read_file(config.STRUCTURES, layer="njdep_head_of_tide").to_crs(EPSG)
     main = flow[flow["divergence"] != 2]
     out: dict[int, float] = {}
     for p in h.geometry:
@@ -399,7 +398,7 @@ def gauge_geometry(flow) -> pd.DataFrame:
         bad = cm[k].notna() & (cm[k] != u)
         if bad.any():
             raise ValueError(f"channel-measurements: {k} not {u} in {bad.sum()} rows")
-    ring = gpd.read_file(config.REGION_DIR / "ring.geojson").to_crs(4326).union_all()
+    ring = region.load_ring().to_crs(4326).union_all()
     rows = []
     for s, g in cm.groupby("site"):
         if s not in sites.index:
@@ -447,14 +446,14 @@ def paint(G: Grid, line, grid, prof, hw, code, extra=None, exclude=None, skip_sr
     ok = np.isfinite(prof)
     if ok.sum() < 2:
         return None
-    region = line.buffer(float(np.nanmax(hw)))
+    zone = line.buffer(float(np.nanmax(hw)))
     if extra is not None and not extra.is_empty:
-        region = region.union(extra)
+        zone = zone.union(extra)
     if exclude is not None and not exclude.is_empty:
-        region = region.difference(exclude)
-    if region.is_empty:
+        zone = zone.difference(exclude)
+    if zone.is_empty:
         return None
-    reg_ll = shapely.ops.transform(lambda x, y: G.to_ll.transform(x, y), region)
+    reg_ll = shapely.ops.transform(lambda x, y: G.to_ll.transform(x, y), zone)
     win = from_bounds(*reg_ll.bounds, transform=G.T).round_offsets().round_lengths()
     win = win.intersection(Window(0, 0, G.W, G.H))
     if win.width < 1 or win.height < 1:

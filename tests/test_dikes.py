@@ -129,18 +129,5 @@ class TestNetworkWalk(unittest.TestCase):
         self.assertTrue(np.all(np.diff(x) < 0))
 
 
-class TestMergeBed(unittest.TestCase):
-    def test_lower_only_and_nodata(self):
-        import sys
-
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-        from merge_bed_v1 import merge
-
-        nd = -9999.0
-        bed = np.array([1.0, 1.0, nd, 2.0], dtype="float32")
-        burn = np.array([0.5, 1.5, 0.0, nd], dtype="float32")
-        np.testing.assert_array_equal(merge(bed, burn, nd), [0.5, 1.0, nd, 2.0])
-
-
 if __name__ == "__main__":
     unittest.main()

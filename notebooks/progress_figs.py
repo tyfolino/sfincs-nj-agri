@@ -2,8 +2,9 @@
 
 Each public function draws one figure. Inputs (all local, gitignored or on scratch):
 data/analysis/field_flood_classes.gpkg (scripts/field_flood_classes.py),
-data/analysis/field_flood_sandy2012.csv (scripts/field_flood_sandy.py), the run summaries
-<run>/summary/daily_county_crop.csv (scripts/event_summary.py) and the forcing gauge levels.
+data/analysis/field_flood_sandy2012.csv (scripts/field_flood_classes.py --event sandy2012),
+the run summaries <run>/summary/daily_county_crop.csv (scripts/event_summary.py) and the
+forcing gauge levels.
 A field "floods" when >= 10% of it is > 5 cm deep at some time in the period (agri_sfincs.fieldflood).
 """
 
@@ -13,8 +14,6 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from agri_sfincs import config, domain  # noqa: E402  (also sets up PROJ)
-
 import geopandas as gpd  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -24,6 +23,14 @@ from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 from shapely.geometry import LineString  # noqa: E402
 
+from agri_sfincs import (  # noqa: E402  (also sets up PROJ)
+    config,
+    domain,
+    fieldflood,
+    region,
+    runs,
+)
+
 plt.rcParams.update({"figure.dpi": 100, "axes.spines.top": False, "axes.spines.right": False,
                      "axes.grid": True, "grid.color": "#e1e0d9", "grid.linewidth": 0.6,
                      "axes.edgecolor": "#c3c2b7", "axes.titleweight": "bold",
@@ -31,10 +38,9 @@ plt.rcParams.update({"figure.dpi": 100, "axes.spines.top": False, "axes.spines.r
                      "axes.labelcolor": "#52514e", "xtick.color": "#52514e",
                      "ytick.color": "#52514e"})  # fmt: skip
 
-RUNS = config.MODELS / "v1_100m" / "runs"
 UTM = domain.EPSG
-SHARE = 0.10
-LEVELS = [0, 30, 60, 100]  # sea-level rise, cm
+SHARE = fieldflood.SHARE
+LEVELS = list(runs.SLR_CM)  # sea-level rise, cm
 LEVEL_NAME = {0: "Today's sea level", 30: "+0.3 m (1 ft)", 60: "+0.6 m (2 ft)", 100: "+1.0 m (3.3 ft)"}
 SLR_SHORT = {0: "today", 30: "+0.3 m", 60: "+0.6 m", 100: "+1.0 m"}
 SLR_COL = {0: "#86b6ef", 30: "#3987e5", 60: "#1c5cab", 100: "#0d366b"}  # light -> dark = more rise
@@ -46,14 +52,14 @@ EVENT_NAME = {"tide2024oct": "ordinary tides of October 2024", "sandy2012": "Hur
 FIELD_NOTE = ("Fields: 13,699 NJDEP Land Use 2020 farm polygons. A field floods when at least 10% of it "
               "is under more than 5 cm (2 in) of water at some time. Tide only, no rain.")
 
-_fields = gpd.read_file(config.DATA / "analysis" / "field_flood_classes.gpkg")
-_sandy = pd.read_csv(config.DATA / "analysis" / "field_flood_sandy2012.csv")
+_fields = gpd.read_file(config.ANALYSIS_DIR / "field_flood_classes.gpkg")
+_sandy = pd.read_csv(config.ANALYSIS_DIR / "field_flood_sandy2012.csv")
 FIELDS = {"tide2024oct": _fields,
           "sandy2012": _fields[["field_id", "county", "ha", "geometry"]].merge(_sandy, on="field_id")}
-outline = gpd.read_file(config.REGION_DIR / "model_outline.geojson").to_crs(UTM)
-counties = gpd.read_file(config.REGION_DIR / "counties.gpkg").to_crs(UTM)
-states = gpd.read_file(config.REGION_DIR / "states_cb500k.gpkg").to_crs(UTM)
-_crest = gpd.read_file(config.DATA / "structures" / "dikes_built.gpkg", layer="crest_points")
+outline = region.load_outline().to_crs(UTM)
+counties = region.load_counties().to_crs(UTM)
+states = region.load_states().to_crs(UTM)
+_crest = gpd.read_file(config.STRUCT_DIR / "dikes_built.gpkg", layer="crest_points")
 dikes = gpd.GeoDataFrame(geometry=[LineString(g.sort_values("s").geometry.tolist())
                                    for _, g in _crest.groupby("name") if len(g) > 1],
                          crs=_crest.crs).to_crs(UTM)  # fmt: skip
@@ -62,7 +68,7 @@ gauges = gpd.GeoDataFrame(pd.DataFrame(domain.NOAA_STATIONS),
                                                       [s["lat"] for s in domain.NOAA_STATIONS]),
                           crs=4326).to_crs(UTM)  # fmt: skip
 with xr.open_dataset(config.GAUGE_DIR / "waterlevel_forcing_navd88.nc") as _wl:
-    tide_sjs = _wl.waterlevel.sel(stations="8537121").to_series()  # Ship John Shoal, m NAVD88
+    tide_sjs = _wl.waterlevel.sel(stations=domain.SHIP_JOHN).to_series()  # Ship John Shoal, m NAVD88
 
 
 def flooded(event: str, dikes_: str, slr: int) -> pd.Series:
@@ -80,7 +86,7 @@ def daily_cropland_ha(run: str, baseline_run: str) -> pd.Series:
     """CDL cropland under > 5 cm of water each day (ha). The present-day run's first spin-up
     day is subtracted: ponds that CDL calls crops (as scripts/plot_scenarios.py)."""
     def total(r):
-        d = pd.read_csv(RUNS / r / "summary" / "daily_county_crop.csv", parse_dates=["date"])
+        d = pd.read_csv(runs.resolve(r) / "summary" / "daily_county_crop.csv", parse_dates=["date"])
         return d.groupby("date").area_gt_5cm_km2.sum()
     return ((total(run) - total(baseline_run).iloc[0]) * 100).clip(lower=0)
 
@@ -105,7 +111,7 @@ def domain_map() -> None:
     gauges.plot(ax=ax, color="#0b0b0b", markersize=30, marker="^", zorder=5)
     for _, g in gauges.iterrows():
         if box[0] < g.geometry.x < box[2] and box[1] < g.geometry.y < box[3]:
-            left = g["id"] == "8537121"  # keep the label off the Cumberland dikes
+            left = g["id"] == domain.SHIP_JOHN  # keep the label off the Cumberland dikes
             ax.annotate(g["name"].split(",")[0], (g.geometry.x, g.geometry.y),
                         xytext=(-6 if left else 6, -3), textcoords="offset points", fontsize=8,
                         ha="right" if left else "left")  # fmt: skip

@@ -1,6 +1,6 @@
 # RMA loss panel: county × month × crop group
 
-Built by `scripts/build_loss_panel.py` from `data/rma/colsom_*_NJ.csv` (Cause of Loss) and `data/rma/sobcov_*_NJ.csv` (Summary of Business). Output `data/rma/loss_panel_county_month.csv`. The collaborators' file in `data/insurance/` is not read.
+Built by `archive/scripts/build_loss_panel.py` from `data/rma/colsom_*_NJ.csv` (Cause of Loss) and `data/rma/sobcov_*_NJ.csv` (Summary of Business). Output `data/rma/loss_panel_county_month.csv`. The collaborators' file in `data/insurance/` is not read.
 
 ## Method
 

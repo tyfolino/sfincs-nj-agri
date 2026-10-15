@@ -25,8 +25,7 @@ import numpy as np
 import pandas as pd
 from pyproj import Transformer
 
-import bayshore_exposure as be
-from agri_sfincs import config, domain, landuse, region
+from agri_sfincs import cdl, config, domain, exposure, landuse, region
 
 SRC = config.LANDUSE_DIR / "farm_wetland_transitions.gpkg"
 OUT = config.LANDUSE_DIR / "field_units.gpkg"
@@ -36,10 +35,10 @@ KEEP = ["kind", "county", "prev", "next", "label_next", "cls", "y0", "y1", "ha",
 
 
 def marsh_refs(n: int, rng) -> gpd.GeoDataFrame:
-    G = be.load_grid()
+    G = exposure.load_grid()
     stable = np.ones(G.shape, bool)
     for y in range(2008, 2026):
-        stable &= be.read_cdl(y, G.win) == 195
+        stable &= cdl.read(y, G.win) == 195
     cand = np.flatnonzero(stable & np.isfinite(G.hab) & (G.hab < 0.5))
     pick = rng.choice(cand, size=min(4 * n, cand.size), replace=False)
     r, c = np.unravel_index(pick, G.shape)

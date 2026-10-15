@@ -1,4 +1,4 @@
-"""Rain metrics helpers (scripts/rain_metrics.py) — synthetic, no network."""
+"""Rain metrics helpers (archive/scripts/rain_metrics.py) — synthetic, no network."""
 
 from __future__ import annotations
 
@@ -11,8 +11,9 @@ import pandas as pd
 import xarray as xr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-import fetch_nwm_soil as nwm  # noqa: E402
 import rain_metrics as R  # noqa: E402
+
+import cropweights  # noqa: E402
 
 
 class TestLocalMonths(unittest.TestCase):
@@ -88,7 +89,7 @@ class TestWeighting(unittest.TestCase):
         v[0, 1, 2] = v[3] = np.nan  # one NaN cell; one all-NaN step
         w = rng.integers(0, 5, (3, 4)).astype(float)
         mean, nan_frac = R.weighted_means(v.reshape(6, -1), w.reshape(-1, 1))
-        np.testing.assert_allclose(mean[:, 0], nwm.weighted_mean(v, w), equal_nan=True)
+        np.testing.assert_allclose(mean[:, 0], cropweights.weighted_mean(v, w), equal_nan=True)
         self.assertTrue(np.isnan(mean[3, 0]))
         self.assertAlmostEqual(nan_frac[3, 0], 1.0)
         self.assertAlmostEqual(nan_frac[0, 0], w[1, 2] / w.sum())
@@ -110,49 +111,14 @@ class TestWeighting(unittest.TestCase):
         self.assertAlmostEqual(g.x0, -75.64)
         self.assertAlmostEqual(g.y0, 39.91)
         # A pixel at (-75.6251, 39.9349) is in cell (lon -75.625, lat 39.935): top row.
-        n = nwm.bin_pixels([-75.6251], [39.9349], [0], g, 1)
+        n = cropweights.bin_pixels([-75.6251], [39.9349], [0], g, 1)
         self.assertEqual(n[0, 2, 1], 1)  # ascending y: the north row is the last
 
     def test_cdl_year_rule(self):
-        years = [y for y in range(2008, 2026) if y not in nwm.SKIP_CDL]
-        self.assertEqual(nwm.nearest_year(2003, years), 2008)
-        self.assertEqual(nwm.nearest_year(2010, years), 2009)
-        self.assertEqual(nwm.nearest_year(2025, years), 2025)
-
-    def test_regular_axis(self):
-        X, Y = np.meshgrid(1000.0 + 4762.5 * np.arange(5), -50.0 + 4762.5 * np.arange(3))
-        self.assertEqual(R.regular_axis(X, axis=1, tol=1.0), (1000.0, 4762.5))
-        self.assertEqual(R.regular_axis(Y, axis=0, tol=1.0), (-50.0, 4762.5))
-        with self.assertRaises(ValueError):
-            R.regular_axis(X + Y * 0.1, axis=1, tol=1.0)  # rotated
-
-
-class TestFill6h(unittest.TestCase):
-    def setUp(self):
-        self.t = pd.date_range("2003-06-11T01", "2003-06-11T12", freq="h")  # 2 windows
-        self.t6 = pd.DatetimeIndex(["2003-06-11T06", "2003-06-11T12"])
-
-    def test_residual_spread_over_missing_hours(self):
-        p = np.array([1, np.nan, 2, np.nan, 0, 1, 0, 0, 0, 0, 0, 0], float)[:, None]
-        p6 = np.array([[10.0], [0.0]])
-        out, fill = R.fill_from_6h(p, self.t, p6, self.t6)
-        np.testing.assert_allclose(out[:6, 0], [1, 3, 2, 3, 0, 1])  # (10 - 4) / 2
-        self.assertEqual(list(np.nonzero(fill[:, 0])[0]), [1, 3])
-        self.assertAlmostEqual(out[:6].sum(), 10.0)
-
-    def test_negative_residual_fills_zero_and_no_6h_stays_nan(self):
-        p = np.array([5, np.nan, 0, 0, 0, 0, np.nan, 0, 0, 0, 0, 0], float)[:, None]
-        p6 = np.array([[3.0], [np.nan]])
-        out, fill = R.fill_from_6h(p, self.t, p6, self.t6)
-        self.assertEqual(out[1, 0], 0.0)
-        self.assertTrue(np.isnan(out[6, 0]) and not fill[6, 0])
-
-    def test_window_of_00z_holds_19_to_00(self):
-        t = pd.date_range("2003-06-11T19", "2003-06-12T00", freq="h")
-        w = R.six_hour_windows(np.zeros((6, 1)), t, np.zeros((1, 1)),
-                               pd.DatetimeIndex(["2003-06-12T00"]))  # fmt: skip
-        self.assertEqual(list(w["end"]), [pd.Timestamp("2003-06-12T00")])
-        self.assertEqual(list(w["nh"]), [6])
+        years = [y for y in range(2008, 2026) if y not in cropweights.SKIP_CDL]
+        self.assertEqual(cropweights.nearest_year(2003, years), 2008)
+        self.assertEqual(cropweights.nearest_year(2010, years), 2009)
+        self.assertEqual(cropweights.nearest_year(2025, years), 2025)
 
 
 class TestAntecedent(unittest.TestCase):
@@ -177,23 +143,6 @@ class TestAntecedent(unittest.TestCase):
         s = pd.DatetimeIndex(["2020-03-01"])
         self.assertTrue(np.isnan(R.antecedent(d, s, 7)[0]))
         self.assertEqual(R.antecedent(d, s, 4)[0], 4.0)
-
-
-class TestCountiesInsideBBox(unittest.TestCase):
-    def test_whole_counties_inside_the_clip(self):
-        from agri_sfincs import config, domain
-
-        f = config.REGION_DIR / "counties.gpkg"
-        if not f.exists():
-            self.skipTest("no counties.gpkg")
-        import geopandas as gpd
-
-        import fetch_mrms
-
-        c = gpd.read_file(f)
-        b = c[c.fips.isin(domain.COUNTIES)].to_crs(4326).total_bounds
-        w, s, e, n = fetch_mrms.BBOX
-        self.assertTrue(w < b[0] and s < b[1] and e > b[2] and n > b[3], (b, fetch_mrms.BBOX))
 
 
 if __name__ == "__main__":

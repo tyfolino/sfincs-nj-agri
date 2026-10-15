@@ -1,9 +1,9 @@
 """Radar rainfall metrics per county x month (and a daily series), cropland-weighted, from
 the Stage IV and MRMS hourly clips (scripts/fetch_precip_hourly.py).
 
-Runs in the shared sfincs env (no GRIB needed):  python scripts/rain_metrics.py
+Runs in the shared sfincs env (no GRIB needed):  python archive/scripts/rain_metrics.py
 
-Weighting (the same as scripts/fetch_nwm_soil.py, whose helpers are imported): every 30 m
+Weighting (the same as archive/scripts/fetch_nwm_soil.py, whose helpers are imported): every 30 m
 CDL cropland pixel (agri_sfincs.cdl.CROPLAND) inside a county is binned to the precip
 cell holding its centre (MRMS: 0.01 deg lon/lat; Stage IV: HRAP polar-stereographic
 x/y), so a county's weights are cropland pixel counts per cell. CDL of the data year, or
@@ -44,12 +44,11 @@ stage4_hourly_vs_6h.csv compares hourly sums with 6-h totals over complete windo
 
 Writes data/precip/: rain_county_month.csv, rain_county_daily.csv,
 stage4_hourly_vs_6h.csv, precip_cropland_weights.nc (cache, rebuilt when CDL or the grids change).
-Then run scripts/rain_compare.py for the Stage IV vs MRMS (vs NWM) comparison report.
+Then run archive/scripts/rain_compare.py for the Stage IV vs MRMS (vs NWM) comparison report.
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -57,9 +56,8 @@ import pandas as pd
 import xarray as xr
 
 from agri_sfincs import cdl, config, domain
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import fetch_nwm_soil as nwm  # noqa: E402  (Grid, bin_pixels, nearest_year, SKIP_CDL)
+from agri_sfincs.precip import fill_from_6h, regular_axis, six_hour_windows
+import cropweights
 
 TZ = "America/New_York"
 PRODUCTS = ("stage4", "mrms")
@@ -160,28 +158,6 @@ def antecedent(daily: pd.Series, month_starts, ndays: int) -> np.ndarray:
     return np.asarray(out)
 
 
-def six_hour_windows(p: np.ndarray, t_end, p6: np.ndarray, t6_end) -> dict:
-    """Hourly ``p`` (time, cell) grouped into the 6-h windows of ``p6``: window ``end``
-    times, each hour's window ``run`` index, and per window x cell the sum of the hours
-    present (``have``), the count of NaN hours (``nmiss``), the hours on the axis
-    (``nh``) and the 6-h value (``six``, NaN if there is none)."""
-    t_end = pd.DatetimeIndex(t_end)
-    wend = t_end.ceil("6h")
-    if len(wend) > 1 and (np.diff(wend.values) < np.timedelta64(0, "s")).any():
-        raise ValueError("t_end must be sorted")
-    ends, starts = np.unique(wend.values, return_index=True)
-    nh = np.diff(np.append(starts, len(wend)))
-    k = pd.DatetimeIndex(t6_end).get_indexer(pd.DatetimeIndex(ends))
-    return {
-        "end": pd.DatetimeIndex(ends),
-        "run": np.repeat(np.arange(len(ends)), nh),
-        "nh": nh,
-        "have": np.add.reduceat(np.nan_to_num(p, nan=0.0).astype(np.float64), starts, axis=0),
-        "nmiss": np.add.reduceat(np.isnan(p).astype(np.int64), starts, axis=0),
-        "six": np.where((k >= 0)[:, None], p6[np.maximum(k, 0)], np.nan),
-    }
-
-
 def check_6h(t_end, p, t6, p6, wall, cells) -> pd.DataFrame:
     """Stage IV hourly vs 6-h totals per UTC year over the 6-h windows whose 6 hours
     are all present, cropland-weighted (all counties and CDL years pooled); written to
@@ -208,33 +184,6 @@ def check_6h(t_end, p, t6, p6, wall, cells) -> pd.DataFrame:
     return df
 
 
-def fill_from_6h(p: np.ndarray, t_end, p6: np.ndarray, t6_end):
-    """Fill NaN hours of ``p`` (time, cell; hour-ending ``t_end``) from 6-h totals ``p6``
-    (ending ``t6_end`` at 00/06/12/18Z): in each cell's 6-h window, what the 6-h total
-    holds beyond the hours present (never below 0) is spread evenly over the missing
-    hours. Hours whose window has no 6-h value stay NaN. Returns (filled copy, mask of
-    filled values)."""
-    win = six_hour_windows(p, t_end, p6, t6_end)
-    run, have, nmiss, six = win["run"], win["have"], win["nmiss"], win["six"]
-    with np.errstate(invalid="ignore", divide="ignore"):
-        per = np.maximum(six - have, 0.0) / nmiss
-    fill = np.isnan(p) & np.isfinite(per[run])
-    out = p.copy()
-    out[fill] = per[run][fill]
-    return out, fill
-
-
-def regular_axis(v: np.ndarray, axis: int, tol: float) -> tuple[float, float]:
-    """(first centre, spacing) of 2-D centres ``v`` that vary along ``axis`` only, on
-    a regular spacing within ``tol``."""
-    d = np.diff(v, axis=axis)
-    other = np.ptp(v, axis=1 - axis)
-    if np.abs(d - d.mean()).max() > tol or other.max() > tol:
-        raise ValueError(f"not a regular axis (spacing {d.min():.2f}..{d.max():.2f}, "
-                         f"cross-drift {other.max():.2f})")  # fmt: skip
-    return float(np.take(v, 0, axis=axis).mean()), float(d.mean())
-
-
 # ---------------------------------------------------------------- grids + weights
 
 
@@ -250,7 +199,7 @@ def product_grid(product: str, ds: xr.Dataset):
     if product == "mrms":
         lat, lon = ds.lat.values, ds.lon.values
         d = 0.01
-        g = nwm.Grid(float(lon.min()) - d / 2, float(lat.min()) - d / 2, d, d, len(lon), len(lat))
+        g = cropweights.Grid(float(lon.min()) - d / 2, float(lat.min()) - d / 2, d, d, len(lon), len(lat))
         return g, None, bool(lat[0] > lat[-1])
     tr = Transformer.from_crs("EPSG:4326", ds.attrs["crs_proj4"], always_xy=True)
     X, Y = tr.transform(ds.lon.values, ds.lat.values)
@@ -258,7 +207,7 @@ def product_grid(product: str, ds: xr.Dataset):
     y0, dy = regular_axis(Y, axis=0, tol=60.0)
     if dx <= 0 or dy <= 0:
         raise RuntimeError(f"Stage IV axes not ascending ({dx}, {dy})")
-    g = nwm.Grid(x0 - dx / 2, y0 - dy / 2, dx, dy, X.shape[1], X.shape[0])
+    g = cropweights.Grid(x0 - dx / 2, y0 - dy / 2, dx, dy, X.shape[1], X.shape[0])
     return g, tr, False
 
 
@@ -304,11 +253,11 @@ def cropland_weights(grids: dict) -> xr.Dataset:
         ci = lab[r, col].astype(np.int64) - 1
         for k, (g, gtr, _) in grids.items():
             X, Y = (lon, lat) if gtr is None else gtr.transform(lon, lat)
-            out[k][yi] = nwm.bin_pixels(X, Y, ci, g, len(fips))
+            out[k][yi] = cropweights.bin_pixels(X, Y, ci, g, len(fips))
             lost = len(r) - out[k][yi].sum()
             if lost > 0.001 * len(r):
                 raise RuntimeError(f"{f.name}: {lost} cropland pixels fall outside the {k} clip")
-        print(f"  weights {f.name}: {len(r) * nwm.CDL_PX / 1e6:,.0f} km2 cropland", flush=True)
+        print(f"  weights {f.name}: {len(r) * cropweights.CDL_PX / 1e6:,.0f} km2 cropland", flush=True)
     w = xr.Dataset(
         {f"crop_px_{k}": (("cdl_year", "fips", f"y_{k}", f"x_{k}"), v) for k, v in out.items()},
         coords={"cdl_year": years, "fips": fips},
@@ -344,7 +293,7 @@ def load_hourly(product: str, flip: bool, cells: np.ndarray, freq: str = "h"):
 def product_metrics(product: str, weights: xr.Dataset, flip: bool):
     """(monthly DataFrame, daily DataFrame) for one product."""
     fips = [str(f) for f in weights.fips.values]
-    cdl_years = [int(y) for y in weights.cdl_year.values if int(y) not in nwm.SKIP_CDL]
+    cdl_years = [int(y) for y in weights.cdl_year.values if int(y) not in cropweights.SKIP_CDL]
     wall = weights[f"crop_px_{product}"]  # (cdl_year, fips, y, x)
     any_w = (wall.values.sum(axis=(0, 1)) > 0).ravel()
     cells = np.nonzero(any_w)[0]
@@ -369,7 +318,7 @@ def product_metrics(product: str, weights: xr.Dataset, flip: bool):
     wcell = {}
     cdl_of = {}
     for y in np.unique(lyear):
-        cy = nwm.nearest_year(int(y), cdl_years)
+        cy = cropweights.nearest_year(int(y), cdl_years)
         cdl_of[int(y)] = cy
         w = wall.sel(cdl_year=cy).values.reshape(len(fips), -1)[:, cells].T.astype(np.float64)
         wcell[int(y)] = w
@@ -418,7 +367,7 @@ def product_metrics(product: str, weights: xr.Dataset, flip: bool):
             mon[f"max{k}h_mm"] = smax[k][:, ci]
         mon["year"], mon["month"] = mon.index // 12, mon.index % 12 + 1
         mon["cdl_year"] = [cdl_of[int(y)] for y in mon["year"]]
-        mon["crop_km2"] = [round(wcell[int(y)][:, ci].sum() * nwm.CDL_PX / 1e6, 2)
+        mon["crop_km2"] = [round(wcell[int(y)][:, ci].sum() * cropweights.CDL_PX / 1e6, 2)
                            for y in mon["year"]]  # fmt: skip
         pk1, pk24, fr = [], [], {t: [] for t in CELL24_MM}
         for i, y in enumerate(mon["year"]):

@@ -8,6 +8,12 @@ mostly uninsured row-crop-wise, and in NJ it is often lawn-like open land.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import numpy as np
+
+from agri_sfincs import config, domain
+
 # fmt: off
 NAMES = {
     0: "Background", 1: "Corn", 2: "Cotton", 3: "Rice", 4: "Sorghum", 5: "Soybeans",
@@ -57,3 +63,19 @@ PASTURE = frozenset({176})
 
 def name(code: int) -> str:
     return NAMES.get(int(code), f"class {int(code)}")
+
+
+def path(year: int, fips: str = domain.STATE_FIPS) -> Path:
+    """The CDL GeoTIFF of ``year``: NJ in data/cdl/; other states (Fork 1) in
+    data/floodplain/cdl/."""
+    d = config.CDL_DIR if fips == domain.STATE_FIPS else config.FLOODPLAIN_DIR / "cdl"
+    return d / f"CDL_{year}_{fips}.tif"
+
+
+def read(year: int, win) -> np.ndarray:
+    """NJ CDL ``year`` on the rasterio window ``win`` (every year shares one NJ grid;
+    checked), 0 outside the raster."""
+    import rasterio
+
+    with rasterio.open(path(year)) as c:
+        return c.read(1, window=win, boundless=True, fill_value=0)

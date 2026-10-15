@@ -18,6 +18,14 @@ so a code we have not listed is not silently misfiled.
 
 from __future__ import annotations
 
+import geopandas as gpd
+import numpy as np
+from shapely.geometry import box
+
+#: NJDEP LU/LC 2020 (2015 -> 2020 transitions), ArcGIS Online feature layer.
+LULC2020_URL = ("https://services1.arcgis.com/QWdNfRs7lkPq4g4Q/arcgis/rest/services/Land_Use_2020/"
+                "FeatureServer/5")  # fmt: skip
+
 FARMED = frozenset({2100, 2140, 2200, 2300, 2400})
 FORMER_AG_WETLAND = 2150
 FARMED_WETLAND = 2140
@@ -70,3 +78,13 @@ def transition(prev, nxt, next_label: str = "") -> str | None:
     if major == 1:
         return TO_URBAN
     return TO_OTHER
+
+
+def fishnet(bounds, size: float, crs) -> gpd.GeoDataFrame:
+    """Square cells of ``size`` m covering ``bounds``, snapped to the 30 m CDL grid (origin
+    offset 15 m)."""
+    x0, y0, x1, y1 = bounds
+    x0 = np.floor((x0 - 15) / size) * size + 15
+    y0 = np.floor((y0 - 15) / size) * size + 15
+    xs, ys = np.arange(x0, x1 + size, size), np.arange(y0, y1 + size, size)
+    return gpd.GeoDataFrame(geometry=[box(x, y, x + size, y + size) for x in xs for y in ys], crs=crs)

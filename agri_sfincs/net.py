@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import time
+import urllib.parse
+import urllib.request
 
 import geopandas as gpd
 import pandas as pd
@@ -128,3 +131,19 @@ def download(url: str, dest, timeout: float = 600, chunk: int = 1 << 20) -> None
             for b in r.iter_content(chunk):
                 f.write(b)
     part.rename(dest)
+
+
+def arcgis_form_query(url: str, params: dict, tries: int = 4) -> dict:
+    """One ArcGIS REST ``/query`` as a form POST, GeoJSON back (NJDEP LU/LC services:
+    scripts/fetch_njlulc.py, fetch_lulc_training.py)."""
+    data = urllib.parse.urlencode({"f": "geojson", **params}).encode()
+    for k in range(tries):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url + "/query", data=data),
+                                        timeout=300) as r:  # fmt: skip
+                return json.load(r)
+        except Exception:  # noqa: BLE001 — flaky public service: retry, then raise
+            if k == tries - 1:
+                raise
+            time.sleep(5 * (k + 1))
+    raise RuntimeError("unreachable")

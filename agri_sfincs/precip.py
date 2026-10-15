@@ -13,10 +13,10 @@ Products (CLAUDE.md: MRMS where it exists, Stage IV before):
   mrms    0.01 deg lon/lat, written with ``lat`` / ``lon`` dims (north -> south rows, as
           the event files), CRS EPSG:4326. Values identical to the event files'.
   stage4  HRAP ~4.76 km, written on its projected x / y (ascending, regular to < 60 m:
-          scripts/rain_metrics.py ``regular_axis``) with the HRAP proj string as CRS.
+          ``regular_axis``) with the HRAP proj string as CRS.
 
 Gaps (NaN): MRMS hours are filled from Stage IV (the HRAP cell holding each MRMS cell
-centre, same hour); Stage IV hours from its 6-h totals (rain_metrics ``fill_from_6h``:
+centre, same hour); Stage IV hours from its 6-h totals (``fill_from_6h``:
 the 6-h remainder spread evenly over the missing hours); anything left is 0. The counts
 go in the file's attributes and are printed: 2023 MRMS has 6 empty hours (2023-07-09
 15-16Z among them) and 2022 has 19.
@@ -24,7 +24,6 @@ go in the file's attributes and are printed: 2023 MRMS has 6 empty hours (2023-0
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -81,12 +80,58 @@ def load_window(files: list[Path], hours: pd.DatetimeIndex):
     return p, ref
 
 
+def six_hour_windows(p: np.ndarray, t_end, p6: np.ndarray, t6_end) -> dict:
+    """Hourly ``p`` (time, cell) grouped into the 6-h windows of ``p6``: window ``end``
+    times, each hour's window ``run`` index, and per window x cell the sum of the hours
+    present (``have``), the count of NaN hours (``nmiss``), the hours on the axis
+    (``nh``) and the 6-h value (``six``, NaN if there is none)."""
+    t_end = pd.DatetimeIndex(t_end)
+    wend = t_end.ceil("6h")
+    if len(wend) > 1 and (np.diff(wend.values) < np.timedelta64(0, "s")).any():
+        raise ValueError("t_end must be sorted")
+    ends, starts = np.unique(wend.values, return_index=True)
+    nh = np.diff(np.append(starts, len(wend)))
+    k = pd.DatetimeIndex(t6_end).get_indexer(pd.DatetimeIndex(ends))
+    return {
+        "end": pd.DatetimeIndex(ends),
+        "run": np.repeat(np.arange(len(ends)), nh),
+        "nh": nh,
+        "have": np.add.reduceat(np.nan_to_num(p, nan=0.0).astype(np.float64), starts, axis=0),
+        "nmiss": np.add.reduceat(np.isnan(p).astype(np.int64), starts, axis=0),
+        "six": np.where((k >= 0)[:, None], p6[np.maximum(k, 0)], np.nan),
+    }
+
+
+def fill_from_6h(p: np.ndarray, t_end, p6: np.ndarray, t6_end):
+    """Fill NaN hours of ``p`` (time, cell; hour-ending ``t_end``) from 6-h totals ``p6``
+    (ending ``t6_end`` at 00/06/12/18Z): in each cell's 6-h window, what the 6-h total
+    holds beyond the hours present (never below 0) is spread evenly over the missing
+    hours. Hours whose window has no 6-h value stay NaN. Returns (filled copy, mask of
+    filled values)."""
+    win = six_hour_windows(p, t_end, p6, t6_end)
+    run, have, nmiss, six = win["run"], win["have"], win["nmiss"], win["six"]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        per = np.maximum(six - have, 0.0) / nmiss
+    fill = np.isnan(p) & np.isfinite(per[run])
+    out = p.copy()
+    out[fill] = per[run][fill]
+    return out, fill
+
+
+def regular_axis(v: np.ndarray, axis: int, tol: float) -> tuple[float, float]:
+    """(first centre, spacing) of 2-D centres ``v`` that vary along ``axis`` only, on
+    a regular spacing within ``tol``."""
+    d = np.diff(v, axis=axis)
+    other = np.ptp(v, axis=1 - axis)
+    if np.abs(d - d.mean()).max() > tol or other.max() > tol:
+        raise ValueError(f"not a regular axis (spacing {d.min():.2f}..{d.max():.2f}, "
+                         f"cross-drift {other.max():.2f})")  # fmt: skip
+    return float(np.take(v, 0, axis=axis).mean()), float(d.mean())
+
+
 def stage4_axes(ds):
     """(x centres, y centres, proj string) of a Stage IV year file's HRAP grid."""
     from pyproj import Transformer
-
-    sys.path.insert(0, str(config.ROOT / "scripts"))
-    from rain_metrics import regular_axis
 
     proj = ds.attrs["crs_proj4"]
     tr = Transformer.from_crs("EPSG:4326", proj, always_xy=True)
@@ -106,9 +151,6 @@ def nearest_index(centres: np.ndarray, v: np.ndarray) -> np.ndarray:
 
 def fill_stage4_gaps(p: np.ndarray, hours: pd.DatetimeIndex) -> int:
     """Fill NaN Stage IV hours in place from the 6-h totals; returns cells filled."""
-    sys.path.insert(0, str(config.ROOT / "scripts"))
-    from rain_metrics import fill_from_6h
-
     if not np.isnan(p).any():
         return 0
     t6 = pd.date_range(hours[0].ceil("6h"), hours[-1].ceil("6h"), freq="6h")

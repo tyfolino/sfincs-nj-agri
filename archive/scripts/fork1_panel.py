@@ -8,14 +8,14 @@ cropland share, interacted with monthly rain. No SFINCS.
 Inputs (all public; data/insurance/ is NOT read):
   data/rma/colsom_*_NJ.csv + data/rma_states/colsom_*_<ST>.csv   Cause of Loss
   data/rma/sobcov_*_NJ.csv + data/rma_states/sobcov_*_<ST>.csv   Summary of Business
-      (scripts/fetch_rma_col.py, scripts/fetch_rma_sob.py)
-  data/fork1/counties.gpkg            scripts/fork1_counties.py
-  data/fork1/prism_county_monthly.csv scripts/fetch_prism_monthly.py
-  data/fork1/flood_prone_share.csv    scripts/flood_prone_share.py
+      (archive/scripts/fetch_rma_col.py, archive/scripts/fetch_rma_sob.py)
+  data/fork1/counties.gpkg            archive/scripts/fork1_counties.py
+  data/fork1/prism_county_monthly.csv archive/scripts/fetch_prism_monthly.py
+  data/fork1/flood_prone_share.csv    archive/scripts/flood_prone_share.py
 
 Panel: county x calendar month of loss, 2003 (COL's first year of loss) to 2025.
   ind_wet_broad / ind_wet_31_51  water indemnity, all crops, cause sets of
-      scripts/build_loss_panel.py (WET_BROAD: 31, 44, 46, 47, 51, 52, 67, 92; WET_31_51:
+      archive/scripts/build_loss_panel.py (WET_BROAD: 31, 44, 46, 47, 51, 52, 67, 92; WET_31_51:
       31 Excess Moisture + 51 Flood); cell sums of signed COL rows, clipped at 0.
   liability  SOB liability of individual (non-area) plans, all crops, each commodity at
       its exposure commodity year (wheat/barley Sep-Dec -> +1), as build_loss_panel.py.
@@ -25,7 +25,7 @@ Panel: county x calendar month of loss, 2003 (COL's first year of loss) to 2025.
       NFHL covers >= 90% of the county's cropland, else the scaled relief fallback.
 Cells with no liability are dropped from the models.
 
-Models (``agri_sfincs.panel.fit_fe_glm``): FE for county (absorbs the share's main
+Models (``archive/scripts/panel.py.fit_fe_glm``): FE for county (absorbs the share's main
 effect), month of year and year.
   PPML     E[indemnity] = liability * exp(b1 P + b2 P x share + FE)  (P per 100 mm)
   two-part logit Pr(indemnity > $1,000) with the same FE, and PPML on the loss cells
@@ -46,29 +46,28 @@ true b2 with 80% power.
 Writes:
   data/fork1/panel_county_month.csv.gz
   data/fork1/estimates.csv, data/fork1/power.csv
-  reports/fork1_flood_rain.md
+  archive/reports/fork1_flood_rain.md
 
-Usage:  python scripts/fork1_panel.py [--start-year 2003] [--end-year 2025] [--sims 100]
+Usage:  python archive/scripts/fork1_panel.py [--start-year 2003] [--end-year 2025] [--sims 100]
 """
 
 from __future__ import annotations
 
 import argparse
 
-import build_loss_panel as blp
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from fetch_rma_col import STATES
 
-from agri_sfincs import config
-from agri_sfincs.panel import cluster_vcov, fit_fe_glm
+from agri_sfincs import config, domain
+import rma
+from panel import cluster_vcov, fit_fe_glm
 from agri_sfincs.report import md_table
 
 PANEL = config.FORK1_DIR / "panel_county_month.csv.gz"
 EST = config.FORK1_DIR / "estimates.csv"
 POWER = config.FORK1_DIR / "power.csv"
-REPORT = config.REPORTS / "fork1_flood_rain.md"
+REPORT = config.ARCHIVE_REPORTS / "fork1_flood_rain.md"
 ROW_GROUPS = {"corn", "soybeans", "wheat"}
 ANY_LOSS = 1000.0  # $: the two-part model's "any loss" threshold (as FINDINGS §13)
 
@@ -76,7 +75,7 @@ ANY_LOSS = 1000.0  # $: the two-part model's "any loss" threshold (as FINDINGS �
 def rma_paths(prefix: str, years) -> list:
     """NJ from data/rma/, the other Fork 1 states from data/rma_states/."""
     out = []
-    for ab in STATES:
+    for ab in domain.FORK1_STATES:
         d = config.RMA_DIR if ab == "NJ" else config.RMA_STATES_DIR
         for y in years:
             p = d / f"{prefix}_{y}_{ab}.csv"
@@ -90,16 +89,16 @@ def exposure(liab: pd.DataFrame) -> pd.DataFrame:
     """fips x year x month liability (all crops and row crops), each commodity at its
     exposure commodity year — a vectorized ``build_loss_panel.panel_exposure``."""
     lb = liab[["fips", "commodity_code", "commodity_year", "liability"]].copy()
-    lb["row"] = lb.commodity_code.map(blp.crop_group).isin(ROW_GROUPS)
-    lb["fall"] = lb.commodity_code.isin(blp.FALL_SEEDED)
+    lb["row"] = lb.commodity_code.map(rma.crop_group).isin(ROW_GROUPS)
+    lb["fall"] = lb.commodity_code.isin(rma.FALL_SEEDED)
     e = lb.merge(pd.DataFrame({"month": range(1, 13)}), how="cross")
-    e["year"] = e.commodity_year - (e.fall & e.month.isin(blp.FALL_MONTHS)).astype(int)
+    e["year"] = e.commodity_year - (e.fall & e.month.isin(rma.FALL_MONTHS)).astype(int)
     e["liability_row"] = e.liability.where(e.row, 0.0)
     return e.groupby(["fips", "year", "month"], as_index=False)[["liability", "liability_row"]].sum()
 
 
 def losses(col_sel: pd.DataFrame) -> pd.DataFrame:
-    a = blp.aggregate_losses(col_sel)
+    a = rma.aggregate_losses(col_sel)
     keys = ["fips", "year", "month"]
     cols = {"indemnity_wet_broad": "ind_wet_broad", "indemnity_wet_31_51": "ind_wet_31_51",
             "indemnity_total": "ind_total"}  # fmt: skip
@@ -112,13 +111,13 @@ def losses(col_sel: pd.DataFrame) -> pd.DataFrame:
 def build(start: int, end: int) -> tuple[pd.DataFrame, dict]:
     counties = gpd.read_file(config.FORK1_DIR / "counties.gpkg", ignore_geometry=True)
     fips = counties.fips.tolist()
-    col = blp.load_col(rma_paths("colsom", range(start, end + 2)))
-    sob = blp.load_sob(rma_paths("sobcov", range(start, end + 2)))
-    col_sel, drop = blp.select_col(col, fips, start, end)
+    col = rma.load_col(rma_paths("colsom", range(start, end + 2)))
+    sob = rma.load_sob(rma_paths("sobcov", range(start, end + 2)))
+    col_sel, drop = rma.select_col(col, fips, start, end)
     p = pd.MultiIndex.from_product([fips, range(start, end + 1), range(1, 13)],
                                    names=["fips", "year", "month"]).to_frame(index=False)  # fmt: skip
     p = p.merge(losses(col_sel), on=["fips", "year", "month"], how="left")
-    p = p.merge(exposure(blp.liability_by_commodity(sob, fips)), on=["fips", "year", "month"],
+    p = p.merge(exposure(rma.liability_by_commodity(sob, fips)), on=["fips", "year", "month"],
                 how="left").fillna(0.0)  # fmt: skip
     for c in [c for c in p.columns if c.startswith("ind_")]:
         p[c] = p[c].clip(lower=0.0)  # net-negative cells are corrections
@@ -268,7 +267,8 @@ def power(fit, se_jk: float, sims: int, mults=(1.0, 2.0, 3.0, 4.0), seed: int = 
                   permuted-residual draws are shifted by a roughly constant amount; exact
                   size, no SE);
     ``size_twoway`` the rejection rate of |z| > 1.96 with the two-way sandwich SE."""
-    from scipy.stats import nct, t as student_t
+    from scipy.stats import nct
+    from scipy.stats import t as student_t
 
     rng = np.random.default_rng(seed)
     G = fit[1].year.nunique()
@@ -312,7 +312,7 @@ def write_report(p, est, pw, drop, start, end) -> str:
     sp = m.share_p90 - m.share_p10
     mde_jk, mde_sim = mde80(pw, "power_jk"), mde80(pw, "power_sim")
     w("# Fork 1: does flooding add crop-insurance losses beyond rain? (pilot)\n")
-    w("*Pilot memo for the ag-econ collaborators, built by `scripts/fork1_panel.py` "
+    w("*Pilot memo for the ag-econ collaborators, built by `archive/scripts/fork1_panel.py` "
       f"({pd.Timestamp.today():%Y-%m-%d}). Public data only (RMA, PRISM, FEMA, CDL); the "
       "collaborators' loss tables in `data/insurance/` were not used.*\n")
     w("## The question and the design\n")
@@ -467,7 +467,6 @@ def write_report(p, est, pw, drop, start, end) -> str:
     w("- **2003 start:** RMA Cause of Loss has no year of loss before commodity year 2003.\n")
 
     w("## Bottom line\n")
-    rc = est[(est.spec == "row crops (corn, soy, wheat)") & (est.model == "PPML")].iloc[0]
     sig = est[(est.p_b2 < 0.05) & (est.index > 0)]
     others = [f"{r.spec} / {r.model}: b2 = {r.b2:+.2f}, p = {r.p_b2:.2f}" for r in sig.itertuples()]
     verdict = ("is NOT detectably larger" if m.p_b2 >= 0.05 else

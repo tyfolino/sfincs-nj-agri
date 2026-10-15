@@ -1,5 +1,9 @@
 """Stage an event run: copy a static model and add the event's forcing (agri_sfincs.events).
 
+Writes config.MODELS/<model>/runs/<name> (default name = the event) and prints its path.
+The first staging of an event window also writes data/precip/forcing/<product>_<event>.nc
+and its data_catalog.yml entry.
+
 Usage:  python scripts/setup_event.py --model v1_100m --event sep2023 [--name RUN]
             [--drn data/structures/dike_gates_hi.drn]   (replaces sfincs.drn in this run)
             [--zsini -1.0]                              (initial water level, m NAVD88)

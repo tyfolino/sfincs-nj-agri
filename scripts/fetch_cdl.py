@@ -22,27 +22,15 @@ import re
 
 import rasterio
 
-from agri_sfincs import config, domain
+from agri_sfincs import cdl, domain
+from agri_sfincs.cli import parse_years
 from agri_sfincs.net import download, get
 
 SERVICE = "https://nassgeodata.gmu.edu/axis2/services/CDLService/GetCDLFile"
 
 
-def parse_years(s: str) -> list[int]:
-    if "-" in s:
-        a, b = s.split("-")
-        return list(range(int(a), int(b) + 1))
-    return [int(y) for y in s.split(",")]
-
-
-def cdl_path(year: int, fips: str = domain.STATE_FIPS):
-    """NJ in data/cdl/ (as always); other states in data/floodplain/cdl/."""
-    d = config.CDL_DIR if fips == domain.STATE_FIPS else config.FLOODPLAIN_DIR / "cdl"
-    return d / f"CDL_{year}_{fips}.tif"
-
-
 def fetch_year(year: int, fips: str = domain.STATE_FIPS) -> str:
-    dest = cdl_path(year, fips)
+    dest = cdl.path(year, fips)
     if dest.exists():
         return f"{year}: have {dest.name}"
     r = get(SERVICE, {"year": year, "fips": fips}, timeout=600)
@@ -62,7 +50,7 @@ def main() -> None:
     a = ap.parse_args()
     failed = []
     for fips in a.fips.split(","):
-        cdl_path(0, fips).parent.mkdir(parents=True, exist_ok=True)
+        cdl.path(0, fips).parent.mkdir(parents=True, exist_ok=True)
         for y in parse_years(a.years):
             try:
                 print(f"{fips} " + fetch_year(y, fips), flush=True)

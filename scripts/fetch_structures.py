@@ -54,7 +54,7 @@ OPTIONS = {
     },
 }
 CLIP_PAD_M = 1000.0
-OUT = config.DATA / "structures" / "structures.gpkg"
+OUT = config.STRUCTURES
 
 
 def main() -> None:

@@ -372,6 +372,7 @@ def assemble(product, year, coords, part_dir: Path, dest: Path) -> None:
 
 
 def parse_years(s: str) -> list[int]:
+    # = agri_sfincs.cli.parse_years: this script runs in the grib env, which cannot import the package.
     if "-" in s:
         a, b = s.split("-")
         return list(range(int(a), int(b) + 1))

@@ -178,7 +178,7 @@ def open_water_zone(outline):
     from rasterio.features import shapes
     from shapely.geometry import shape
 
-    with rasterio.open(config.DATA / "elevation" / "bed_source.tif") as src:
+    with rasterio.open(config.ELEV_DIR / "bed_source.tif") as src:
         h, w = src.height // WL_ZONE_DECIMATE, src.width // WL_ZONE_DECIMATE
         a = src.read(1, out_shape=(h, w), resampling=Resampling.mode)
         tr = src.transform * src.transform.scale(src.width / w, src.height / h)

@@ -34,8 +34,7 @@ import pandas as pd
 from pyproj import Transformer
 from scipy import ndimage
 
-import bayshore_exposure as be
-from agri_sfincs import config, fieldhist, skill
+from agri_sfincs import cdl, config, exposure, fieldhist, skill
 from agri_sfincs.report import md_table
 
 CLASSES = ["farm", "oldfield", "marsh", "wetwood", "forest", "developed", "water"]
@@ -103,13 +102,13 @@ def train(rng):
 
 def cell_context(cells: gpd.GeoDataFrame) -> pd.DataFrame:
     """Per cell: tide-connected at MHHW + 1 m (centroid cell of the §21 grid) and km to tidal water."""
-    G = be.load_grid()
-    cdl25 = be.read_cdl(2025, G.win)
+    G = exposure.load_grid()
+    cdl25 = cdl.read(2025, G.win)
     valid = np.isfinite(G.z_mean)
     seed = np.isin(cdl25, [0, 83, 111]) & (G.z_mean < 0.0)
     zmax = np.where(valid, G.z_max, np.inf)
     zmean = np.where(valid, G.z_mean, np.inf)
-    low, con = be.connected_low(zmean, zmax, G.hw["mhhw"] + 1.0, seed)
+    low, con = exposure.connected_low(zmean, zmax, G.hw["mhhw"] + 1.0, seed)
     dist = ndimage.distance_transform_edt(~seed) * abs(G.tr.a) / 1000.0
     pts = cells.geometry.representative_point()
     x, y = Transformer.from_crs(cells.crs, G.crs, always_xy=True).transform(pts.x.values, pts.y.values)

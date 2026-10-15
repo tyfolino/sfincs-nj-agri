@@ -1,6 +1,7 @@
 """Compare an event run's observation-point water levels with the USGS 15-min records.
 
-v0 has no cross-sections, so DISCHARGE is not compared yet. What is:
+No model has cross-sections at the stream gauges yet (FINDINGS §15), so DISCHARGE is not
+compared. What is:
   * tidal gauges (72279, ft -> m): RMSE / bias / correlation of hourly levels, and of
     the de-meaned series (the datum of 72279 is checked, not assumed: the means differ
     by any datum offset);

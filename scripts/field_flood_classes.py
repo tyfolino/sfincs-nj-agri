@@ -19,11 +19,21 @@ behind_levee = >= 50% of the field inside an NLD leveed area.
 
 Writes data/analysis/field_flood_classes.{gpkg,csv}, reports/field_flood_classes.md and
 reports/figs/field_flood_classes{,_zoom}.png.
-Usage:  python scripts/field_flood_classes.py
+
+``--event sandy2012``: the same per-field numbers for the Hurricane Sandy runs instead:
+sandy2012 x {intact, removed, breach_all_farm} x SLR (tide only), plus
+sandy2012_intact_slr000_rain (tide + Stage IV rain), over the event's focus period. Same
+fields, ids and pixels: reads the gpkg above, so the default mode must have run first.
+Writes data/analysis/field_flood_sandy2012.csv: field_id, then share_<dikes>_slr<cm>,
+wetdays_..., maxd_... per run (the rain run as <dikes> = intact_rain, slr000). No class,
+report or map.
+
+Usage:  python scripts/field_flood_classes.py [--event sandy2012]
 """
 
 from __future__ import annotations
 
+import argparse
 import math
 
 import matplotlib
@@ -34,20 +44,24 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import rasterio  # noqa: E402
-import xarray as xr  # noqa: E402
 from pyproj import Transformer  # noqa: E402
-from rasterio.features import rasterize  # noqa: E402
 
-import plot_scenarios as ps  # noqa: E402
-from agri_sfincs import config, domain, fieldflood, landuse, region  # noqa: E402
-from agri_sfincs.events import EVENTS  # noqa: E402
+from agri_sfincs import (  # noqa: E402
+    config,
+    dikes,
+    domain,
+    fieldflood,
+    landuse,
+    maps,
+    region,
+    runs,
+)
 from agri_sfincs.report import md_table  # noqa: E402
 
 EVENT = "tide2024oct"
-DIKES = ("intact", "removed", "breach_all_farm")
-SLR_CM = (0, 30, 60, 100)
-THRESH = 0.05
-OUT = config.DATA / "analysis"
+DIKES = tuple(runs.DIKES)
+SLR_CM = runs.SLR_CM
+OUT = config.ANALYSIS_DIR
 COLORS = {"flooded today": "#7f2704",
           "dike-dependent today": "#0d366b", "dike-dependent +0.3 m": "#1c5cab",
           "dike-dependent +0.6 m": "#3987e5", "dike-dependent +1.0 m": "#86b6ef",
@@ -69,7 +83,7 @@ def load_fields(crs) -> gpd.GeoDataFrame:
     pts["geometry"] = g.representative_point()
     g["county"] = gpd.sjoin(pts, cty, how="left", predicate="within").groupby(level=0).county.first()
     g = g[g.county.notna()].reset_index(drop=True)
-    lev = gpd.read_file(config.DATA / "structures" / "structures.gpkg", layer="nld_leveed_areas").to_crs(crs)
+    lev = dikes.leveed_areas(crs)
     inter = gpd.overlay(g[["geometry"]].reset_index(names="fid"), lev[["geometry"]], how="intersection")
     share = inter.assign(a=inter.area).groupby("fid").a.sum() / g.area
     g["behind_levee"] = share.reindex(g.index).fillna(0).values >= 0.5
@@ -79,45 +93,16 @@ def load_fields(crs) -> gpd.GeoDataFrame:
         columns={"next": "lulc2020", "label_next": "lulc2020_label"})  # fmt: skip
 
 
-def run_stats(run, f_sel, d_sel, fid, nfield, event: str = EVENT) -> pd.DataFrame:
-    """Per field: share of pixels flooded (> 5 cm month max), mean wet days, mean max depth
-    over flooded pixels, over ``event``'s focus period."""
-    with xr.open_dataset(run / "sfincs_map.nc") as mp:
-        day = pd.to_datetime(mp["timemax"].values) - pd.Timedelta(days=1)
-        focus = EVENTS[event].in_focus(day)
-        maxd = np.zeros(f_sel.size, "float32")
-        wet = np.zeros(f_sel.size, "uint16")
-        for k in np.flatnonzero(focus):
-            h = mp["zsmax"][k].values.ravel()[f_sel] - d_sel
-            h = np.where(np.isfinite(h) & (h > 0), h, 0).astype("float32")
-            maxd = np.maximum(maxd, h)
-            wet += h > THRESH
-    npx = np.bincount(fid, minlength=nfield + 1).astype(float)
-    fl = maxd > THRESH
-    nfl = np.bincount(fid, weights=fl, minlength=nfield + 1)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        return pd.DataFrame({
-            "share": nfl / npx,
-            "wetdays": np.bincount(fid, weights=wet, minlength=nfield + 1) / npx,
-            "maxd": np.bincount(fid, weights=np.where(fl, maxd, 0), minlength=nfield + 1) / nfl,
-        }).iloc[1:].set_index(np.arange(1, nfield + 1))  # fmt: skip
-
-
 def draw_fields(ax, g, win_ext, bd) -> None:
     water, wext, cty, lev = bd
-    ax.set_facecolor(ps.LAND_COL)
-    ax.imshow(water, extent=wext, origin="lower", cmap=matplotlib.colors.ListedColormap([ps.WATER_COL]),
+    ax.set_facecolor(maps.LAND_COL)
+    ax.imshow(water, extent=wext, origin="lower", cmap=matplotlib.colors.ListedColormap([maps.WATER_COL]),
               interpolation="nearest")  # fmt: skip
     g.plot(ax=ax, color=g["cls"].map(color), linewidth=0)
     for x, y in lev:
         ax.plot(x, y, color="#0b0b0b", lw=0.7)
     cty.boundary.plot(ax=ax, color="#52514e", lw=0.8, ls="--")
-    px, py = Transformer.from_crs(4326, g.crs, always_xy=True).transform(
-        [v[0] for v in ps.be.PLACES.values()], [v[1] for v in ps.be.PLACES.values()])  # fmt: skip
-    for n, x, y in zip(ps.be.PLACES, px, py):
-        if win_ext[0] < x < win_ext[1] and win_ext[2] < y < win_ext[3]:
-            ax.plot(x, y, ".", color="#0b0b0b", ms=4)
-            ax.annotate(n, (x, y), xytext=(3, 3), textcoords="offset points", fontsize=8)
+    maps.label_places(ax, g.crs, win_ext)
     ax.set_xlim(win_ext[0], win_ext[1]), ax.set_ylim(win_ext[2], win_ext[3])
     ax.set_xticks([]), ax.set_yticks([])
 
@@ -130,8 +115,8 @@ def legend(ax) -> None:
     ax.legend(loc="lower left", fontsize=7.5, framealpha=0.95)
 
 
-def maps(g, crs) -> None:
-    bd = ps.backdrop(crs)
+def draw_maps(g, crs) -> None:
+    bd = maps.backdrop(crs)
     hit = g[g.cls != fieldflood.SAFE]
     x0, y0, x1, y1 = hit.total_bounds
     pad = 3000
@@ -146,7 +131,7 @@ def maps(g, crs) -> None:
 
     to = Transformer.from_crs(4326, crs, always_xy=True)
     fig, axes = plt.subplots(1, 2, figsize=(15, 8.2), gridspec_kw={"width_ratios": [0.85, 1.25]})
-    for ax, (name, (lo0, la0, lo1, la1)) in zip(axes, ps.ZOOMS.items()):
+    for ax, (name, (lo0, la0, lo1, la1)) in zip(axes, domain.ZOOMS.items()):
         (xa, xb), (ya, yb) = to.transform([lo0, lo1], [la0, la1])
         draw_fields(ax, g, (xa, xb, ya, yb), bd)
         ax.set_title(name, fontsize=10, loc="left")
@@ -157,45 +142,42 @@ def maps(g, crs) -> None:
 
 
 def subgrid_crs():
-    with rasterio.open(ps.RUNS.parent / "subgrid" / "dep_subgrid_lev0.tif") as d:
+    with rasterio.open(runs.subgrid_dep()) as d:
         return d.crs
 
 
-def field_pixels(g: gpd.GeoDataFrame):
-    """Every 10 m subgrid pixel of every field: (flat model-cell index, ground elevation,
-    field_id), for pixels inside the model grid with a finite ground."""
-    with rasterio.open(ps.RUNS.parent / "subgrid" / "dep_subgrid_lev0.tif") as d:
-        dep = d.read(1, masked=True).filled(np.nan)
-        tr, shape = d.transform, d.shape
-    ids = rasterize(zip(g.geometry, g.field_id), out_shape=shape, transform=tr, fill=0, dtype="uint32")
-    with xr.open_dataset(ps.run_dir(EVENT, "intact", 0) / "sfincs_map.nc") as mp:
-        zshape = mp["zsmax"].shape
-        x0, y0 = float(mp.corner_x.min()), float(mp.corner_y.min())
-        dx = float(np.diff(np.unique(mp.corner_x.values.round(3)))[0])
-    rr, cc = np.nonzero(ids)
-    nn = np.floor((tr.f + (rr + 0.5) * tr.e - y0) / dx).astype(np.int64)
-    mm = np.floor((tr.c + (cc + 0.5) * tr.a - x0) / dx).astype(np.int64)
-    ok = (nn >= 0) & (nn < zshape[1]) & (mm >= 0) & (mm < zshape[2]) & np.isfinite(dep[rr, cc])
-    f_sel = (nn * zshape[2] + mm)[ok]
-    d_sel = dep[rr, cc][ok]
-    fid = ids[rr, cc][ok].astype(np.int64)
-    return f_sel, d_sel, fid
+def sandy(event: str) -> None:
+    """Per-field share / wetdays / maxd in every Sandy run (docstring, ``--event``)."""
+    g = gpd.read_file(OUT / "field_flood_classes.gpkg")[["field_id", "geometry"]]
+    f_sel, d_sel, fid = fieldflood.field_pixels(g)
+    out = g[["field_id"]].copy()
+    for dk, s, suffix in [(dk, s, "") for dk in DIKES for s in SLR_CM] + [("intact", 0, "_rain")]:
+        run = runs.run_dir(event, dk, s, suffix)
+        st = fieldflood.run_stats(run, f_sel, d_sel, fid, len(g), event)
+        for c in st:
+            out[f"{c}_{dk}{suffix}_slr{s:03d}"] = st[c].values
+        print(f"{run.name}: {int((st.share >= fieldflood.SHARE).sum())} fields flood")
+    out.to_csv(OUT / f"field_flood_{event}.csv", index=False)
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--event", default=EVENT, choices=[EVENT, "sandy2012"])
+    a = ap.parse_args()
+    if a.event != EVENT:
+        return sandy(a.event)
     g = load_fields(subgrid_crs())
-    f_sel, d_sel, fid = field_pixels(g)
+    f_sel, d_sel, fid = fieldflood.field_pixels(g)
     n = len(g)
     g["model_px_share"] = np.bincount(fid, minlength=n + 1)[1:] / np.maximum(g.ha.values * 100, 1)
 
     have = {}
     for dk in DIKES:
         for s in SLR_CM:
-            run = ps.run_dir(EVENT, dk, s)
-            log = run / "sfincs_log.txt"
-            if not log.exists() or "Total time" not in log.read_text(errors="ignore"):
+            run = runs.run_dir(EVENT, dk, s)
+            if not runs.finished(run):
                 continue  # not run, or still running
-            st = run_stats(run, f_sel, d_sel, fid, n)
+            st = fieldflood.run_stats(run, f_sel, d_sel, fid, n, EVENT)
             for c in st:
                 g[f"{c}_{dk}_slr{s:03d}"] = st[c].values
             have[(dk, s)] = True
@@ -263,7 +245,7 @@ def main() -> None:
     text = "\n".join(lines)
     (config.REPORTS / "field_flood_classes.md").write_text(text + "\n")
     print(text)
-    maps(g[g.cls != "outside model"], g.crs)
+    draw_maps(g[g.cls != "outside model"], g.crs)
 
 
 if __name__ == "__main__":

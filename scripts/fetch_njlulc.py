@@ -18,40 +18,19 @@ label_next, acres + the period) and prints counts. Usage:  python scripts/fetch_
 
 from __future__ import annotations
 
-import json
-import time
-import urllib.parse
-import urllib.request
-
 import geopandas as gpd
 
-from agri_sfincs import config, region
+from agri_sfincs import config, landuse, net, region
 
 MAPSDEP = "https://mapsdep.nj.gov/arcgis/rest/services/Features/Land_lu/MapServer"
-AGOL20 = ("https://services1.arcgis.com/QWdNfRs7lkPq4g4Q/arcgis/rest/services/Land_Use_2020/"
-          "FeatureServer/5")  # fmt: skip
 PERIODS = [  # (y0, y1, layer url, previous suffix, next suffix)
     (1995, 2002, f"{MAPSDEP}/11", "95", "02"),
     (2002, 2007, f"{MAPSDEP}/7", "02", "07"),
     (2007, 2012, f"{MAPSDEP}/0", "07", "12"),
     (2012, 2015, f"{MAPSDEP}/13", "12", "15"),
-    (2015, 2020, AGOL20, "15", "20"),
+    (2015, 2020, landuse.LULC2020_URL, "15", "20"),
 ]
 PAGE = 1000
-
-
-def post(url: str, params: dict, tries: int = 4) -> dict:
-    data = urllib.parse.urlencode({"f": "geojson", **params}).encode()
-    for k in range(tries):
-        try:
-            with urllib.request.urlopen(urllib.request.Request(url + "/query", data=data),
-                                        timeout=300) as r:  # fmt: skip
-                return json.load(r)
-        except Exception:  # noqa: BLE001 — flaky public service: retry, then raise
-            if k == tries - 1:
-                raise
-            time.sleep(5 * (k + 1))
-    raise RuntimeError("unreachable")
 
 
 def fetch_period(url: str, p: str, n: str, bbox) -> gpd.GeoDataFrame:
@@ -62,7 +41,7 @@ def fetch_period(url: str, p: str, n: str, bbox) -> gpd.GeoDataFrame:
             "outFields": ",".join(fields), "orderByFields": "OBJECTID"}  # fmt: skip
     feats, off = [], 0
     while True:
-        d = post(url, {**base, "resultOffset": off, "resultRecordCount": PAGE})
+        d = net.arcgis_form_query(url, {**base, "resultOffset": off, "resultRecordCount": PAGE})
         f = d.get("features", [])
         feats += f
         if len(f) < PAGE:

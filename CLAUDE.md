@@ -7,7 +7,7 @@ characteristics per **county × month (× crop)** for a Rutgers ag-econ crop-ins
 tide gates, sea-level rise; which pathway: passive failure, easement, purchase, mitigation).
 SFINCS's job there is the same event under different conditions (farmed vs restored, intact
 vs breached bank, today vs sea-level rise). The insurance question is kept as a basic
-cross-county flood × rain test without SFINCS.
+cross-county flood × rain test without SFINCS (done, null; archived 2026-10-15).
 
 The plan is `~/.claude/plans/compressed-humming-eclipse.md` (approved 2026-10-05; it supersedes
 `dynamic-squishing-heron.md`, 2026-10-02). What is happening now is in [docs/STATUS.md](docs/STATUS.md); what is believed true is in
@@ -29,9 +29,15 @@ The plan is `~/.claude/plans/compressed-humming-eclipse.md` (approved 2026-10-05
 ## Layout
 
 ```
-agri_sfincs/   the package. domain.py = ALL geography; config.py = ALL paths
-scripts/       one job each; the docstring says what it writes
+agri_sfincs/   the package. domain.py = ALL geography; config.py = ALL paths;
+               runs.py = run dirs + pixel->cell mapping; exposure.py = tide/ground grid;
+               maps.py = map backdrop; precip.py = MRMS / Stage IV rain forcing
+scripts/       one job each; the docstring says what it writes. Scripts NEVER import
+               scripts: shared code goes in agri_sfincs/ (exception: the grib-env pair
+               fetch_mrms / fetch_precip_hourly, which cannot import the package)
 tests/         stdlib unittest, no network:  python -m unittest discover -s tests
+archive/       FROZEN side lines (insurance track, Fork 1): scripts, their
+               own modules, tests and reports. Read archive/README.md before reviving any.
 data/          bulk is gitignored; data/region/ring.geojson + data/gauges/*.csv tracked
   insurance/   the ag-econ loss tables — NEVER commit, publish or send anywhere
 reports/       generated summaries (markdown)

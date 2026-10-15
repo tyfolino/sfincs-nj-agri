@@ -1,13 +1,15 @@
 """Build a static SFINCS model under config.MODELS/<name> (agri_sfincs.build).
 
+Writes config.MODELS/<name>/: sfincs.inp, sfincs.nc, sfincs_subgrid.nc, roughness.nc, the
+subgrid/ and gis/ rasters, and the structure files passed (sfincs.weir, sfincs.drn).
+
 Usage:
   python scripts/build_model.py --name v0_100m [--res 100] [--subgrid 10] [--drained]
       [--elevation bed_v1] [--weir data/structures/dikes.weir]
       [--drn data/structures/dike_gates_lo.drn]
 
 v0_100m (2026-10-02): uniform 100 m quadtree, 10 m subgrid, undrained soil groups — the
-first, cheap model for the Sep 2023 / May 2025 event runs. Refinement comes after the
-cost test (plan step 5).
+first, cheap model for the Sep 2023 / May 2025 event runs (a smoke test, FINDINGS §9).
 
 v1_100m (2026-10-05): same grid, bed_v1 (river-bed burn, FINDINGS §11), NLD dikes as
 weirs + farm-dike check valves at the LOW gate coefficient (FINDINGS §10); the high

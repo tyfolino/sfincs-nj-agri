@@ -1,6 +1,6 @@
 # Fork 1: does flooding add crop-insurance losses beyond rain? (pilot)
 
-*Pilot memo for the ag-econ collaborators, built by `scripts/fork1_panel.py` (2026-10-05). Public data only (RMA, PRISM, FEMA, CDL); the collaborators' loss tables in `data/insurance/` were not used.*
+*Pilot memo for the ag-econ collaborators, built by `archive/scripts/fork1_panel.py` (2026-10-05). Public data only (RMA, PRISM, FEMA, CDL); the collaborators' loss tables in `data/insurance/` were not used.*
 
 ## The question and the design
 

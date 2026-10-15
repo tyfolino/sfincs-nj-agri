@@ -1,4 +1,4 @@
-"""NWM soil-moisture extraction helpers (scripts/fetch_nwm_soil.py) — no network."""
+"""NWM soil-moisture extraction helpers (archive/scripts/fetch_nwm_soil.py) — no network."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import fetch_nwm_soil as F  # noqa: E402
+
+import cropweights  # noqa: E402
 
 
 class TestWindow(unittest.TestCase):
@@ -84,7 +86,7 @@ class TestWeighting(unittest.TestCase):
     def test_weighted_mean_drops_nan_cells(self):
         v = np.array([[[1.0, 3.0], [np.nan, 10.0]], [[np.nan] * 2] * 2])
         w = np.array([[1.0, 3.0], [5.0, 0.0]])
-        out = F.weighted_mean(v, w)
+        out = cropweights.weighted_mean(v, w)
         self.assertAlmostEqual(out[0], (1 * 1 + 3 * 3) / 4)
         self.assertTrue(np.isnan(out[1]))
 
@@ -94,16 +96,16 @@ class TestWeighting(unittest.TestCase):
 
     def test_nearest_year(self):
         ys = [2008, 2009, 2011, 2012]
-        self.assertEqual(F.nearest_year(2002, ys), 2008)
-        self.assertEqual(F.nearest_year(2010, ys), 2009)  # tie -> earlier
-        self.assertEqual(F.nearest_year(2023, ys), 2012)
+        self.assertEqual(cropweights.nearest_year(2002, ys), 2008)
+        self.assertEqual(cropweights.nearest_year(2010, ys), 2009)  # tie -> earlier
+        self.assertEqual(cropweights.nearest_year(2023, ys), 2012)
 
     def test_bin_pixels(self):
-        g = F.Grid(x0=0.0, y0=0.0, dx=100.0, dy=100.0, nx=2, ny=2)
+        g = cropweights.Grid(x0=0.0, y0=0.0, dx=100.0, dy=100.0, nx=2, ny=2)
         xs = np.array([10, 150, 150, 50, 999])
         ys = np.array([10, 10, 10, 150, 10])  # last one outside the grid
         county = np.array([0, 0, 1, 1, 0])
-        n = F.bin_pixels(xs, ys, county, g, 2)
+        n = cropweights.bin_pixels(xs, ys, county, g, 2)
         self.assertEqual(n.shape, (2, 2, 2))
         self.assertEqual(n[0, 0, 0], 1)
         self.assertEqual(n[0, 0, 1], 1)

@@ -65,5 +65,20 @@ class TestYearlyFeatures(unittest.TestCase):
         self.assertAlmostEqual(f.fa_ndvi, 0.3)
 
 
+class TestExitSpotcheckTag(unittest.TestCase):
+    def test_cell_tags(self):
+        """Both cell tags join exits to the 120 m cells, not the field units (the v2 exits
+        of field_classes.py are tagged cells_v2)."""
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        import exit_spotcheck
+
+        self.assertTrue(exit_spotcheck.on_cells("cells"))
+        self.assertTrue(exit_spotcheck.on_cells("cells_v2"))
+        self.assertFalse(exit_spotcheck.on_cells(""))
+
+
 if __name__ == "__main__":
     unittest.main()

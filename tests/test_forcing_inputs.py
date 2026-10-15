@@ -1,4 +1,5 @@
-"""Water-level gap filling and SSURGO ksat averaging — synthetic, no network."""
+"""Forcing inputs: water-level gap filling, SSURGO ksat averaging, and the bed merges
+(build_bed.py, merge_bed_v1.py) — synthetic, no network."""
 
 from __future__ import annotations
 
@@ -90,6 +91,18 @@ class TestBedMerge(unittest.TestCase):
         # lake keeps lidar surface; Greenwich not raised; Bivalve deepened; 0.8 -> 0.0
         # is the documented residual risk (a 0-filled creek between DEEPER_M and LOW_M).
         self.assertEqual(src[0].tolist(), [1, 1, 2, 3, 4, 5, 2])
+
+
+class TestMergeBedV1(unittest.TestCase):
+    """merge_bed_v1.py: the river-bed burn only ever lowers the bed; NoData passes through."""
+
+    def test_lower_only_and_nodata(self):
+        from merge_bed_v1 import merge
+
+        nd = -9999.0
+        bed = np.array([1.0, 1.0, nd, 2.0], dtype="float32")
+        burn = np.array([0.5, 1.5, 0.0, nd], dtype="float32")
+        np.testing.assert_array_equal(merge(bed, burn, nd), [0.5, 1.0, nd, 2.0])
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 PY="${AGRI_PYTHON:-$HOME/nj_sandy_sfincs/micromamba/envs/sfincs/bin/python}"
-export PYTHONPATH="$PWD:$PWD/scripts"
+export PYTHONPATH="$PWD"
 export PROJ_DATA="$HOME/nj_sandy_sfincs/micromamba/envs/sfincs/share/proj"
 echo "host $(hostname)  job ${SLURM_JOB_ID:-local}  restart# ${SLURM_RESTART_COUNT:-0}  $(date -Is)"
 echo "run  $*"

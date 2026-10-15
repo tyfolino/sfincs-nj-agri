@@ -29,7 +29,7 @@ from agri_sfincs import config, domain
 URL = ("https://apps.geo.fpac.usda.gov/nrcs-geodata/rest/services/easements/easements/"
        "MapServer/1/query")  # fmt: skip
 BBOX = (-76.0, 38.4, -74.4, 40.1)  # Delaware Bay, both shores, all of Delaware
-OUT = config.DATA / "easements" / "nrcs_easements.gpkg"
+OUT = config.EASEMENT_DIR / "nrcs_easements.gpkg"
 PAGE = 1000
 
 

@@ -1,4 +1,4 @@
-"""Checks for the open-water evaporation forcing (agri_sfincs.evap): a base run vs the
+"""Checks for the open-water evaporation forcing (agri_sfincs/evap.py): a base run vs the
 same run with P - E. Run validate_event.py and event_summary.py on both first.
 
 1. Partial wetness: SFINCS removes negative net rain over the WHOLE cell area once a
@@ -17,7 +17,7 @@ same run with P - E. Run validate_event.py and event_summary.py on both first.
    cell depth (zs - lowest pixel) over cells with lowest pixel < 1 m, 5-day means.
 
 Prints markdown tables (agri_sfincs.report.md_table) and writes
-<evap run>/summary/evap_check_*.csv.
+<evap run>/summary/evap_check_*.csv. reports/evaporation.md was written by hand from them.
 
 Usage:  python scripts/evap_check.py --base v1_100m/sep2023 --evap v1_100m/sep2023_evap \
             --days 2023-09-14 2023-09-20
@@ -35,10 +35,10 @@ import xarray as xr
 from rasterio.features import rasterize
 from scipy.interpolate import RegularGridInterpolator
 
-from agri_sfincs import config
+from agri_sfincs import config, dikes, domain, runs
 from agri_sfincs.report import md_table
 
-STRUCT = config.DATA / "structures"
+STRUCT = config.STRUCT_DIR
 
 
 def cell_pixels(model, n: int, m: int, x0: float, y0: float) -> np.ndarray:
@@ -138,11 +138,7 @@ def main() -> None:
     ap.add_argument("--evap", required=True)
     ap.add_argument("--days", nargs=2, default=["2023-09-14", "2023-09-20"])
     a = ap.parse_args()
-    def run_dir(spec: str):  # "<model>/<run>", as compare_runs.py
-        mdl, run = spec.split("/")
-        return config.MODELS / mdl / "runs" / run
-
-    base, ev = run_dir(a.base), run_dir(a.evap)
+    base, ev = runs.resolve(a.base), runs.resolve(a.evap)
     model = base.parents[1]
     out = ev / "summary"
     out.mkdir(exist_ok=True)
@@ -209,9 +205,9 @@ def main() -> None:
     print(md_table(crop, "{:,.2f}"))
 
     # 5. diked interiors
-    la = gpd.read_file(STRUCT / "structures.gpkg", layer="nld_leveed_areas")
+    la = dikes.leveed_areas()
     gates = gpd.read_file(STRUCT / "dikes_built.gpkg", layer="gates")
-    la = la[la.LEVEED_ID.isin(gates.leveed_id)].to_crs(32618)
+    la = la[la.LEVEED_ID.isin(gates.leveed_id)].to_crs(domain.EPSG)
     tr = rasterio.Affine(100, 0, x0, 0, 100, y0)  # south-up rows, as the map output
     masks = {}
     for _, r in la.iterrows():

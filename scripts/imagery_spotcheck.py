@@ -21,31 +21,21 @@ Usage:  python scripts/imagery_spotcheck.py
 
 from __future__ import annotations
 
-import json
-import os
-import urllib.request
-
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import rasterio
 from pyproj import Transformer
-from rasterio.enums import Resampling
-from rasterio.vrt import WarpedVRT
 
-import bayshore_exposure as be
-from agri_sfincs import cdl, config
+from agri_sfincs import cdl, config, exposure, naip
 
-OUT = config.DATA / "imagery"
+OUT = config.IMAGERY_DIR
 N_CHANGE, N_CONTROL, SEED = 36, 12, 20261005
 YEARS_IMG = (2010, 2023)
 HALF_M = 120  # chip half-width
 WET = (87, 190, 195)
-STAC = "https://planetarycomputer.microsoft.com/api/stac/v1/search"
-SAS = "https://planetarycomputer.microsoft.com/api/sas/v1/token/naip"
 SITES = {"Greenwich south (Cumberland)": (-75.293, 39.352),
          "Logan Twp, Raccoon Cr. (Gloucester)": (-75.3636, 39.8048)}  # fmt: skip
 SITE_YEARS = (2010, 2013, 2017, 2019, 2023)
@@ -53,36 +43,6 @@ LETTER = {**{c: "C" for c in cdl.CROPLAND}, 176: "g", **{c: "W" for c in WET}, 8
           111: "~", **{c: "d" for c in (82, 121, 122, 123, 124)},
           **{c: "f" for c in (63, 64, 141, 142, 143, 152)}}  # fmt: skip
 
-os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
-os.environ.setdefault("CPL_VSIL_CURL_ALLOWED_EXTENSIONS", ".tif")
-
-
-def http_json(url, body=None):
-    req = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json"})  # fmt: skip
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.load(r)
-
-
-def naip_item(lon, lat, year) -> str | None:
-    """HREF of the NAIP image covering (lon, lat) flown in ``year`` (None if none)."""
-    d = http_json(STAC, {"collections": ["naip"], "limit": 50,
-                         "intersects": {"type": "Point", "coordinates": [lon, lat]},
-                         "datetime": f"{year}-01-01T00:00:00Z/{year}-12-31T23:59:59Z"})  # fmt: skip
-    f = d.get("features", [])
-    return f[0]["assets"]["image"]["href"] if f else None
-
-
-def chip(href, token, lon, lat, half=HALF_M, res=1.0) -> np.ndarray:
-    """RGB at ``res`` m, a 2*``half`` m square centred on (lon, lat), in UTM 18N."""
-    utm = "EPSG:26918"
-    x, y = Transformer.from_crs(4326, utm, always_xy=True).transform(lon, lat)
-    n = int(2 * half / res)
-    tr = rasterio.transform.from_origin(x - half, y + half, res, res)
-    with rasterio.open(f"/vsicurl/{href}?{token}") as s, \
-            WarpedVRT(s, crs=utm, transform=tr, width=n, height=n,
-                      resampling=Resampling.bilinear) as v:  # fmt: skip
-        return np.moveaxis(v.read([1, 2, 3]), 0, -1)
 
 
 def site_timelines(token) -> None:
@@ -92,9 +52,9 @@ def site_timelines(token) -> None:
         for j, yr in enumerate(SITE_YEARS):
             ax = axs[i, j]
             ax.axis("off")
-            href = naip_item(lon, lat, yr)
+            href = naip.naip_item(lon, lat, yr)
             if href:
-                ax.imshow(chip(href, token, lon, lat, half=1000, res=2.0))
+                ax.imshow(naip.chip(href, token, lon, lat, half=1000, res=2.0))
             ax.set_title(f"{name}, {yr}" if j == 0 else str(yr), fontsize=10)
     fig.suptitle("NAIP time series, 2 km squares", fontsize=12)
     fig.tight_layout()
@@ -106,7 +66,7 @@ def site_timelines(token) -> None:
 def history(win, rows, cols) -> list[str]:
     seqs = [""] * len(rows)
     for y in range(2008, 2026):
-        a = be.read_cdl(y, win)[rows, cols]
+        a = cdl.read(y, win)[rows, cols]
         for i, c in enumerate(a):
             seqs[i] += LETTER.get(int(c), "o")
     return [s[:5] + "|" + s[5:15] + "|" + s[15:] for s in seqs]
@@ -115,14 +75,14 @@ def history(win, rows, cols) -> list[str]:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "chips").mkdir(exist_ok=True)
-    G = be.load_grid()
+    G = exposure.load_grid()
     win, tr, crs, shape, hab = G.win, G.tr, G.crs, G.shape, G.hab
-    early = sum(np.isin(be.read_cdl(y, win), list(cdl.CROPLAND)).astype(int) for y in range(2008, 2013))
-    late_w = sum(np.isin(be.read_cdl(y, win), WET).astype(int) for y in range(2023, 2026))
-    late_c = sum(np.isin(be.read_cdl(y, win), list(cdl.CROPLAND)).astype(int) for y in range(2023, 2026))
+    early = sum(np.isin(cdl.read(y, win), list(cdl.CROPLAND)).astype(int) for y in range(2008, 2013))
+    late_w = sum(np.isin(cdl.read(y, win), WET).astype(int) for y in range(2023, 2026))
+    late_c = sum(np.isin(cdl.read(y, win), list(cdl.CROPLAND)).astype(int) for y in range(2023, 2026))
     low = np.isfinite(hab) & (hab < 1.0) & (early >= 3)
     change, stable = low & (late_w >= 2), low & (late_c == 3)
-    print(f"change {change.sum() * be.PX_KM2:.2f} km², stable low cropland {stable.sum() * be.PX_KM2:.2f} km²")
+    print(f"change {change.sum() * exposure.PX_KM2:.2f} km², stable low cropland {stable.sum() * exposure.PX_KM2:.2f} km²")
 
     rng = np.random.default_rng(SEED)
     picks = []
@@ -137,17 +97,17 @@ def main() -> None:
     s["cdl_history"] = history(win, s.row.values, s.col.values)
     s.insert(0, "id", [f"{'X' if k == 'change' else 'K'}{i:02d}" for i, k in enumerate(s.kind)])
 
-    token = http_json(SAS)["token"]
+    token = naip.http_json(naip.SAS)["token"]
     for yr in YEARS_IMG:
         paths = []
         for r in s.itertuples():
             p = OUT / "chips" / f"{r.id}_{yr}.png"
             if not p.exists():
-                href = naip_item(r.lon, r.lat, yr)
+                href = naip.naip_item(r.lon, r.lat, yr)
                 if href is None:
                     paths.append("")
                     continue
-                plt.imsave(p, chip(href, token, r.lon, r.lat))
+                plt.imsave(p, naip.chip(href, token, r.lon, r.lat))
             paths.append(str(p.relative_to(config.ROOT)))
         s[f"naip_{yr}"] = paths
     s.to_csv(OUT / "spotcheck_samples.csv", index=False)

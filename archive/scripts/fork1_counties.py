@@ -17,7 +17,7 @@ uses:
 Writes data/fork1/counties.gpkg (fips, state, state_abbr, name, area_km2, eco_l3,
 eco_l3_name, coastal_plain; EPSG:5070).
 
-Usage:  python scripts/fork1_counties.py [--states NJ,DE,MD,VA,NC] [--overwrite]
+Usage:  python archive/scripts/fork1_counties.py [--states NJ,DE,MD,VA,NC] [--overwrite]
 """
 
 from __future__ import annotations
@@ -26,10 +26,10 @@ import argparse
 
 import geopandas as gpd
 import pandas as pd
-from fetch_rma_col import parse_states
 
 from agri_sfincs import config
 from agri_sfincs.net import arcgis_query
+from rma import parse_states
 
 TIGER_COUNTIES = (
     "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/"

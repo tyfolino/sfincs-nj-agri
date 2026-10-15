@@ -1,8 +1,9 @@
 """NAIP check of Landsat-detected exits from farming, LOW vs UPLAND (are low-ground exits
 just classifier noise on wet fields?).
 
-From data/landuse/field_exit_events[_<tag>].parquet (scripts/field_history.py), draws at
-random (area-weighted) N exits per stratum among exits in EXIT_YEARS, so NAIP brackets them:
+From data/landuse/field_exit_events[_<tag>].parquet (scripts/field_history.py; tag cells_v2:
+scripts/field_classes.py), draws at random (area-weighted) N exits per stratum among exits
+in EXIT_YEARS, so NAIP brackets them:
   low     cell / unit ground below recent MHHW + 0.6 m
   upland  ground more than 3 m above recent MHHW
 Before = the latest NAIP year <= exit year, after = the earliest NAIP year >= exit + 3
@@ -10,7 +11,7 @@ Before = the latest NAIP year <= exit year, after = the earliest NAIP year >= ex
 with the unit outlined. Judging by eye: farmed before and not after = real.
 
 Writes data/imagery/exit_samples[_<tag>].csv and reports/figs/exit_spotcheck[_<tag>]_<k>.png.
-Usage:  python scripts/exit_spotcheck.py [--tag cells] [--n 18]
+Usage:  python scripts/exit_spotcheck.py [--tag cells | cells_v2] [--n 18]
 """
 
 from __future__ import annotations
@@ -26,8 +27,7 @@ import numpy as np
 import pandas as pd
 from pyproj import Transformer
 
-import imagery_spotcheck as isc
-from agri_sfincs import config
+from agri_sfincs import config, naip
 
 NAIP = [2010, 2013, 2015, 2017, 2019, 2022, 2023]
 EXIT_YEARS = (2010, 2019)
@@ -40,6 +40,12 @@ def bracket(y: int):
     return before, after
 
 
+def on_cells(tag: str) -> bool:
+    """Whether the ``tag``'s exits are keyed by 120 m cell (``cells``: field_history.py;
+    ``cells_v2``: field_classes.py) rather than by field unit."""
+    return tag.startswith("cells")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--tag", default="")
@@ -49,7 +55,7 @@ def main() -> None:
     E = pd.read_parquet(config.LANDUSE_DIR / f"field_exit_events{sfx}.parquet")
     E = E[E.exit & E.year.between(*EXIT_YEARS)]
     U = (gpd.read_file(config.LANDUSE_DIR / "field_cells.gpkg").rename(columns={"unit": "parent", "cell": "unit"})
-         if a.tag == "cells" else gpd.read_file(config.LANDUSE_DIR / "field_units.gpkg"))  # fmt: skip
+         if on_cells(a.tag) else gpd.read_file(config.LANDUSE_DIR / "field_units.gpkg"))  # fmt: skip
     U = U.set_index("unit")
     E = E.join(U[["m_above_mhhw", "county"]], on="unit")
     rng = np.random.default_rng(SEED)
@@ -65,7 +71,7 @@ def main() -> None:
     cen = geo.to_crs(4326).representative_point()
     s["lon"], s["lat"] = cen.x.values, cen.y.values
     half, res = (150, 1.0) if a.tag == "cells" else (300, 2.0)
-    token = isc.http_json(isc.SAS)["token"]
+    token = naip.http_json(naip.SAS)["token"]
     to_utm = Transformer.from_crs(U.crs, "EPSG:26918", always_xy=True)
     per = 12
     for k in range(0, len(s), per):
@@ -82,9 +88,9 @@ def main() -> None:
                 ax = axs[j // 3, (j % 3) * 2 + t]
                 if yr is None:
                     continue
-                href = isc.naip_item(r.lon, r.lat, yr)
+                href = naip.naip_item(r.lon, r.lat, yr)
                 if href:
-                    ax.imshow(isc.chip(href, token, r.lon, r.lat, half=half, res=res))
+                    ax.imshow(naip.chip(href, token, r.lon, r.lat, half=half, res=res))
                 for p in polys:
                     if p.geom_type != "Polygon":
                         continue
@@ -102,7 +108,7 @@ def main() -> None:
         plt.close(fig)
         print(f"wrote {out}")
     s[["id", "stratum", "unit", "year", "ha", "m_above_mhhw", "county", "lon", "lat"]].to_csv(
-        config.DATA / "imagery" / f"exit_samples{sfx}.csv", index=False)  # fmt: skip
+        config.IMAGERY_DIR / f"exit_samples{sfx}.csv", index=False)  # fmt: skip
     print(s[["id", "stratum", "unit", "year", "ha", "m_above_mhhw", "county"]].round(2).to_string())
 
 

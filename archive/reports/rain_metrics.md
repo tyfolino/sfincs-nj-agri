@@ -1,6 +1,6 @@
 # Radar rainfall metrics per county × month (Stage IV, MRMS)
 
-Made by `scripts/rain_compare.py` on 2026-10-03 from `data/precip/rain_county_month.csv` (`scripts/rain_metrics.py`) and the hourly clips from `scripts/fetch_precip_hourly.py`.
+Made by `archive/scripts/rain_compare.py` on 2026-10-03 from `data/precip/rain_county_month.csv` (`archive/scripts/rain_metrics.py`) and the hourly clips from `scripts/fetch_precip_hourly.py`.
 
 **Bottom line.**
 
@@ -177,7 +177,7 @@ Daily county cropland means agree at r = 0.977 (11,679 county-days). Days differ
 | Cumberland | 2020-12-24 | 82.6 | 30.8 | 51.8 |
 | Salem | 2020-12-24 | 119.3 | 36.4 | 82.9 |
 
-![Stage IV vs MRMS](rain_metrics_compare.png)
+![Stage IV vs MRMS](figs/rain_metrics_compare.png)
 
 ## 4. Against NWM `qrain_mm` (indicative)
 

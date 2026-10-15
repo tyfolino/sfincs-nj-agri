@@ -63,8 +63,8 @@ def count_year(path, counties: gpd.GeoDataFrame, hucs: gpd.GeoDataFrame) -> pd.D
 
 def main() -> None:
     counties = region.load_counties()
-    dom = gpd.read_file(region.HUC12_FILE, layer="domain")
-    egg = gpd.read_file(region.HUC12_FILE, layer="great_egg_gloucester")
+    dom = region.load_huc12()
+    egg = region.load_huc12("great_egg_gloucester")
     hucs = pd.concat([dom, egg], ignore_index=True)
     if len(hucs) > 255:
         raise ValueError("uint8 HUC index overflow")
@@ -116,7 +116,7 @@ def main() -> None:
     summ.insert(0, "county", summ.index.map(names))
 
     # 2. Gloucester's Great Egg cropland
-    glo = crop[crop.fips == "34015"]
+    glo = crop[crop.fips == domain.GLOUCESTER]
     ge = glo[glo.great_egg].groupby("year").px.sum() * PX_KM2
     gt = glo.groupby("year").px.sum() * PX_KM2
     egg_tab = pd.DataFrame({"great_egg_km2": ge, "gloucester_cropland_km2": gt}).fillna(0)

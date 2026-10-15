@@ -1,6 +1,6 @@
 # NWM v3.0 retrospective: soil-wetness predictors per county
 
-Checked 2026-10-02. Script: `scripts/fetch_nwm_soil.py` (log: `logs/fetch_nwm_soil.log`). Outputs are in `data/nwm/`.
+Checked 2026-10-02. Script: `archive/scripts/fetch_nwm_soil.py` (log: `logs/fetch_nwm_soil.log`). Outputs are in `data/nwm/`.
 
 **Bottom line.** Anonymous windowed reads of the NWM v3.0 retrospective zarr on AWS work well. All of
 2002-01-01 → 2023-01-31 took about 30 minutes (~1 min per year at 1 km, 20 s per year at 250 m). The record

@@ -1,3 +1,5 @@
+"""Per-field flood class rules (agri_sfincs.fieldflood) — pure, no runs."""
+
 import math
 import unittest
 

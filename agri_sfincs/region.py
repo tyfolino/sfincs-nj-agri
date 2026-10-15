@@ -71,12 +71,17 @@ def remove_foreign_land(ring: Polygon, foreign_land) -> Polygon:
     return out
 
 
-def load_huc12() -> gpd.GeoDataFrame:
-    return gpd.read_file(HUC12_FILE)
+def load_huc12(layer: str = "domain") -> gpd.GeoDataFrame:
+    """The domain's HUC12s, or ``layer="great_egg_gloucester"``: the ones left out."""
+    return gpd.read_file(HUC12_FILE, layer=layer)
 
 
 def load_counties() -> gpd.GeoDataFrame:
     return gpd.read_file(COUNTIES_FILE)
+
+
+def load_states() -> gpd.GeoDataFrame:
+    return gpd.read_file(STATES_FILE)
 
 
 def load_ring() -> gpd.GeoDataFrame:

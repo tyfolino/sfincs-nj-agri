@@ -22,32 +22,25 @@ Usage:  python scripts/make_dike_scenarios.py
 
 from __future__ import annotations
 
-import re
-
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 
-import bayshore_exposure as be
-from agri_sfincs import config, dikes
+from agri_sfincs import config, dikes, domain, exposure
 
-STRUCT = config.DATA / "structures"
+STRUCT = config.STRUCT_DIR
 OUT = STRUCT / "scenarios"
 MARSH_BELOW_MHHW, BREACH_M = 0.2, 100.0
-CRS = "EPSG:32618"
-
-
-def slug(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")
+CRS = f"EPSG:{domain.EPSG}"
 
 
 def main() -> None:
     (OUT / "breach").mkdir(parents=True, exist_ok=True)
     lines = dikes.read_weir(STRUCT / "dikes.weir")
-    st = be.high_water_stations()
+    st = exposure.high_water_stations()
 
     def marsh(x, y):
-        return be.idw(st, "mhhw", np.asarray(x), np.asarray(y), CRS) - MARSH_BELOW_MHHW
+        return exposure.idw(st, "mhhw", np.asarray(x), np.asarray(y), CRS) - MARSH_BELOW_MHHW
 
     n = dikes.write_weir(OUT / "dikes_removed.weir", dikes.cap_crests(lines, marsh))
     print(f"dikes_removed.weir: {n} vertices capped at marsh level")
@@ -67,9 +60,9 @@ def main() -> None:
         zn = dikes.breach(x, y, z, j, BREACH_M, zb)
         one = list(lines)
         one[i_line] = (name, x, y, zn)
-        dikes.write_weir(OUT / "breach" / f"{slug(system)}.weir", one)
+        dikes.write_weir(OUT / "breach" / f"{dikes.slug(system)}.weir", one)
         all_farm[i_line][3] = np.minimum(all_farm[i_line][3], zn)
-        rows.append({"system": system, "slug": slug(system), "polyline": name, "x": float(x[j]),
+        rows.append({"system": system, "slug": dikes.slug(system), "polyline": name, "x": float(x[j]),
                      "y": float(y[j]), "crest_before": float(z[j]), "breach_z": zb,
                      "vertices_lowered": int((zn < z).sum())})  # fmt: skip
     dikes.write_weir(OUT / "breach_all_farm.weir", [tuple(t) for t in all_farm])

@@ -1,4 +1,4 @@
-"""Inputs for the river-bed burn (v1 to-do 1-2): chart soundings, flowlines, gauge
+"""Inputs for the river-bed burn (FINDINGS §11): chart soundings, flowlines, gauge
 cross-sections and tidal datums. Network only; ``build_riverbeds.py`` reads the cache.
 
     python scripts/fetch_channels.py [enc] [nhd] [usgs] [datums] [ehydro] [--overwrite]
@@ -42,14 +42,12 @@ The ENC sounding reader and the channel-measurement depth rule follow nj_bight_s
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import warnings
 import xml.etree.ElementTree as ET
 import zipfile
 
 import geopandas as gpd
-import numpy as np
 import pandas as pd
 import shapely
 

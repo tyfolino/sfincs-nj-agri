@@ -1,4 +1,4 @@
-"""Dikes as SFINCS weirs, tide gates as one-way drainage structures: the pure pieces.
+"""Dikes as SFINCS weirs, tide gates as one-way drainage structures.
 
 Why (FINDINGS §10): a 100 m subgrid face averages its pixels half-strip by half-strip
 (hydromt_sfincs ``subgrid_q_table``), so a 10–20 m meadow bank never blocks flow and the
@@ -15,9 +15,16 @@ File formats (SFINCS main, ``read_structure_file`` / ``read_drainage_file``):
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
+import rasterio
+from pyproj import Transformer
+from rasterio.windows import from_bounds
+from shapely.geometry import LineString, MultiLineString
+
+from agri_sfincs import config, domain
 
 #: Broad-crested weir coefficient (bight's Keansburg weir, FINDINGS §38 there).
 WEIR_CD = 0.6
@@ -26,6 +33,9 @@ WEIR_CD = 0.6
 #: lidar; a 200 m window keeps the real rise and fall of a bank.
 NOTCH_WINDOW_M = 200.0
 NOTCH_DROP_M = 0.3
+#: Check-valve coefficients (m^2.5/s): C_LO ≈ one 0.8 m (30") pipe, C_HI ≈ four of them or
+#: one 1.4 m box (scripts/build_dikes.py).
+C_LO, C_HI = 1.5, 6.0
 
 
 def running_median(z: np.ndarray, s: np.ndarray, window_m: float) -> np.ndarray:
@@ -124,3 +134,50 @@ def breach(x: np.ndarray, y: np.ndarray, z: np.ndarray, at: int, length_m: float
     hit = np.abs(s - s[at]) <= length_m / 2
     out[hit] = np.minimum(out[hit], z_breach)
     return out
+
+
+def leveed_areas(crs=None):
+    """NLD leveed areas (data/structures/structures.gpkg, scripts/fetch_structures.py), in
+    ``crs`` if given."""
+    import geopandas as gpd
+
+    la = gpd.read_file(config.STRUCTURES, layer="nld_leveed_areas")
+    return la if crs is None else la.to_crs(crs)
+
+
+class Bed:
+    """Window reads of the pre-merged bed (EPSG:4326, ~3.9 m) at UTM points."""
+
+    def __init__(self):
+        self.src = rasterio.open(config.ELEV_DIR / "bed_merged.tif")
+        self.to_ll = Transformer.from_crs(domain.EPSG, self.src.crs, always_xy=True)
+
+    def sample(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        lon, lat = self.to_ll.transform(x, y)
+        pad = 1e-4
+        win = from_bounds(lon.min() - pad, lat.min() - pad, lon.max() + pad, lat.max() + pad,
+                          self.src.transform).round_offsets().round_lengths()  # fmt: skip
+        a = self.src.read(1, window=win, boundless=True, fill_value=np.nan).astype("float64")
+        nd = self.src.nodata
+        if nd is not None:
+            a[a == nd] = np.nan
+        tr = self.src.window_transform(win)
+        c, r = ~tr * (lon, lat)
+        r, c = np.floor(r).astype(int), np.floor(c).astype(int)
+        ok = (r >= 0) & (r < a.shape[0]) & (c >= 0) & (c < a.shape[1])
+        out = np.full(x.shape, np.nan)
+        out[ok] = a[r[ok], c[ok]]
+        return out
+
+
+def lines_of(geom) -> list[LineString]:
+    if isinstance(geom, LineString):
+        return [geom]
+    if isinstance(geom, MultiLineString):
+        return list(geom.geoms)
+    return [g for g in getattr(geom, "geoms", []) if isinstance(g, LineString)]
+
+
+def slug(system: str) -> str:
+    """A dike system's name as a file-name stem ("Middle Neck" -> "middle_neck")."""
+    return re.sub(r"[^a-z0-9]+", "_", system.lower()).strip("_")

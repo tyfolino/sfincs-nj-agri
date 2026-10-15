@@ -12,9 +12,9 @@ and get re-modelled; re-fetch them with ``--refresh-from``.
 County mean over cropland: one static mask, the 2023 CDL (NJ: data/cdl/CDL_2023_34.tif;
 other states: data/floodplain/cdl/, scripts/fetch_cdl.py --fips), cropland =
 ``agri_sfincs.cdl.CROPLAND``. Each 30 m cropland pixel inside a county
-(data/fork1/counties.gpkg, scripts/fork1_counties.py) is assigned its PRISM cell
+(data/fork1/counties.gpkg, archive/scripts/fork1_counties.py) is assigned its PRISM cell
 (nearest-neighbour warp of a cell-index grid); a county's monthly value is the
-cropland-pixel-weighted mean of its PRISM cells (``agri_sfincs.panel.weighted_county_mean``).
+cropland-pixel-weighted mean of its PRISM cells (``archive/scripts/panel.py.weighted_county_mean``).
 Counties with no CDL cropland fall back to all their pixels (flagged ``weights =
 "all land"``).
 
@@ -23,7 +23,7 @@ Writes:
   data/fork1/prism_weights.csv                  fips, cell, n_px, weights
   data/fork1/prism_county_monthly.csv           fips, year, month, ppt_mm, prism_type
 
-Usage:  python scripts/fetch_prism_monthly.py [--years 2001-2025] [--cdl-year 2023]
+Usage:  python archive/scripts/fetch_prism_monthly.py [--years 2001-2025] [--cdl-year 2023]
                                                [--refresh-from 202501] [--download-only]
 """
 
@@ -37,13 +37,12 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
-from fetch_cdl import cdl_path
-from fetch_rma_col import parse_years
 from rasterio import features, warp
 
 from agri_sfincs import cdl, config
+from agri_sfincs.cli import parse_years
 from agri_sfincs.net import download
-from agri_sfincs.panel import weighted_county_mean
+from panel import weighted_county_mean
 
 BASE = "https://data.prism.oregonstate.edu/time_series/us/an/4km/ppt/monthly/"
 COUNTIES = config.FORK1_DIR / "counties.gpkg"
@@ -86,7 +85,7 @@ def build_weights(counties: gpd.GeoDataFrame, grid_src: str, cdl_year: int) -> p
     crop_codes = np.array(sorted(cdl.CROPLAND), dtype=np.uint8)
     out = []
     for st, cs in counties.groupby("state"):
-        path = cdl_path(cdl_year, st)
+        path = cdl.path(cdl_year, st)
         if not path.exists():
             raise SystemExit(f"missing {path} — run scripts/fetch_cdl.py --years {cdl_year} --fips {st}")
         with rasterio.open(path) as src:

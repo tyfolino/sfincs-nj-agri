@@ -1,4 +1,5 @@
-"""Per-field flood class from the dike x sea-level scenario runs (pure pieces).
+"""Per-field flooding in the dike x sea-level scenario runs: the per-pixel stats read from a
+run (``field_pixels``, ``run_stats``) and the class rules (pure pieces).
 
 A field "floods" in a run when at least ``SHARE`` of its 10 m pixels see a month-max depth
 above 5 cm. For each field we know, per dike scenario, the lowest sea-level rise (of
@@ -21,6 +22,13 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pandas as pd
+import rasterio
+import xarray as xr
+from rasterio.features import rasterize
+
+from agri_sfincs import runs
+from agri_sfincs.events import EVENTS
 
 LEVELS = (0.0, 0.3, 0.6, 1.0)
 SHARE = 0.10
@@ -68,3 +76,37 @@ def longest_run(wet) -> int:
         cur = cur + 1 if w else 0
         best = max(best, cur)
     return best
+
+
+def field_pixels(g, model: str = runs.MODEL):
+    """Every 10 m subgrid pixel of every field (``g.field_id``, 1..N): (flat model-cell index,
+    ground elevation, field_id), for pixels inside the model grid with a finite ground."""
+    with rasterio.open(runs.subgrid_dep(model)) as d:
+        dep = d.read(1, masked=True).filled(np.nan)
+        tr, shape = d.transform, d.shape
+    ids = rasterize(zip(g.geometry, g.field_id), out_shape=shape, transform=tr, fill=0, dtype="uint32")
+    with xr.open_dataset(runs.run_dir("tide2024oct", "intact", 0, model=model) / "sfincs_map.nc") as mp:
+        grid = runs.MapGrid.from_map(mp)
+    return runs.pixel_cells(ids, tr, dep, grid)
+
+
+def run_stats(run, f_sel, d_sel, fid, nfield, event: str) -> pd.DataFrame:
+    """Per field: share of pixels flooded (> 5 cm month max), mean wet days, mean max depth
+    over flooded pixels, over ``event``'s focus period."""
+    with xr.open_dataset(run / "sfincs_map.nc") as mp:
+        focus = EVENTS[event].in_focus(runs.block_days(mp))
+        maxd = np.zeros(f_sel.size, "float32")
+        wet = np.zeros(f_sel.size, "uint16")
+        for k in np.flatnonzero(focus):
+            h = runs.depth(mp, k, f_sel, d_sel)
+            maxd = np.maximum(maxd, h)
+            wet += h > runs.THRESH
+    npx = np.bincount(fid, minlength=nfield + 1).astype(float)
+    fl = maxd > runs.THRESH
+    nfl = np.bincount(fid, weights=fl, minlength=nfield + 1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return pd.DataFrame({
+            "share": nfl / npx,
+            "wetdays": np.bincount(fid, weights=wet, minlength=nfield + 1) / npx,
+            "maxd": np.bincount(fid, weights=np.where(fl, maxd, 0), minlength=nfield + 1) / nfl,
+        }).iloc[1:].set_index(np.arange(1, nfield + 1))  # fmt: skip

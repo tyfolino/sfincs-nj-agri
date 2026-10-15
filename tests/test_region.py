@@ -99,5 +99,30 @@ class TestCountYear(unittest.TestCase):
                                ("A", "", 63): 4, ("B", "", 242): 4})  # fmt: skip
 
 
+class TestCountiesInsideBBox(unittest.TestCase):
+    def test_whole_counties_inside_the_clip(self):
+        from agri_sfincs import config, domain
+
+        f = config.REGION_DIR / "counties.gpkg"
+        if not f.exists():
+            self.skipTest("no counties.gpkg")
+        import geopandas as gpd
+
+        import fetch_mrms
+
+        c = gpd.read_file(f)
+        b = c[c.fips.isin(domain.COUNTIES)].to_crs(4326).total_bounds
+        w, s, e, n = fetch_mrms.BBOX
+        self.assertTrue(w < b[0] and s < b[1] and e > b[2] and n > b[3], (b, fetch_mrms.BBOX))
+
+    def test_mrms_bbox_matches_domain(self):
+        """fetch_mrms.py (grib env, cannot import the package) keeps a copy of the clip."""
+        import fetch_mrms
+
+        from agri_sfincs import domain
+
+        self.assertEqual(fetch_mrms.BBOX, domain.RAIN_BBOX)
+
+
 if __name__ == "__main__":
     unittest.main()

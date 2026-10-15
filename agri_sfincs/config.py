@@ -29,7 +29,15 @@ CHANNELS_DIR = DATA / "channels"  # ENC soundings, NHDPlus HR, USGS sections, ti
 EVAP_DIR = DATA / "evap"  # gridMET daily reference ET (pet) clipped to the BBOX (bulk)
 LANDUSE_DIR = DATA / "landuse"  # NJDEP Land Use/Land Cover editions + farm-to-wetland transitions
 LANDSAT_DIR = DATA / "landsat"  # Landsat C2 L2 per-field per-scene stats (bulk; symlink to /scratch)
+STRUCT_DIR = DATA / "structures"  # NID, NLD levees, head of tide, lakes; dike weirs and gates
+STRUCTURES = STRUCT_DIR / "structures.gpkg"
+SOILS_DIR = DATA / "soils"  # SSURGO hydrologic soil groups and ksat
+LANDCOVER_DIR = DATA / "landcover"  # NLCD
+EASEMENT_DIR = DATA / "easements"  # NRCS conservation easements
+IMAGERY_DIR = DATA / "imagery"  # NAIP spot-check samples and chips
+ANALYSIS_DIR = DATA / "analysis"  # derived per-field / per-test tables
 REPORTS = ROOT / "reports"
+ARCHIVE_REPORTS = ROOT / "archive" / "reports"  # reports of the archived side lines (archive/README.md)
 CATALOG = DATA / "data_catalog.yml"
 
 #: Built models and runs: regenerable, so on scratch (1 TB tier, purged when idle),

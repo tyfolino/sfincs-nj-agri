@@ -27,23 +27,29 @@ Usage:  python scripts/build_dikes.py
 
 from __future__ import annotations
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
-import geopandas as gpd
 import rasterio
-from pyproj import Transformer
 from rasterio.features import rasterize
 from rasterio.vrt import WarpedVRT
 from rasterio.windows import from_bounds
-from shapely.geometry import LineString, MultiLineString, Point
+from shapely.geometry import LineString, Point
 
-from agri_sfincs import config, domain, region
+from agri_sfincs import cdl, config, dikes, domain, region
 from agri_sfincs.cdl import CROPLAND
-from agri_sfincs.dikes import fill_notches, write_drn, write_weir
+from agri_sfincs.dikes import (
+    C_HI,
+    C_LO,
+    Bed,
+    fill_notches,
+    lines_of,
+    write_drn,
+    write_weir,
+)
 from agri_sfincs.report import md_table
 
-STRUCT = config.DATA / "structures"
-BED = config.DATA / "elevation" / "bed_merged.tif"
+STRUCT = config.STRUCT_DIR
 STEP_M = 5.0
 RIDGE_HALF_M = 20.0
 RIDGE_OFFSETS = np.arange(-RIDGE_HALF_M, RIDGE_HALF_M + 0.1, 4.0)
@@ -51,42 +57,6 @@ FARM_CROP_KM2 = 0.1
 CDL_YEAR = 2023
 GATE_RMIN, GATE_RMAX, GATE_GRID = 120.0, 400.0, 20.0
 GATE_CLEAR_M, GATE_SEP_M = 60.0, 150.0
-C_LO, C_HI = 1.5, 6.0
-
-
-class Bed:
-    """Window reads of the pre-merged bed (EPSG:4326, ~3.9 m) at UTM points."""
-
-    def __init__(self):
-        self.src = rasterio.open(BED)
-        self.to_ll = Transformer.from_crs(domain.EPSG, self.src.crs, always_xy=True)
-
-    def sample(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-        lon, lat = self.to_ll.transform(x, y)
-        pad = 1e-4
-        win = from_bounds(lon.min() - pad, lat.min() - pad, lon.max() + pad, lat.max() + pad,
-                          self.src.transform).round_offsets().round_lengths()  # fmt: skip
-        a = self.src.read(1, window=win, boundless=True, fill_value=np.nan).astype("float64")
-        nd = self.src.nodata
-        if nd is not None:
-            a[a == nd] = np.nan
-        tr = self.src.window_transform(win)
-        c, r = ~tr * (lon, lat)
-        r, c = np.floor(r).astype(int), np.floor(c).astype(int)
-        ok = (r >= 0) & (r < a.shape[0]) & (c >= 0) & (c < a.shape[1])
-        out = np.full(x.shape, np.nan)
-        out[ok] = a[r[ok], c[ok]]
-        return out
-
-
-def lines_of(geom) -> list[LineString]:
-    if isinstance(geom, LineString):
-        return [geom]
-    if isinstance(geom, MultiLineString):
-        return list(geom.geoms)
-    return [g for g in getattr(geom, "geoms", []) if isinstance(g, LineString)]
-
-
 def ridge_along(line: LineString, bed: Bed):
     """Stations s, points (x, y) every STEP_M, and the ridge = max bed across ±RIDGE_HALF_M."""
     s = np.append(np.arange(0.0, line.length, STEP_M), line.length)
@@ -105,7 +75,7 @@ def ridge_along(line: LineString, bed: Bed):
 
 
 def cropland_km2(areas: gpd.GeoDataFrame) -> np.ndarray:
-    with rasterio.open(config.CDL_DIR / f"CDL_{CDL_YEAR}_{domain.STATE_FIPS}.tif") as c:
+    with rasterio.open(cdl.path(CDL_YEAR)) as c:
         with WarpedVRT(c, crs=f"EPSG:{domain.EPSG}", resolution=30) as v:
             west, south, east, north = areas.total_bounds
             win = from_bounds(west, south, east, north, v.transform).round_offsets().round_lengths()
@@ -147,7 +117,7 @@ def main() -> None:
     outline = region.load_outline().to_crs(crs).geometry.union_all()
     gpkg = STRUCT / "structures.gpkg"
     al = gpd.read_file(gpkg, layer="nld_alignment").to_crs(crs)
-    la = gpd.read_file(gpkg, layer="nld_leveed_areas").to_crs(crs)
+    la = dikes.leveed_areas(crs)
     pg = gpd.read_file(gpkg, layer="nld_pipe_gates").to_crs(crs)
     al = al[al.intersects(outline)].copy()
     al["geometry"] = al.geometry.intersection(outline)

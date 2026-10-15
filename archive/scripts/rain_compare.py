@@ -1,10 +1,10 @@
 """Stage IV vs MRMS (vs NWM rain) comparison and the rain-metrics report.
 
-Shared sfincs env, after scripts/rain_metrics.py:  python scripts/rain_compare.py
+Shared sfincs env, after archive/scripts/rain_metrics.py:  python archive/scripts/rain_compare.py
 
 Reads data/precip/: rain_county_month.csv, stage4_hourly_vs_6h.csv, the year files'
 ``status`` (archive coverage), and data/nwm/nwm_soil_daily_county.csv (``qrain_mm``).
-Writes reports/rain_metrics.md and reports/rain_metrics_compare.png.
+Writes archive/reports/rain_metrics.md and archive/reports/figs/rain_metrics_compare.png.
 
 Comparison rules: county x local-month totals, only months with missing_frac < 2 % in
 BOTH products. Periods: MRMS GaugeCorr (to 2020-09) and Pass2 (2020-11 on); 2020-10, the
@@ -27,8 +27,8 @@ from agri_sfincs import config  # noqa: E402
 from agri_sfincs.report import md_table  # noqa: E402
 
 P = config.PRECIP_DIR
-REPORT = config.REPORTS / "rain_metrics.md"
-FIG = config.REPORTS / "rain_metrics_compare.png"
+REPORT = config.ARCHIVE_REPORTS / "rain_metrics.md"
+FIG = config.ARCHIVE_REPORTS / "figs" / "rain_metrics_compare.png"
 MAX_MISSING = 0.02
 SWITCH = (2020, 10)
 #: Palette: validated default categorical slots 1-2 (dataviz skill), text in ink.
@@ -78,8 +78,8 @@ def coverage() -> pd.DataFrame:
 def main() -> None:
     m = pd.read_csv(P / "rain_county_month.csv", dtype={"fips": str})
     out = ["# Radar rainfall metrics per county × month (Stage IV, MRMS)", ""]
-    out += [f"Made by `scripts/rain_compare.py` on {pd.Timestamp.now():%Y-%m-%d} from "
-            "`data/precip/rain_county_month.csv` (`scripts/rain_metrics.py`) and the hourly "
+    out += [f"Made by `archive/scripts/rain_compare.py` on {pd.Timestamp.now():%Y-%m-%d} from "
+            "`data/precip/rain_county_month.csv` (`archive/scripts/rain_metrics.py`) and the hourly "
             "clips from `scripts/fetch_precip_hourly.py`.", ""]  # fmt: skip
 
     out += ["## 1. Sources", "",
@@ -178,7 +178,7 @@ def main() -> None:
                 "2024-08-30 04–05Z: 14 mm/h against 1.5). Prefer Stage IV in those months:", "",
                 tab(big, "{:.1f}"), ""]  # fmt: skip
         fig_compare(j, yr)
-        out += [f"![Stage IV vs MRMS]({FIG.name})", ""]
+        out += [f"![Stage IV vs MRMS](figs/{FIG.name})", ""]
 
     # ---- NWM
     nwmf = config.NWM_DIR / "nwm_soil_daily_county.csv"

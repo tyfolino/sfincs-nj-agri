@@ -31,11 +31,9 @@ from rasterio.enums import Resampling  # noqa: E402
 from rasterio.vrt import WarpedVRT  # noqa: E402
 from rasterio.windows import Window  # noqa: E402
 
-import bayshore_exposure as be  # noqa: E402
-from agri_sfincs import cdl, config, dikes, domain  # noqa: E402
+from agri_sfincs import cdl, config, dikes, maps, runs  # noqa: E402
 from agri_sfincs.events import EVENTS  # noqa: E402
 
-RUNS = config.MODELS / "v1_100m" / "runs"
 WINDOW = (-75.58, 39.36, -75.25, 39.63)  # lon0, lat0, lon1, lat1: Salem River to Greenwich
 F = 2  # display pixel = 20 m
 DEPTH_CMAP = plt.get_cmap("Blues")
@@ -61,10 +59,9 @@ def main() -> None:
     ap.add_argument("--fps", type=int, default=6)
     a = ap.parse_args()
     ev = EVENTS[a.event]
-    runs = [RUNS / f"{a.event}_{r}" for r in a.runs]
-    model = runs[0].parents[1]
+    run_dirs = [runs.resolve(f"{a.event}_{r}") for r in a.runs]
 
-    with rasterio.open(model / "subgrid" / "dep_subgrid_lev0.tif") as d:
+    with rasterio.open(runs.subgrid_dep()) as d:
         tr, crs = d.transform, d.crs
         (xa, xb), (ya, yb) = Transformer.from_crs(4326, crs, always_xy=True).transform(
             [WINDOW[0], WINDOW[2]], [WINDOW[1], WINDOW[3]])  # fmt: skip
@@ -74,20 +71,15 @@ def main() -> None:
         win = Window(c0, r0, c1 - c0, r1 - r0)
         dep = d.read(1, window=win, masked=True).filled(np.nan)
         wtr = d.window_transform(win)
-    with rasterio.open(config.CDL_DIR / f"CDL_{ev.focus_start.year}_{domain.STATE_FIPS}.tif") as c:
+    with rasterio.open(cdl.path(ev.focus_start.year)) as c:
         with WarpedVRT(c, crs=crs, transform=wtr, width=dep.shape[1], height=dep.shape[0],
                        resampling=Resampling.nearest) as v:  # fmt: skip
             crop = np.isin(v.read(1), list(cdl.CROPLAND))
 
     # 10 m pixel -> model cell (event_summary.py's mapping)
-    maps = [xr.open_dataset(r / "sfincs_map.nc") for r in runs]
-    mp = maps[0]
-    x0, y0 = float(mp.corner_x.min()), float(mp.corner_y.min())
-    dx = float(np.diff(np.unique(mp.corner_x.values.round(3)))[0])
-    rows, cols = np.indices(dep.shape)
-    nn = np.floor((wtr.f + (rows + 0.5) * wtr.e - y0) / dx).astype(int)
-    mm = np.floor((wtr.c + (cols + 0.5) * wtr.a - x0) / dx).astype(int)
-    inside = (nn >= 0) & (nn < mp.zs.shape[1]) & (mm >= 0) & (mm < mp.zs.shape[2])
+    mds = [xr.open_dataset(r / "sfincs_map.nc") for r in run_dirs]
+    mp = mds[0]
+    nn, mm, inside = runs.MapGrid.from_map(mp).index(*runs.pixel_centres(wtr, *np.indices(dep.shape)))
     nn, mm = np.clip(nn, 0, mp.zs.shape[1] - 1), np.clip(mm, 0, mp.zs.shape[2] - 1)
     n0, n1, m0, m1 = nn.min(), nn.max() + 1, mm.min(), mm.max() + 1
     nn, mm = nn - n0, mm - m0
@@ -95,10 +87,10 @@ def main() -> None:
 
     times = pd.to_datetime(mp.time.values)
     sel = np.flatnonzero((times >= pd.Timestamp(a.start)) & (times <= pd.Timestamp(a.end)))
-    zs = [m.zs.isel(time=sel, n=slice(n0, n1), m=slice(m0, m1)).values for m in maps]
+    zs = [m.zs.isel(time=sel, n=slice(n0, n1), m=slice(m0, m1)).values for m in mds]
 
     # boundary strip: the forcing gauge nearest the window's SW corner (the bay side)
-    bnd = [xr.open_dataset(r / "sfincs_netbndbzsbzifile.nc") for r in runs]
+    bnd = [xr.open_dataset(r / "sfincs_netbndbzsbzifile.nc") for r in run_dirs]
     k = int(np.argmin(np.hypot(bnd[0].x.values - xa, bnd[0].y.values - ya)))
     st_name = f"{str(bnd[0].name.values[k]).strip()} (NOAA {bnd[0].noaa_id.values[k]}), boundary forcing"
     ht = pd.to_datetime(bnd[0].time.values)
@@ -112,8 +104,6 @@ def main() -> None:
     axes = [fig.add_subplot(gs[0, i]) for i in range(2)]
     axl = fig.add_subplot(gs[1, :])
     ims = []
-    pts = Transformer.from_crs(4326, crs, always_xy=True)
-    px, py = pts.transform([v[0] for v in be.PLACES.values()], [v[1] for v in be.PLACES.values()])
     for ax, r in zip(axes, a.runs):
         ax.set_facecolor("#c6dbef")  # below 0 m NAVD88: water
         ax.imshow(np.where(land_d > 0, 1, np.nan), extent=ext, origin="lower",
@@ -123,12 +113,9 @@ def main() -> None:
         ims.append(ax.imshow(np.full(crop_d.shape, np.nan), extent=ext, origin="lower", cmap=DEPTH_CMAP,
                              vmin=0, vmax=1.5, interpolation="nearest"))  # fmt: skip
         if not r.startswith("removed"):
-            for _, wx, wy, _ in dikes.read_weir(runs[0] / "sfincs.weir"):
+            for _, wx, wy, _ in dikes.read_weir(run_dirs[0] / "sfincs.weir"):
                 ax.plot(wx, wy, color="#0b0b0b", lw=0.6)
-        for nme, x, y in zip(be.PLACES, px, py):
-            if ext[0] < x < ext[1] and ext[2] < y < ext[3]:
-                ax.plot(x, y, ".", color="#0b0b0b", ms=4)
-                ax.annotate(nme, (x, y), xytext=(3, 3), textcoords="offset points", fontsize=8)
+        maps.label_places(ax, crs, ext)
         ax.set_xlim(ext[0], ext[1]), ax.set_ylim(ext[2], ext[3])
         ax.set_xticks([]), ax.set_yticks([])
         ax.set_title(label(r), fontsize=10, loc="left")
@@ -150,7 +137,7 @@ def main() -> None:
     def frame(i):
         for im, z in zip(ims, zs):
             h = z[i][nn, mm] - dep
-            h = np.where(land & np.isfinite(h) & (h > 0.05), h, np.nan)
+            h = np.where(land & np.isfinite(h) & (h > runs.THRESH), h, np.nan)
             im.set_data(coarsen(h, F, np.nanmax))
         vline.set_xdata([times[sel[i]]] * 2)
         stamp.set_text(f"{ev.name}: {times[sel[i]]:%Y-%m-%d %H:%M} UTC")

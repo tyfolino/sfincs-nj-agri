@@ -78,8 +78,18 @@ GREAT_EGG_GLOUCESTER = {
 
 #: Counties the analysis is about (the loss data are county x month).
 COUNTIES = {"34033": "Salem", "34011": "Cumberland", "34015": "Gloucester"}
+GLOUCESTER = "34015"  # the county whose Great Egg headwaters are left out
 #: Counties the domain also touches; modelled, never analysed.
 COUNTIES_FRINGE = {"34007": "Camden", "34001": "Atlantic", "34009": "Cape May"}
+
+#: Fork 1 (cross-county flood x rain test): state abbreviation -> 2-digit FIPS of the
+#: states it pools, NJ first.
+FORK1_STATES = {"NJ": "34", "DE": "10", "MD": "24", "VA": "51", "NC": "37"}
+
+#: The MRMS / Stage IV / gridMET clip, lon/lat (w, s, e, n). scripts/fetch_mrms.py keeps
+#: a literal copy (it runs in the grib env, which cannot import this package);
+#: tests/test_region.py checks the two agree.
+RAIN_BBOX = (-75.64, 38.98, -74.80, 39.94)
 
 #: NOAA CO-OPS water-level stations along the Delaware River/Bay, upstream to mouth.
 #: Coordinates and MLLW-only datum handling as nj_bight_sfincs
@@ -96,6 +106,8 @@ NOAA_STATIONS = [
     {"id": "8536110", "name": "Cape May, NJ",           "lon": -74.9600, "lat": 38.9683},
     {"id": "8557380", "name": "Lewes, DE",              "lon": -75.1193, "lat": 38.7828},
 ]
+SHIP_JOHN = "8537121"  # Ship John Shoal: the bay gauge nearest the Cumberland bayshore
+CAPE_MAY = "8536110"  # the one forcing gauge on the ocean side
 
 #: USGS sites known to matter (the nj_bight_sfincs v4 lists). Labels are short
 #: reminders; the inventory script reports the official names from the USGS API and
@@ -149,5 +161,29 @@ TIDAL_REACHES = {
     "big_timber": {"river": "Big Timber Creek", "head": (-75.081778, 39.809432),
                    "note": "head = NJDEP point on the South Branch (the North "
                            "Branch is all Camden County)"},
+}
+# fmt: on
+
+
+# fmt: off
+#: Map labels, lon/lat: towns (for orientation) and waters.
+PLACES = {
+    "Salem": (-75.467, 39.572), "Pennsville": (-75.517, 39.654),
+    "Penns Grove": (-75.468, 39.730), "Paulsboro": (-75.240, 39.830),
+    "Woodstown": (-75.328, 39.652), "Hancocks Bridge": (-75.461, 39.507),
+    "Greenwich": (-75.337, 39.390), "Bridgeton": (-75.234, 39.427),
+    "Millville": (-75.039, 39.402), "Fortescue": (-75.170, 39.237),
+    "Port Norris": (-75.035, 39.246), "Mauricetown": (-74.993, 39.286),
+}
+WATERS = {
+    "Delaware River": (-75.36, 39.80), "Delaware Bay": (-75.30, 39.24),
+    "Mannington\nMeadow": (-75.43, 39.615), "Salem R.": (-75.50, 39.585),
+    "Alloway Cr.": (-75.50, 39.50), "Stow Cr.": (-75.41, 39.43),
+    "Cohansey R.": (-75.33, 39.355), "Maurice R.": (-74.98, 39.33),
+}
+#: The two bayshore zoom windows of the scenario maps: lon0, lat0, lon1, lat1.
+ZOOMS = {
+    "Salem River / Mannington Meadow / Hancocks Bridge": (-75.57, 39.47, -75.38, 39.63),
+    "Cumberland bayshore: Greenwich to the Maurice River": (-75.40, 39.21, -74.93, 39.42),
 }
 # fmt: on

@@ -9,8 +9,9 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-import build_loss_panel as blp  # noqa: E402
 import fetch_rma_sob  # noqa: E402
+
+import rma  # noqa: E402
 
 SOB_LINE = (
     "2024|02|AK|240|Southeast Fairbanks           |9999|All Other Crops               "
@@ -55,24 +56,24 @@ class TestSobLayout(unittest.TestCase):
 
 class TestRules(unittest.TestCase):
     def test_crop_groups(self):
-        self.assertEqual(blp.crop_group("0081"), "soybeans")
-        self.assertEqual(blp.crop_group("41"), "corn")
-        self.assertEqual(blp.crop_group("0011"), "wheat")
-        self.assertEqual(blp.crop_group("0091"), "other")  # barley
-        self.assertEqual(blp.crop_group("9999"), "other")
+        self.assertEqual(rma.crop_group("0081"), "soybeans")
+        self.assertEqual(rma.crop_group("41"), "corn")
+        self.assertEqual(rma.crop_group("0011"), "wheat")
+        self.assertEqual(rma.crop_group("0091"), "other")  # barley
+        self.assertEqual(rma.crop_group("9999"), "other")
 
     def test_exposure_year_fall_seeded_only_sep_dec(self):
-        self.assertEqual(blp.exposure_year("0011", 2018, 10), 2019)
-        self.assertEqual(blp.exposure_year("0011", 2018, 9), 2019)
-        self.assertEqual(blp.exposure_year("0011", 2018, 6), 2018)
-        self.assertEqual(blp.exposure_year("0091", 2018, 11), 2019)
-        self.assertEqual(blp.exposure_year("0041", 2018, 11), 2018)
+        self.assertEqual(rma.exposure_year("0011", 2018, 10), 2019)
+        self.assertEqual(rma.exposure_year("0011", 2018, 9), 2019)
+        self.assertEqual(rma.exposure_year("0011", 2018, 6), 2018)
+        self.assertEqual(rma.exposure_year("0091", 2018, 11), 2019)
+        self.assertEqual(rma.exposure_year("0041", 2018, 11), 2018)
 
     def test_area_plans(self):
         for a in ("SCO-YP", "ECO-RP", "RI", "GRIP", "GRIP-HR", "HIP-WI", "STAX", "GRP"):
-            self.assertTrue(blp.is_area_plan(a), a)
+            self.assertTrue(rma.is_area_plan(a), a)
         for a in ("RP", "YP", "APH", "RPHPE", "DO", "WFRP", "ARC"):
-            self.assertFalse(blp.is_area_plan(a), a)
+            self.assertFalse(rma.is_area_plan(a), a)
 
 
 class TestPanel(unittest.TestCase):
@@ -88,7 +89,7 @@ class TestPanel(unittest.TestCase):
             _col(col_code="31", indemnity=-10.0),  # signed correction
         ]  # fmt: skip
         col = pd.DataFrame(rows)
-        self.col, self.drop = blp.select_col(col, ["34033", "34011"], 2020, 2020)
+        self.col, self.drop = rma.select_col(col, ["34033", "34011"], 2020, 2020)
         sob = pd.DataFrame([
             _sob(),
             _sob(insurance_plan_abbr="SCO-RP", liability=500.0),
@@ -96,9 +97,9 @@ class TestPanel(unittest.TestCase):
             _sob(commodity_code="0011", commodity_year=2021, liability=300.0),
             _sob(commodity_code="0091", commodity_year=2021, liability=7.0),
         ])  # fmt: skip
-        sob["area_plan"] = sob.insurance_plan_abbr.map(blp.is_area_plan)
-        liab = blp.liability_by_commodity(sob, ["34033", "34011"])
-        self.p = blp.build_panel(self.col, liab, ["34033", "34011"], range(2020, 2021))
+        sob["area_plan"] = sob.insurance_plan_abbr.map(rma.is_area_plan)
+        liab = rma.liability_by_commodity(sob, ["34033", "34011"])
+        self.p = rma.build_panel(self.col, liab, ["34033", "34011"], range(2020, 2021))
 
     def cell(self, fips, month, group):
         q = self.p[(self.p.fips == fips) & (self.p.month == month) & (self.p.crop_group == group)]
@@ -145,7 +146,7 @@ class TestSelect(unittest.TestCase):
         col = pd.DataFrame([_col(), _col(month_of_loss=0), _col(year_of_loss=None),
                             _col(fips="34999"), _col(year_of_loss=2026)])  # fmt: skip
         col["year_of_loss"] = pd.to_numeric(col.year_of_loss)
-        d, drop = blp.select_col(col, ["34033"], 2003, 2025)
+        d, drop = rma.select_col(col, ["34033"], 2003, 2025)
         self.assertEqual(len(d), 1)
         self.assertEqual(drop["month 0 / unknown"][0], 1)
         self.assertEqual(drop["no year of loss (commodity year >= start)"][0], 1)

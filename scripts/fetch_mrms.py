@@ -40,7 +40,9 @@ import xarray as xr
 
 #: Model outline + 5 km, lon/lat (agri_sfincs.region.load_outline, 2026-10-02),
 #: rounded outward to the 0.01 deg MRMS grid.
-BBOX = (-75.64, 38.98, -74.80, 39.94)  # w, s, e, n
+# w, s, e, n. = agri_sfincs.domain.RAIN_BBOX: this script runs in the grib env, which cannot
+# import the package (no pyproj); tests/test_rain_metrics.py checks the two agree.
+BBOX = (-75.64, 38.98, -74.80, 39.94)
 PASS2_START = pd.Timestamp("2020-10-14T00")
 AWS = (
     "https://noaa-mrms-pds.s3.amazonaws.com/CONUS/MultiSensor_QPE_01H_Pass2_00.00/"

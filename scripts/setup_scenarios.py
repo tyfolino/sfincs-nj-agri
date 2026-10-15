@@ -15,7 +15,11 @@ Runs, on the v1 model (dikes as weirs, check-valve gates, burned beds), TIDE-ONL
                Middle Neck set-back (non-farmed seaward land restored, farms behind an inner dike)
                on tide2024oct x SLR {0, 0.6} and sandy2012.
 "intact" = the static model's own weirs; "removed" / "breach_*" swap in the weir files of
-scripts/make_dike_scenarios.py. Run names: <event>_<dikes>_slr<cm>[_rain].
+scripts/make_dike_scenarios.py. Run names: <event>_<dikes>_slr<cm>[_rain]
+(agri_sfincs.runs.run_dir).
+
+Writes each run not yet staged to config.MODELS/<model>/runs/<name> (scripts/setup_event.py's
+setup_event). ``--submit`` sbatches hpc/sfincs_run.slurm for every run without a sfincs_map.nc.
 
 Usage:  python scripts/setup_scenarios.py [--model v1_100m] [--breaches] [--restore] [--submit] [--only NAME...]
 """
@@ -28,7 +32,7 @@ import subprocess
 from agri_sfincs import config
 from agri_sfincs.events import EVENTS, setup_event
 
-SC = config.DATA / "structures" / "scenarios"
+SC = config.STRUCT_DIR / "scenarios"
 SLR = [0.0, 0.3, 0.6, 1.0]
 DIKES = {"intact": None, "removed": SC / "dikes_removed.weir", "breach_all_farm": SC / "breach_all_farm.weir"}
 
