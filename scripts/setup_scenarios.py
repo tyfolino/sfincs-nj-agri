@@ -6,6 +6,9 @@ Runs, on the v1 model (dikes as weirs, check-valve gates, burned beds), TIDE-ONL
                a polder, FINDINGS §27)
   sandy2012    x {intact, removed, breach_all_farm}  x SLR {0, 0.3, 0.6, 1.0} m
   sandy2012    intact, SLR 0, WITH Stage IV rain     (how much rain adds behind the banks)
+  --storms:    the other Sandy-class storm tides (storm2012dec, storm2016jan, storm2021oct) x
+               {intact, removed} at SLR 0, plus intact WITH rain: repeated exposure for the
+               land-use test (FINDINGS §34)
   --breaches:  sandy2012 x each farm system breached alone (data/structures/scenarios/breach/)
   --restore:   farm -> wetland phase 1 (2026-10-06, scripts/make_restore_scenarios.py): per site,
                the outlet re-opened to MLLW over 100 / 300 m and its gate removed, tide2024oct x
@@ -21,7 +24,7 @@ scripts/make_dike_scenarios.py. Run names: <event>_<dikes>_slr<cm>[_rain]
 Writes each run not yet staged to config.MODELS/<model>/runs/<name> (scripts/setup_event.py's
 setup_event). ``--submit`` sbatches hpc/sfincs_run.slurm for every run without a sfincs_map.nc.
 
-Usage:  python scripts/setup_scenarios.py [--model v1_100m] [--breaches] [--restore] [--submit] [--only NAME...]
+Usage:  python scripts/setup_scenarios.py [--model v1_100m] [--breaches] [--restore] [--storms] [--submit] [--only NAME...]
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ SLR = [0.0, 0.3, 0.6, 1.0]
 DIKES = {"intact": None, "removed": SC / "dikes_removed.weir", "breach_all_farm": SC / "breach_all_farm.weir"}
 
 
+STORMS = ["storm2012dec", "storm2016jan", "storm2021oct"]
 RESTORE = SC / "restore"
 RESTORE_SITES = ["middle_neck", "durham"]
 
@@ -63,7 +67,7 @@ def restore_runs() -> list[dict]:
     return runs
 
 
-def matrix(breaches: bool, restore: bool = False) -> list[dict]:
+def matrix(breaches: bool, restore: bool = False, storms: bool = False) -> list[dict]:
     runs = []
     for ev, dk in (("tide2024oct", ["intact", "removed", "breach_all_farm"]), ("sandy2012", ["intact", "removed", "breach_all_farm"])):
         for d in dk:
@@ -76,6 +80,11 @@ def matrix(breaches: bool, restore: bool = False) -> list[dict]:
                          "precip": "none"})  # fmt: skip
     if restore:
         runs += restore_runs()
+    if storms:
+        for ev in STORMS:
+            for d in ("intact", "removed"):
+                runs.append({"event": ev, "dikes": d, "weir": DIKES[d], "slr": 0.0, "precip": "none"})
+            runs.append({"event": ev, "dikes": "intact", "weir": None, "slr": 0.0, "precip": None})
     for r in runs:
         r["name"] = (f"{r['event']}_{r['dikes']}_slr{int(round(100 * r['slr'])):03d}"
                      + ("_rain" if r["precip"] is None else "") + r.get("suffix", ""))  # fmt: skip
@@ -87,11 +96,12 @@ def main() -> None:
     ap.add_argument("--model", default="v1_100m")
     ap.add_argument("--breaches", action="store_true")
     ap.add_argument("--restore", action="store_true")
+    ap.add_argument("--storms", action="store_true")
     ap.add_argument("--submit", action="store_true")
     ap.add_argument("--only", nargs="*", default=None)
     a = ap.parse_args()
     static = config.MODELS / a.model
-    for r in matrix(a.breaches, a.restore):
+    for r in matrix(a.breaches, a.restore, a.storms):
         if a.only and r["name"] not in a.only:
             continue
         run = static / "runs" / r["name"]
