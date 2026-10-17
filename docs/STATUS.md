@@ -20,19 +20,15 @@ NJ-VA, event-based. Gate: does modeled Sandy flooding explain crop change beyond
 - The progress notebook for the ag-econ group: `notebooks/model_progress_agecon.ipynb`.
 
 ## Next, in order
-0. **Storm-history land-use test** (Sandy alone: a corn → soy hint, §34). Runs for 11 more storm
-   tides were submitted 2026-10-15 (`setup_scenarios.py --storms`):
-   - Sandy-class: 2012-12, 2016-01, 2021-10;
-   - planting season (Mar-Jun): 2010-03, 2011-04, 2012-06, 2014-04, 2022-04, 2023-06, 2024-03/04;
-   - harvest: 2018-09.
-   When they finish, rerun `build_sandy_panel.py` (it writes field_event.csv: per field × storm,
-   with peak month and first CDL year). FIRST check the overlap: similar peaks (1.68-1.92 m) may
-   flood nested sets of fields, so count the distinct flood histories within each height band,
-   tide only vs with rain. Then redo the first look as each field's flood history by
-   season. April 2011 may explain the 2011-12 "pre-trend". Show the colleague and the advisor.
-1. **Tide gates from public sources** (background agent): NRCS post-Sandy repair documents,
-   NAACC culvert inventory, WMA / refuge plans (Abbotts Meadow, Mad Horse Creek, Supawna),
-   Partnership for the Delaware Estuary, county documents.
+0. **Storm-history land-use test: first look done** (§35, §37). Null in fields storms flood
+   only sometimes; a weak corn → soy tilt and slow cropland loss in the 100 fields wet on
+   ordinary tides today, which flood in every storm. The 2011 corn dip is not confirmed. Next: show the colleague
+   and the advisor (`reports/storm_panel.md`; the hand-off table is `data/analysis/storm_panel/`).
+   Open choices: model the unmodelled storm tides (Irene 2011, Oct 2018, Isaias 2020, Jan 2024,
+   Aug 2025; ~10 min each); or drop the storm-by-storm test and use exposure as one number per
+   field (n_storms_tide) in the colleague's model.
+1. **Tide gates:** the public-source search is done (§36). No inventory; a few confirmations. The
+   leads that need a person are listed in §36 and are the user's call.
 2. **Plan checks** (Sandy vs the interior gauges is done, §33):
    - mass balance;
    - where station peaks rise by more than the SLR.
@@ -59,6 +55,9 @@ NJ-VA, event-based. Gate: does modeled Sandy flooding explain crop change beyond
   is asking their NJDEP contacts (2026-10-17).
 
 ## Shared / not yet shared
+- Claude Doc "Bayshore farmland and storm flooding: where the story is" (2026-10-17, for Seowoo and
+  James; https://claude.ai/code/artifact/b6020269-e82b-413f-9430-59783a9d2828). Private until the
+  user shares it. Talk figures: `reports/figs/talk_*.png` (`scripts/plot_talk_figs.py`).
 - Claude Doc "Water-related crop-insurance losses, Salem / Cumberland / Gloucester"
   (https://claude.ai/artifact/P62Vj4zoqFzRJy7BDBb7Xy). It is private until the user shares it.
 - The per-field sample (§32) is not sent yet; the user shares it.

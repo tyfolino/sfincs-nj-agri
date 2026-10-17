@@ -1,0 +1,129 @@
+"""Do the 12 modelled storm tides flood DIFFERENT farm fields, or the same ones again? The check
+before using them as repeated exposure in the land-use panel (FINDINGS §34, §35).
+
+Fields = the low crop fields of the Sandy first look (agri_sfincs.panel.low_crop_fields; scripts/plot_sandy_panel.py before its
+grouping): LU/LC farm in 2012, < 1.5 m above MHHW, at least half CDL cropland over 2008-12,
+with a Sandy value. A field is flooded by a storm when >= fieldflood.SHARE (10%) of it is
+> 5 cm deep (data/analysis/sandy_panel/field_event.csv; dikes as built), tide only and with
+the storm's rain.
+
+Per storm: peak at Ship John, fields flooded, and how many of them Sandy also floods. Per
+field: its flood history (which storms flood it). Reported: storms per field, the number of
+distinct histories, the share that is NESTED (a field flooded by k storms is flooded by the k
+with the biggest footprints), the same within height bands, and how many Sandy-flooded fields
+had already flooded before Sandy.
+
+Writes reports/storm_overlap.md.
+Usage:  python scripts/storm_overlap.py
+"""
+
+from __future__ import annotations
+
+import pandas as pd
+import xarray as xr
+
+from agri_sfincs import config, domain, fieldflood, panel
+from agri_sfincs.report import md_table
+
+PANEL = config.ANALYSIS_DIR / "sandy_panel"
+MAX_H = panel.MAX_H
+BANDS, BAND_LABELS = [-9, 0, 0.5, 1.0, MAX_H], ["< 0", "0-0.5", "0.5-1.0", "1.0-1.5"]
+BEFORE_SANDY = ["storm2010mar", "storm2011apr", "storm2012jun"]
+KINDS = {"tide": "tide only", "rain": "tide + rain"}
+
+
+def load() -> tuple[pd.DataFrame, pd.DataFrame]:
+    f = pd.read_csv(PANEL / "fields.csv").set_index("field_id")
+    fy = pd.read_csv(PANEL / "field_year.csv")
+    f = f[panel.low_crop_fields(f, fy)]
+    ev = pd.read_csv(PANEL / "field_event.csv")
+    return f, ev[ev.field_id.isin(f.index)]
+
+
+def wet_matrix(ev: pd.DataFrame, idx: pd.Index, kind: str, order: list[str]) -> pd.DataFrame:
+    """field x storm: flooded (>= SHARE) in that run; absent rows are dry."""
+    s = ev.pivot(index="field_id", columns="event", values=f"{kind}_share")
+    return s.reindex(index=idx, columns=order).fillna(0) >= fieldflood.SHARE
+
+
+def nested_share(w: pd.DataFrame) -> tuple[int, int]:
+    """(nested, flooded): fields whose storms are exactly the k biggest footprints."""
+    v = w[w.sum().sort_values(ascending=False).index].values
+    k = v.sum(axis=1)
+    hit = k > 0
+    return int(sum(r[:n].all() for r, n in zip(v[hit], k[hit]))), int(hit.sum())
+
+
+def main() -> None:
+    f, ev = load()
+    peaks = ev.groupby("event").peak.first()
+    with xr.open_dataset(config.GAUGE_DIR / "waterlevel_forcing_navd88.nc") as ds:
+        sj = ds["waterlevel"].sel(stations=domain.SHIP_JOHN).to_series()
+    height = {e: float(sj[pd.Timestamp(p)]) for e, p in peaks.items()}
+    order = sorted(peaks.index, key=lambda e: -height[e])
+    band = pd.cut(f.m_above_mhhw, BANDS, labels=BAND_LABELS)
+
+    w = {k: wet_matrix(ev, f.index, k, order) for k in KINDS}
+    storms = pd.DataFrame({"storm": order, "peak (UTC)": [peaks[e][:10] for e in order],
+                           "Ship John m NAVD88": [round(height[e], 2) for e in order]})  # fmt: skip
+    for k, lab in KINDS.items():
+        n = w[k].sum()
+        both = w[k].apply(lambda c: (c & w[k]["sandy2012"]).sum())
+        storms[f"fields, {lab}"] = n.values
+        storms[f"also Sandy, {lab}"] = [f"{b / m:.0%}" if m else "" for b, m in zip(both.values, n.values)]
+
+    summary, per_band, lines = [], [], []
+    for k, lab in KINDS.items():
+        x = w[k]
+        n = x.sum(axis=1)
+        pat = x.astype(int).astype(str).agg("".join, axis=1)
+        nest, hit = nested_share(x)
+        s = x["sandy2012"]
+        pre = x[BEFORE_SANDY].any(axis=1)
+        summary.append({"run": lab, "fields": len(x), "never flooded": int((n == 0).sum()),
+                        "flooded by all 12": int((n == 12).sum()), "distinct histories (flooded)": pat[n > 0].nunique(),
+                        "nested": f"{nest} of {hit} ({nest / hit:.0%})", "Sandy-flooded": int(s.sum()),
+                        "of those, flooded before Sandy": f"{(s & pre).sum()} ({(s & pre).sum() / s.sum():.0%})",
+                        "of those, in Apr 2011": int((s & x['storm2011apr']).sum())})  # fmt: skip
+        t = pd.DataFrame({"n": n, "pat": pat, "band": band}).groupby("band", observed=True)
+        b = t.agg(fields=("n", "size"), never=("n", lambda v: int((v == 0).sum())),
+                  once=("n", lambda v: int((v == 1).sum())), two_plus=("n", lambda v: int((v >= 2).sum())),
+                  mean_storms=("n", "mean"), histories=("pat", "nunique")).round(1).reset_index()  # fmt: skip
+        b.insert(0, "run", lab)
+        per_band.append(b)
+        lines.append(f"- {lab}: storms per field {n.value_counts().sort_index().to_dict()}")
+        print(summary[-1])
+
+    md = f"""# Storm overlap: do the 12 storm tides flood different fields?
+
+Generated by `scripts/storm_overlap.py` (FINDINGS §35). Fields: {len(f):,} low crop fields
+(LU/LC farm 2012, < {MAX_H} m above MHHW, at least half cropland 2008-12; {f.ha.sum():,.0f} ha).
+Flooded = at least {fieldflood.SHARE:.0%} of the field > 5 cm deep in the run (dikes as built
+TODAY, not as they stood in each storm's year).
+
+## Per storm
+
+{md_table(storms.set_index('storm'), '{:.2f}')}
+
+"also Sandy" = share of the storm's flooded fields that Sandy (tide only / with rain) also floods.
+
+## Per field
+
+{md_table(pd.DataFrame(summary).set_index('run'))}
+
+Nested = the field's storms are exactly the k storms with the biggest footprints, so one
+number (how big a storm it takes) describes its history.
+
+{chr(10).join(lines)}
+
+## Within height bands (m above MHHW)
+
+{md_table(pd.concat(per_band).set_index('run'), '{:.1f}')}
+"""
+    out = config.REPORTS / "storm_overlap.md"
+    out.write_text(md)
+    print(f"wrote {out}")
+
+
+if __name__ == "__main__":
+    main()

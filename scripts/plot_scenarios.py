@@ -11,8 +11,8 @@ for the runs staged by scripts/setup_scenarios.py (v1_100m/runs/<event>_<dikes>_
    each 10 m cropland pixel's monthly max depth exceeds 5 cm, with dikes as built and with the
    dikes removed. "Dike-dependent at L" = floods at L without the dikes but not with them.
 
-Writes reports/figs/scenario_cropland_slr.png, reports/figs/scenario_first_flood_{map,zoom}.png and
-reports/scenario_matrix.md.
+Writes reports/figs/scenario_cropland_slr.png, reports/figs/scenario_first_flood_{map,zoom}.png,
+reports/scenario_matrix.md and data/analysis/scenario_cropland_tide2024oct.csv (the map's table).
 Usage:  python scripts/plot_scenarios.py
 """
 
@@ -203,6 +203,7 @@ def main() -> None:
                     "dike-dependent (km²)": (crop & wr & ~wi).sum() * px_km2,
                     "floods even with dikes, not without (km²)": (crop & wi & ~wr).sum() * px_km2})  # fmt: skip
     tab = pd.DataFrame(tab).set_index("sea level")
+    tab.to_csv(config.ANALYSIS_DIR / "scenario_cropland_tide2024oct.csv")
     flood_map(ff, tr, crs)
 
     show = m.assign(slr_m=m.slr_m.map("{:+.1f}".format)).set_index(["event", "dikes"]).round(2)

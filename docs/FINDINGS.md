@@ -93,7 +93,8 @@ files in `data/gauges/noaa/`, in MLLW):
     113 km of alignment in 60 leveed areas. Examples: Jones Island Road, Sayres Neck,
     Port Norris, Locust Island (Thorofare Meadow Bank Co.), Hancocks Bridge, PSEG
     Artificial Island, Gibbstown/Repauno. Most sponsors are private.
-  - **Tide gates:** 13 NLD pipe gates, the only tide-gate-like records.
+  - **Tide gates:** 13 NLD pipe gates, the only tide-gate-like records. Only 6 are in NJ
+    (Repaupo / Gibbstown); 7 are at Chester, PA (§36).
   - **Lakes:** 517 lakes/reservoirs ≥ 1 ha (NJDEP NHD 2015). Their `LEVELELEV` field is
     empty, so lake levels must come from the DEM or the dam heights.
   - **Head of tide:** 96 points (NJDEP).
@@ -990,3 +991,100 @@ Descriptive only (no model fits). Panel: `data/analysis/sandy_panel/`.
 - **Cheapest power gain:** more storms rather than more area. The 2016-01-23 (1.92 m at Ship
   John) and 2021-10-29 (1.87 m) storm tides are Sandy-class (§25). Event runs of those would
   give repeated exposure per field.
+
+## 35. The 12 storm tides flood the SAME fields again; Sandy was not a first flood (2026-10-17; `reports/storm_overlap.md`, `scripts/storm_overlap.py`)
+
+All 22 storm runs are in (§34's "more storms"). Fields: the 1,043 low crop fields of §34 (before
+its grouping); flooded = ≥ 10% of the field > 5 cm; dikes as built today.
+- **One footprint, repeated.** Tide only:
+  - 526 fields never flood; 114 flood in all 12 storms;
+  - Sandy floods 95-100% of every other storm's fields (2021-10: 84%);
+  - 79% of flooded fields are nested: a field flooded by k storms is flooded by the k biggest.
+    Only 44 distinct histories.
+  - With rain: 71 histories, 61% nested. Rain adds variety, but rain ponding is not salt.
+- **So the storms give one exposure number per field (how big a storm floods it) plus WHEN
+  storms came**, not 12 independent experiments. Height explains little of that number among
+  flooded fields (r = −0.13): banks and connection do.
+- **Peak height at Ship John does not order the footprints.** 2016-01 (1.92 m) floods 287
+  fields; 2021-10 (1.87 m) floods 509. Duration and timing of the high water matter.
+- **Sandy was not a first flood.** 393 of the 428 Sandy-flooded fields (92%) also flood in the
+  April 2011 storm (1.85 m), at planting; 396 (93%) in some 2010-12 storm. §34's 2008-12
+  "before" period is therefore not clean.
+- **The 2011 corn dip lines up with April 2011.** Corn, flooded − dry (height-reweighted, pp):
+  2008-10 +3.1 / +4.2 / +4.6, **2011 −1.6**, 2012 +4.8, 2013-15 about 0. One CDL year, so
+  "consistent with" a one-season planting loss, not shown.
+
+## 36. Public sources on the farm-dike tide gates: confirmations, no inventory (2026-10-17; `reports/tide_gates_public.md`, `data/structures/tide_gates_public.csv`)
+
+Web search (background agent). The user has no local gate knowledge, so this is the gate record.
+- **No public inventory** of meadow-bank gates in the three counties: not from NJDEP, NRCS,
+  USACE or NAACC. Only Gibbstown has located gates (NLD: 3 sluices at the Repaupo mouth, 3 flap
+  gates on 48 in pipes). A pump station there is named but not located; the model has no pump.
+- **Confirmed but not located:**
+  - Silver Lake and Locust Island: the USDA project of 1957-62 gave them "pipe sluiceways with
+    tide gates"; the dike crest is "elevation 10 ft", datum not stated.
+  - Middle Neck (new gates 2018, Sinnickson Landing Rd); Mill Creek / Union Bank (repaired 2014).
+- **Nothing gate-specific for 11 systems**, mostly the private Lawrence / Fairfield banks.
+- **Gates are failing now.** Salem County calls four of its sluice structures "critically
+  failing" (Lower Alloways Creek, Pennsville). It asked for $2.7 M; $1.0 M is in the House FY27
+  bill. This supports a gate-failure scenario on its own terms.
+- **Unchecked lead for the crests:** if "10 ft" is NGVD29, it is ≈ 2.7 m NAVD88 (conversion not
+  verified). The lidar crest medians are 2.48 m (Silver Lake) and 1.83 m (Locust Island): settled,
+  eroded, or a different datum.
+- **Follow-ups that need a person:**
+  - the Salem County Engineer (the FY27 application should list the four sites);
+  - NRCS NJ (Silver Lake–Locust Island as-builts);
+  - a free NAACC login (two crossings sit on the Middle Neck and Sunset Road model sites).
+
+## 37. All 7 spring storm tides: no consistent crop response in the flooded season (2026-10-17; `reports/storm_panel.md`, `scripts/build_storm_panel.py`, `scripts/plot_storm_panel.py`)
+
+Descriptive. Panel: `data/analysis/storm_panel/` (field × CDL year exposure, 2008-25).
+- **Design:**
+  - Fields: §34's 1,043 low crop fields minus the 100 wet on ordinary spring tides = 943; 417
+    are flood-prone (≥ 1 storm), 526 never flood.
+  - Per spring storm: the fields it floods vs flood-prone fields it missed, height-reweighted.
+  - Each field is measured against its own nearby QUIET years (no modelled storm: 2008, 2009,
+    2015, 2017, 2018, 2020, 2021, 2025), not 2008-12.
+- **Same season, all 7 storms (flooded − prone-dry, pp):** corn +1.2 [−2.0, +4.8], soybeans
+  +1.2 [−2.0, +4.9], cropland +1.1 [−0.6, +2.7], grass 0.0 [−2.4, +2.0]. Next season also
+  nothing. With rain, or against never-flooded fields: nothing in the flooded season.
+- **Per storm, signs flip** (corn +10 in 2010, −7 in 2022). One of 28 storm × outcome cells
+  stands out (2022 soybeans +17 [+5, +29], 38 fields), about what chance gives.
+- **The 2011 corn dip (§34) is not confirmed.** Corn, April-2011-flooded − never-flooded: 2010
+  +7.5, 2011 +2.6, 2012 +8.4, but the quiet years 2008 / 2009 / 2015 are +1.8 / +5.3 / +0.6.
+  2011 is low only next to two FLOOD years, so a 2011 dip and corn bumps in 2010 and 2012 can't
+  be told apart.
+- **CDL 2024 hits flood-prone fields hardest:** cropland −22 pp for flooded and prone-dry fields
+  alike, −10 for never-flooded ones. The product change, not a storm; comparisons against
+  never-flooded fields carry it (their next-season cropland −4 pp is this).
+- **Reading:** with these storms and CDL, a planting-season storm tide leaves no crop-mix
+  signal larger than ~±4 pp pooled. §34's corn → soy hint does not recur storm by storm. The
+  storms share most of their fields (§35), so the pooled interval is too narrow if anything.
+- **Not modelled:** Irene (Aug 2011, 1.85 m), Oct 2018 (1.73), Isaias (Aug 2020, 1.75), Jan 2024
+  (1.77), Aug 2025 (1.75); springs of 1.60-1.67 m (2016, 2017, 2019, 2025).
+- **The 100 chronic fields (wet on ordinary tides TODAY) matter** (checked after a side note;
+  some may be chronic because earlier storms wore their banks down):
+  - 83 of them flood in all 12 storms; they sit at −0.2 to +0.3 m above MHHW (middle half),
+    lower than the other flood-prone fields (+0.2 to +0.8 m). LU/LC still calls 95% of them farm in 2020.
+  - Cropland vs flood-prone fields at the same height: −5 pp (2008-10) → −9 by 2015, then flat to
+    2025; much of the step shows in 2012 and 2014 (spring-storm years). Against never-flooded
+    fields the gap reaches −30 by 2024, with steps at the CDL 2019 / 2024 product changes.
+  - Put back into the storm comparison, the pooled same-season result tilts corn → soy: corn
+    −2.2 [−5.2, +0.8], soybeans +3.1 [+0.5, +5.9]. It is the same ~83 fields in every storm:
+    one group's storm years vs its quiet years, not seven tests.
+  - Revised reading: no signal in fields that storms flood only sometimes; a weak corn → soy tilt
+    and a slow cropland decline in the fields that flood in every storm. Cause unknown (today's
+    banks in every year).
+  - Later the same day: they are mostly ~2 wet days in the month on the low quarter of a 0.6 ha
+    marsh-edge field (median), where the 100 m model cannot see berms or ditches. Left out of the
+    talk figure.
+- **Yes/no per field (added 2026-10-17; outcome years ≥ 2024 left out for the CDL change):**
+  - **Left cropland** (≥ half cropland the year before, < half that year and the next; usual rate
+    1%/yr): flooded − prone-dry −0.6 [−1.8, +0.6] the storm season, +0.6 [−4.2, +5.8] the next.
+    No exits; a few-point rise the next year can't be ruled out.
+  - **Main crop changed** (usual rate 51%/yr, mostly corn / soy / small-grain rotation): +4.7
+    [−5.9, +14.4] same season, +2.5 [−7.9, +13.9] next; per storm −21 to +40. Raw, flooded fields
+    switch 66% in storm years vs 59% for the others (53% for both in quiet years); a few points of
+    it is to CDL "wetland", likely standing water in that summer's image.
+  - Against never-flooded fields "main crop changed" is +21 [+5, +35]: the few never-flooded
+    fields as low as the flooded ones carry large height weights. Not trusted.
