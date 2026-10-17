@@ -79,6 +79,7 @@ class TestRstFiles(unittest.TestCase):
     def test_stamp(self):
         self.assertEqual(R.rst_stamp("sfincs.20230817.000000.rst"), datetime(2023, 8, 17))
         self.assertIsNone(R.rst_stamp("sfincs.20230817.rst"))
+        self.assertIsNone(R.rst_stamp("sfincs.20250231.000000.rst"))  # engine's leap-day name
 
     def test_rst_type(self):
         with tempfile.TemporaryDirectory() as d:

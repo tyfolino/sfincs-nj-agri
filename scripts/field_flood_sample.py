@@ -36,8 +36,8 @@ MIN_PCT = 5  # crops listed in cdl_crops when they cover >= this % of the field
 
 
 def crops(g: gpd.GeoDataFrame, year: int) -> pd.DataFrame:
-    """Per field: CDL main class (any class) and its %, cropland %, and the crop classes
-    covering >= MIN_PCT %."""
+    """Per field: CDL main class (any class) and its %, cropland %, pasture %, and the crop
+    classes covering >= MIN_PCT %."""
     with rasterio.open(cdl.path(year)) as src:
         gg = g.to_crs(src.crs)
         win = from_bounds(*gg.total_bounds, transform=src.transform).round_offsets().round_lengths()
@@ -56,6 +56,8 @@ def crops(g: gpd.GeoDataFrame, year: int) -> pd.DataFrame:
         f"cdl{year}_main": main.code.map(lambda c: cdl.NAMES.get(c, str(c))),
         f"cdl{year}_main_pct": main.pct.round(0),
         f"cdl{year}_cropland_pct": crop.groupby("field_id").pct.sum().reindex(main.index).fillna(0).round(0),
+        f"cdl{year}_pasture_pct": t[t.code.isin(cdl.PASTURE)].groupby("field_id").pct.sum()
+                                   .reindex(main.index).fillna(0).round(0),
         f"cdl{year}_crops": listed.reindex(main.index).fillna(""),
     })  # fmt: skip
     return out.reindex(g.field_id)
@@ -115,7 +117,8 @@ the flooded part of them is {f.flooded_ha.sum():,.0f} ha.
 | behind_levee | at least half the field inside a mapped levee-protected area (USACE NLD) |
 | flood_class | when the field first floods across all the scenarios (today, +0.3, +0.6, +1.0 m; with/without dikes) |
 | cdl{year}_main, _main_pct | the most common USDA CDL {year} class on the field, and its % of the field |
-| cdl{year}_cropland_pct | % of the field CDL calls cropland (pasture, wetland, forest, etc. excluded) |
+| cdl{year}_cropland_pct | % of the field CDL calls cropland (pasture, wetland, forest, etc. excluded; hay included) |
+| cdl{year}_pasture_pct | % of the field CDL calls Grass/Pasture (class 176). Add it to cropland_pct for a crop-or-pasture share. CDL's pasture class also takes idle and abandoned grassy fields and is less accurate than its crop classes |
 | cdl{year}_crops | crop classes covering >= {MIN_PCT}% of the field |
 | flooded | at least 10% of the field is > 5 cm deep on at least one day |
 | flooded_pct, flooded_ha | share / area of the field > 5 cm deep on at least one day |
@@ -199,6 +202,10 @@ def main() -> None:
     print(f"  flooded fields with no single day >= 10%: {odd}")
     print(f"  flooded ha by county:\n{f.groupby('county').flooded_ha.sum().round(0)}")
     print(f"  flooded fields by CDL main class:\n{f.groupby(f'cdl{year}_main').ha.agg(['size', 'sum']).round(0)}")
+    crop, past = f[f"cdl{year}_cropland_pct"], f[f"cdl{year}_pasture_pct"]
+    for lab, share in [("cropland", crop), ("cropland + pasture", crop + past)]:
+        h = f[share >= 50]
+        print(f"  flooded fields >= 50% {lab}: {len(h)} ({h.flooded_ha.sum():,.0f} ha flooded)")
     print(f"  longest run (days): {f.longest_run_days.describe().round(1).to_dict()}")
     print(f"  wrote {out}")
 

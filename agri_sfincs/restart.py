@@ -137,8 +137,16 @@ def resume_inp(text: str, rst_name: str, t_resume: datetime) -> str:
 
 
 def rst_stamp(name: str) -> datetime | None:
+    """The time in a restart file's name; None if it is not one, or if the date is
+    impossible. The engine names the Feb 29 restart wrongly (2024's came out as
+    sfincs.20250231.000000.rst), so a resume must never trust such a name."""
     m = RST_RE.match(name)
-    return datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S") if m else None
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S")
+    except ValueError:
+        return None
 
 
 def restart_files(model_dir: Path) -> list[tuple[datetime, Path]]:
@@ -529,6 +537,10 @@ def finish(model_dir: Path, keep_final_rst: bool = True) -> dict:
             continue
         p.unlink()
         removed += 1
+    for p in Path(model_dir).iterdir():  # misnamed leap-day restarts (see rst_stamp)
+        if RST_RE.match(p.name) and rst_stamp(p.name) is None:
+            p.unlink()
+            removed += 1
     report["rst_removed"] = removed
     if segs or removed:
         _history(model_dir, f"finish: {report}")

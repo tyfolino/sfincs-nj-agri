@@ -912,8 +912,9 @@ area; holds NRCS RCPP-WRE 330636, 7.5 ha; the most dike-dependent farmland, §29
   - 435 are ≥ 50% CDL cropland (1,159 ha flooded);
   - 236 already flood today;
   - 684 are wet on all 31 days.
-- **Adding CDL pasture (176)** to cropland would give 555 fields ≥ 50% (1,369 ha). Hay (36/37)
-  already counts as cropland.
+- **CDL pasture (176)** is its own column, `cdl2024_pasture_pct` (2026-10-17; the colleague wants
+  pasture counted). Cropland + pasture ≥ 50%: 558 fields (1,377 ha flooded); 555 / 1,369 before
+  the per-class rounding. Hay (36/37) already counts as cropland.
 - **Days per month** exist for October 2024 only. Other months need new runs.
 - **LU/LC 2140** is farmland on mapped wetland: ~54% CDL cropland, and the class is sticky after
   abandonment (§23).
@@ -982,6 +983,10 @@ Descriptive only (no model fits). Panel: `data/analysis/sandy_panel/`.
 - **Reading:** "something in between". The direction fits salt-sensitive corn being avoided,
   but it is one storm with about 75 effective dry fields, and CDL's product jumps (pasture
   2012 → 2013, 2024) move every group.
+- **Soil drainage class** is in the panel (2026-10-17, `scripts/fetch_ssurgo_drainage.py`):
+  drain_dominant, drain_poor_share (poorly + very poorly), drain_spoor_share. It tracks the HSG
+  stand-in (r = 0.89) but is narrower: 403 fields are ≥ 50% D / dual group yet < 50% poorly
+  drained. It is NATURAL drainage; ditching and tile are not in it.
 - **Cheapest power gain:** more storms rather than more area. The 2016-01-23 (1.92 m at Ship
   John) and 2021-10-29 (1.87 m) storm tides are Sandy-class (§25). Event runs of those would
   give repeated exposure per field.

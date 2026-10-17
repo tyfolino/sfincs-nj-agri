@@ -20,11 +20,13 @@ fields.csv / fields.gpkg (one row per field, static):
   bathtub           motf_share: share of the field's FEMA MOTF pixels (15 m, nj_bight_sfincs
                     validation_v4) inside the Sandy surge extent, of those in MOTF's NJ-valid
                     area; a dike-blind rival to the model (FINDINGS §33)
-  soil              SSURGO DRAINAGE CLASS IS NOT ON DISK (scripts/fetch_ssurgo.py keeps only
-                    hydgrp + ksat). Stand-in from data/soils/ssurgo_mapunits.gpkg (dominant
-                    component per map unit): hsg_dominant (soil group covering most of the
-                    field) and hsg_wet_share (share in D or dual A/D, B/D, C/D = water table
-                    within ~60 cm when undrained)
+  soil              SSURGO, dominant component per map unit (data/soils/ssurgo_mapunits.gpkg,
+                    scripts/fetch_ssurgo.py; ssurgo_drainage.csv, scripts/fetch_ssurgo_drainage.py):
+                    hsg_dominant (soil group covering most of the field), hsg_wet_share (share
+                    in D or dual A/D, B/D, C/D = water table within ~60 cm when undrained),
+                    drain_dominant (natural drainage class covering most of the field),
+                    drain_poor_share (share poorly or very poorly drained) and
+                    drain_spoor_share (share somewhat poorly drained)
   CDL pixels        n_cdl_px, cdl_px_fallback (field holds no 30 m pixel centre: one pixel
                     under its representative point stands in)
 
@@ -66,6 +68,8 @@ RUNS = {"sandy": ("intact", ""), "sandy_nodikes": ("removed", ""), "sandy_rain":
 MOTF = config.BIGHT_DATA / "validation_v4" / "sandy_motf_extent_v4.tif"
 MOTF_VALID = config.BIGHT_DATA / "validation_v4" / "sandy_motf_valid_nj_v4.tif"
 WET_HSG = ("D", "A/D", "B/D", "C/D")
+POOR_DRAIN = ("Poorly drained", "Very poorly drained")
+SPOOR_DRAIN = ("Somewhat poorly drained",)
 #: every storm tide in field_event.csv (FINDINGS §25, §34): Sandy and the other Sandy-class ones,
 #: then the planting-season (Mar-Jun) ones and Sep 2018
 STORMS = ["sandy2012", "storm2012dec", "storm2016jan", "storm2021oct", "storm2010mar", "storm2011apr",
@@ -160,20 +164,26 @@ def motf_share(g: gpd.GeoDataFrame) -> pd.Series:
 
 
 def soil_columns(g: gpd.GeoDataFrame) -> pd.DataFrame:
-    """hsg_dominant and hsg_wet_share by area of SSURGO map-unit polygons."""
+    """hsg_* and drain_* (docstring) by area of SSURGO map-unit polygons."""
     bbox = tuple(g.to_crs(4326).total_bounds)
-    mu = gpd.read_file(config.SOILS_DIR / "ssurgo_mapunits.gpkg", bbox=bbox, columns=["hsg"])
+    mu = gpd.read_file(config.SOILS_DIR / "ssurgo_mapunits.gpkg", bbox=bbox, columns=["mukey", "hsg"])
     mu = mu.to_crs(g.crs)
+    dr = pd.read_csv(config.SOILS_DIR / "ssurgo_drainage.csv", dtype={"mukey": str}, keep_default_na=False)
+    mu = mu.merge(dr[["mukey", "drainagecl"]], on="mukey", how="left", validate="many_to_one")
     mu["hsg"] = mu.hsg.fillna("").replace("", "none")
-    x = gpd.overlay(g[["field_id", "geometry"]], mu[["hsg", "geometry"]], how="intersection",
+    mu["drain"] = mu.drainagecl.fillna("").replace("", "none")
+    x = gpd.overlay(g[["field_id", "geometry"]], mu[["hsg", "drain", "geometry"]], how="intersection",
                     keep_geom_type=True)  # fmt: skip
     x["a"] = x.area
-    a = x.groupby(["field_id", "hsg"]).a.sum().reset_index()
-    tot = a.groupby("field_id").a.sum()
-    dom = a.sort_values(["field_id", "a"], ascending=[True, False]).drop_duplicates("field_id")
-    wet = a[a.hsg.isin(WET_HSG)].groupby("field_id").a.sum().reindex(tot.index).fillna(0)
-    out = pd.DataFrame({"hsg_dominant": dom.set_index("field_id").hsg, "hsg_wet_share": wet / tot})
-    return out.reindex(g.field_id.values)
+    out = {}
+    for col, shares in [("hsg", {"wet": WET_HSG}), ("drain", {"poor": POOR_DRAIN, "spoor": SPOOR_DRAIN})]:
+        a = x.groupby(["field_id", col]).a.sum().reset_index()
+        tot = a.groupby("field_id").a.sum()
+        dom = a.sort_values(["field_id", "a"], ascending=[True, False]).drop_duplicates("field_id")
+        out[f"{col}_dominant"] = dom.set_index("field_id")[col]
+        for name, vals in shares.items():
+            out[f"{col}_{name}_share"] = a[a[col].isin(vals)].groupby("field_id").a.sum().reindex(tot.index).fillna(0) / tot
+    return pd.DataFrame(out).reindex(g.field_id.values)
 
 
 def cdl_panel(g: gpd.GeoDataFrame) -> tuple[pd.DataFrame, pd.DataFrame, list[int]]:
@@ -269,7 +279,10 @@ not). Fields first farmed after 2012 are not in the table.
 {"| sandy_rain_share, sandy_rain_maxd_m, sandy_rain_flooded | the same for the run with Sandy's rain added (Stage IV radar, `sandy2012_intact_slr000_rain`) |" if rain else ""}
 | motf_share | share of the field inside FEMA's Modeling Task Force Sandy surge extent (15 m; of the pixels in MOTF's NJ-valid area; blank if none). MOTF lays the bay's peak (~1.9-2.0 m NAVD88) flat over lidar with no dikes: a bathtub rival to the model, wetter on flat fields (FINDINGS §33) |
 | hsg_dominant | SSURGO hydrologic soil group covering most of the field (dominant soil component of each map unit); `none` = no group (water, urban, pits) |
-| hsg_wet_share | share of the field in soil group D or a dual group (A/D, B/D, C/D). NOT the drainage class (see caveats); dual groups mark a seasonal high water table when undrained |
+| hsg_wet_share | share of the field in soil group D or a dual group (A/D, B/D, C/D); dual groups mark a seasonal high water table when undrained |
+| drain_dominant | SSURGO natural drainage class covering most of the field (dominant soil component of each map unit); `none` = no class (water, urban, pits) |
+| drain_poor_share | share of the field poorly or very poorly drained (natural drainage; see caveats) |
+| drain_spoor_share | share of the field somewhat poorly drained |
 | n_cdl_px | number of 30 m CDL pixels whose centre lies in the field |
 | cdl_px_fallback | True when the field holds no pixel centre: its CDL values come from the ONE pixel under the field's representative point (n_cdl_px = 1) |
 
@@ -317,6 +330,7 @@ All are SFINCS runs with the dikes as built and today's sea level; Sandy's rows 
   `nj_bight_sfincs/data/validation_v4/` (FINDINGS §33).
 - Height above MHHW, leveed share: `agri_sfincs.exposure.add_exposure` (FINDINGS §21).
 - Soil group: `data/soils/ssurgo_mapunits.gpkg` (`scripts/fetch_ssurgo.py`, USDA SSURGO).
+- Drainage class: `data/soils/ssurgo_drainage.csv` (`scripts/fetch_ssurgo_drainage.py`, USDA SSURGO).
 - Land use: USDA NASS Cropland Data Layer, NJ, `data/cdl/` (`scripts/fetch_cdl.py`).
 
 ## Caveats
@@ -334,9 +348,9 @@ All are SFINCS runs with the dikes as built and today's sea level; Sandy's rows 
   single field are noisy; small fields and field edges are mixed pixels.
 - **Small fields.** About {int(f.cdl_px_fallback.sum()):,} fields hold no 30 m pixel centre
   and get one pixel; {int((f.n_cdl_px < 5).sum()):,} have fewer than 5 pixels.
-- **Soil drainage class is not included.** SSURGO `drainagecl` is not on disk; the soil group
-  columns are a stand-in. Getting it means extending `scripts/fetch_ssurgo.py` to read
-  `component.drainagecl` (same dominant-component rule).
+- **Soil drainage class is the soil's NATURAL drainage.** Many fields here are ditched or tiled,
+  so a "poorly drained" field may farm like a better-drained one. Classes are for each map
+  unit's dominant soil component; minor wetter soils inside a map unit are not counted.
 - **Height.** {int(f.m_above_mhhw.isna().sum())} fields have no height. High tide is spread
   between bay gauges, so tide amplification up the creeks is missing.
 """

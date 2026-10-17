@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-10-15** (Sandy validation done; nothing on SLURM).
+Last updated: **2026-10-17** (all 22 storm runs in; no local tide-gate knowledge exists: public sources only).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent. It comes
@@ -54,17 +54,9 @@ NJ-VA, event-based. Gate: does modeled Sandy flooding explain crop change beyond
    then re-run field_history.py (§24) on the fixed pieces.
 7. **Check NLD** for levee condition / inspection fields.
 
-## Pending decisions (user)
-- Add a `cdl2024_pasture_pct` column to field_flood_sample.py? (§32: 435 → 555 fields.)
-- Soil drainage class for the panel? `fetch_ssurgo.py` gets only HSG / ksat; the panel uses HSG D
-  share as a stand-in.
-
 ## Waiting on
-- **The user's local tide-gate knowledge.** In priority order: location and the creek each gate
-  drains to (§16), invert, condition, count / size, pumps. Middle Neck plus a few Cumberland necks
-  would do.
-- **The "South Jersey Levee Inventory"** (NRCS / NJDEP Dam Safety, 2010), via the user's NJDEP
-  contact.
+- **The "South Jersey Levee Inventory"** (NRCS / NJDEP Dam Safety, 2010): the user's supervisor
+  is asking their NJDEP contacts (2026-10-17).
 
 ## Shared / not yet shared
 - Claude Doc "Water-related crop-insurance losses, Salem / Cumberland / Gloucester"
