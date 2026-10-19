@@ -36,6 +36,7 @@ LANDCOVER_DIR = DATA / "landcover"  # NLCD
 EASEMENT_DIR = DATA / "easements"  # NRCS conservation easements
 IMAGERY_DIR = DATA / "imagery"  # NAIP spot-check samples and chips
 ANALYSIS_DIR = DATA / "analysis"  # derived per-field / per-test tables
+RELEASE_DIR = ROOT.parent / "bayshore-storm-panel"  # data bundle for the econ colleague (its own git repo)
 REPORTS = ROOT / "reports"
 ARCHIVE_REPORTS = ROOT / "archive" / "reports"  # reports of the archived side lines (archive/README.md)
 CATALOG = DATA / "data_catalog.yml"

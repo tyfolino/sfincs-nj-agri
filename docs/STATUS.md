@@ -61,6 +61,9 @@ NJ-VA, event-based. Gate: does modeled Sandy flooding explain crop change beyond
 - Claude Doc "Water-related crop-insurance losses, Salem / Cumberland / Gloucester"
   (https://claude.ai/artifact/P62Vj4zoqFzRJy7BDBb7Xy). It is private until the user shares it.
 - The per-field sample (§32) is not sent yet; the user shares it.
+- Storm panel bundle for Seowoo (2026-10-19): `/cache/home/tpj8/bayshore-storm-panel`
+  (`scripts/export_storm_panel.py`; rerun after panel changes). The user makes it a private
+  GitHub repo and invites her.
 
 ## Operational
 - **Bulk data lives on scratch as symlinks into /scratch/tpj8/sfincs-nj-agri/data_bulk:**

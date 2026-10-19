@@ -48,10 +48,7 @@ OUTCOMES = {
     "grass (hay + pasture + idle)": ["share_hay", "share_pasture", "share_idle"],
 }
 EVENTS = ["main crop changed", "left cropland"]
-CLASSES = ["share_corn", "share_soybeans", "share_other_grains", "share_hay", "share_idle", "share_other_crops",
-           "share_pasture", "share_herb_wetland", "share_woody_wetland", "share_forest_shrub", "share_developed",
-           "share_water", "share_other"]  # fmt: skip
-CDL_CHANGE = 2024
+CLASSES, CDL_CHANGE = panel.CLASSES, panel.CDL_CHANGE
 QUIET_WINDOW = 5
 N_BOOT = 500
 BLUE = "#2a78d6"

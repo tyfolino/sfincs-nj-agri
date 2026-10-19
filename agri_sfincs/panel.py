@@ -9,6 +9,11 @@ import pandas as pd
 MAX_H = 1.5  # m above MHHW
 PRE = range(2008, 2013)  # CDL years before Sandy
 H_BIN = 0.25  # m, height bins for reweighting
+CDL_CHANGE = 2024  # CDL product change: cropland drops on every low field from here (FINDINGS §37)
+# land-use classes of sandy_panel/field_year.csv; a field's main class is the largest of them
+CLASSES = ["share_corn", "share_soybeans", "share_other_grains", "share_hay", "share_idle", "share_other_crops",
+           "share_pasture", "share_herb_wetland", "share_woody_wetland", "share_forest_shrub", "share_developed",
+           "share_water", "share_other"]  # fmt: skip
 
 
 def low_crop_fields(f: pd.DataFrame, fy: pd.DataFrame, max_h: float = MAX_H, pre=PRE) -> pd.Series:
