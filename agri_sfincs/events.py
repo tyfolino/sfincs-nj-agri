@@ -140,6 +140,10 @@ EVENTS = {
                           "mrms", "2024-01"),
     "tide2024oct": Event("tide2024oct", "2024-09-24 00:00:00", "2024-11-01 00:00:00",
                          "mrms", "2024-10"),
+    # creek-tide calibration (FINDINGS §40): ordinary tides before the 2023-06-04 storm, with
+    # Greenwich and Hancocks Bridge recording; scored from day 4 (scripts/check_creek_tides.py)
+    "tidecal2023may": Event("tidecal2023may", "2023-05-21 00:00:00", "2023-06-01 00:00:00",
+                            "mrms", "2023-05"),
 }  # fmt: skip
 EVENTS |= {f"y{y}": year_event(y) for y in range(2003, 2026)}
 
@@ -157,12 +161,16 @@ def precip_source(event: Event, precip: str | None = None) -> str:
 
 
 def obs_points() -> gpd.GeoDataFrame:
-    """Every USGS gauge inside the ring (inventory) + the NOAA stations, as SFINCS
-    observation points named ``<agency>_<id>``."""
+    """Every USGS gauge inside the ring (inventory), the NOAA stations, and the CO-OPS tidal
+    datum stations (data/channels/tidal_datum_nodes.csv: published mean ranges up the creeks,
+    scripts/check_creek_tides.py), as SFINCS observation points named ``<agency>_<id>``
+    (``coops_<id>`` for the datum stations)."""
     inv = pd.read_csv(config.GAUGE_DIR / "usgs_series.csv", dtype={"site": str})
     inv = inv.drop_duplicates("site")
     pts = [(f"usgs_{r.site}", r.lon, r.lat) for r in inv.itertuples()]
     pts += [(f"noaa_{s['id']}", s["lon"], s["lat"]) for s in domain.NOAA_STATIONS]
+    nodes = pd.read_csv(config.CHANNELS_DIR / "tidal_datum_nodes.csv", dtype={"id": str})
+    pts += [(f"coops_{r.id}", r.lon, r.lat) for r in nodes.itertuples()]
     return gpd.GeoDataFrame(
         {"name": [p[0] for p in pts]},
         geometry=[Point(p[1], p[2]) for p in pts], crs=4326,

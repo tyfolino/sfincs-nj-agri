@@ -49,3 +49,18 @@ class TestSwitchExit(unittest.TestCase):
         self.assertEqual(out[2011].tolist(), [1.0, 0.0])  # field 2 came back in 2012
         self.assertEqual(out[2012].tolist(), [0.0, 0.0])  # field 1 was already out in 2011
         self.assertTrue(out[2010].isna().all() and out[2013].isna().all())  # no t-1 / t+1
+
+
+class TestQuietEstimate(unittest.TestCase):
+    def test_deviations(self):
+        v = pd.DataFrame([[1.0, 2.0, 5.0, 3.0, 9.0]], columns=[2008, 2009, 2010, 2011, 2020])
+        # quiet 2008, 2009, 2020; window 2 around 2010 keeps 2008 / 2009 (mean 1.5)
+        self.assertEqual(panel.deviations(v, 2010, [2008, 2009, 2020], 0, window=2).tolist(), [3.5])
+        self.assertEqual(panel.deviations(v, 2010, [2008, 2009, 2020], 1, window=2).tolist(), [1.5])
+
+    def test_estimate(self):
+        d = pd.Series([2.0, 4.0, 1.0, np.nan])
+        w_t, w_c = pd.Series([1.0, 3.0, 0.0, 0.0]), pd.Series([0.0, 0.0, 1.0, 5.0])
+        boot = np.ones((4, 2))
+        e = panel.estimate(d, w_t, w_c, boot, scale=1.0)  # (2 + 12) / 4 - 1 (NaN field drops out)
+        self.assertEqual(e.tolist(), [2.5, 2.5, 2.5])

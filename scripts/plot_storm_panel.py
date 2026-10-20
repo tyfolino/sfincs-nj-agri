@@ -49,7 +49,7 @@ OUTCOMES = {
 }
 EVENTS = ["main crop changed", "left cropland"]
 CLASSES, CDL_CHANGE = panel.CLASSES, panel.CDL_CHANGE
-QUIET_WINDOW = 5
+QUIET_WINDOW = panel.QUIET_WINDOW
 N_BOOT = 500
 BLUE = "#2a78d6"
 INK, MUTED = "#222222", "#6b6b6b"
@@ -81,20 +81,6 @@ def load(keep_chronic: bool = False):
     return f, y, sp, spring, quiet
 
 
-def deviations(v: pd.DataFrame, year: int, quiet: list[int], k: int) -> pd.Series:
-    """Each field's share in year + k minus its mean over the quiet years near ``year``."""
-    base = [t for t in quiet if abs(t - year) <= QUIET_WINDOW]
-    return v[year + k] - v[base].mean(axis=1)
-
-
-def estimate(d: pd.Series, w_t: pd.Series, w_c: pd.Series, boot: np.ndarray) -> np.ndarray:
-    """Flooded - comparison weighted means for the point (column 0) and each bootstrap draw."""
-    ok = d.notna().values
-    dv, wt, wc = d.fillna(0).values, w_t.values * ok, w_c.values * ok
-    W = np.column_stack([np.ones(len(dv)), boot])  # field x draw
-    return 100 * ((dv * wt) @ W / (wt @ W) - (dv * wc) @ W / (wc @ W))
-
-
 def compare(f, y, sp, spring, quiet, kinds=("tide", "rain"), comps=("prone-dry", "never")) -> pd.DataFrame:
     """Per storm and pooled ("all") flooded - comparison estimates (docstring)."""
     rng = np.random.default_rng(0)
@@ -114,7 +100,7 @@ def compare(f, y, sp, spring, quiet, kinds=("tide", "rain"), comps=("prone-dry",
                     for name, v in y.items():
                         if v[year + k].isna().all():
                             continue
-                        e = estimate(deviations(v, year, quiet, k), w_t, w_c, boot)
+                        e = panel.estimate(panel.deviations(v, year, quiet, k), w_t, w_c, boot)
                         draws[(kind, comp, k, name, storm)] = e
                         rows.append({"flooded by": kind, "comparison": comp, "k": k, "outcome": name, "storm": storm,
                                      "year": year, "n_flooded": int(t.sum()), "n_comparison": int(c.sum()),

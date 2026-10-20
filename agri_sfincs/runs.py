@@ -103,3 +103,28 @@ def depth(mp, k: int, face: np.ndarray, dep: np.ndarray) -> np.ndarray:
     0 where dry or unknown."""
     h = mp["zsmax"][k].values.ravel()[face] - dep
     return np.where(np.isfinite(h) & (h > 0), h, 0).astype("float32")
+
+
+def centreline_links(grid: MapGrid, line, step: float = 10.0) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Cell-centre to cell-centre links a channel along ``line`` (shapely, model CRS) must
+    flow through on the uniform ``grid``: one per step between the consecutive cells the line
+    visits, and, where it steps diagonally, the four links of the two detours through the
+    side cells (flow between cells only crosses shared faces)."""
+    cells: list[tuple[int, int]] = []
+    for d in np.arange(0.0, line.length + step / 2, step):
+        p = line.interpolate(min(d, line.length))
+        nn, mm, inside = grid.index(np.array([p.x]), np.array([p.y]))
+        if inside[0] and (not cells or cells[-1] != (int(nn[0]), int(mm[0]))):
+            cells.append((int(nn[0]), int(mm[0])))
+
+    def centre(c):
+        return (grid.x0 + (c[1] + 0.5) * grid.dx, grid.y0 + (c[0] + 0.5) * grid.dx)
+
+    links = []
+    for a, b in zip(cells[:-1], cells[1:]):
+        if abs(a[0] - b[0]) + abs(a[1] - b[1]) == 1:
+            links.append((centre(a), centre(b)))
+        else:  # diagonal (or a jump of a long step): both L-shaped detours
+            for side in ((a[0], b[1]), (b[0], a[1])):
+                links += [(centre(a), centre(side)), (centre(side), centre(b))]
+    return links

@@ -116,6 +116,34 @@ def read_weir(path: Path) -> list[tuple[str, np.ndarray, np.ndarray, np.ndarray]
     return out
 
 
+def drop_crossings(lines, links) -> tuple[list, int]:
+    """Remove every weir segment that crosses one of ``links`` ((x_a, y_a), (x_b, y_b)):
+    SFINCS puts a weir on each cell link a segment crosses (sfincs_quadtree.F90
+    ``find_uv_points_intersected_by_polyline``), so a bank within half a cell of a creek can
+    close the creek itself. A polyline split by a removal continues as ``<name>_<k>``.
+    Returns the new (name, x, y, z) polylines and the number of segments removed."""
+    from shapely import STRtree
+
+    tree = STRtree([LineString(lk) for lk in links])
+    out, dropped = [], 0
+    for name, x, y, z in lines:
+        segs = [LineString([(x[i], y[i]), (x[i + 1], y[i + 1])]) for i in range(len(x) - 1)]
+        cut = np.array([len(tree.query(sg, predicate="intersects")) > 0 for sg in segs], bool)
+        if not cut.any():
+            out.append((name, x, y, z))
+            continue
+        dropped += int(cut.sum())
+        start, k = 0, 0
+        for i in np.flatnonzero(cut):
+            if i + 1 - start >= 2:
+                out.append((f"{name}_{k}", x[start : i + 1], y[start : i + 1], z[start : i + 1]))
+                k += 1
+            start = i + 1
+        if len(x) - start >= 2:
+            out.append((f"{name}_{k}", x[start:], y[start:], z[start:]))
+    return out, dropped
+
+
 def cap_crests(lines, cap) -> list:
     """Crest = min(crest, cap(x, y)): a bank worn down to ``cap`` (scalar or callable)."""
     out = []

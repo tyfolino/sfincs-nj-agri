@@ -25,9 +25,8 @@ import pandas as pd
 import rasterio
 import xarray as xr
 from rasterio.features import rasterize
-from scipy.signal import find_peaks
 
-from agri_sfincs import config, domain, fieldflood, region, runs
+from agri_sfincs import config, domain, fieldflood, region, runs, waterlevel
 from agri_sfincs.report import md_table
 
 RUN = runs.run_dir("sandy2012", "intact", 0)
@@ -50,15 +49,8 @@ def gauge_highs() -> pd.DataFrame:
                         parse_dates=["time"]).set_index("time")["value"] * FT  # fmt: skip
         o.index = o.index.tz_convert(None) if o.index.tz is not None else o.index
         o = o["2012-10-20":"2012-11-04"]
-        m = zs[f"usgs_{site}"]
-        for p in find_peaks(o.values, distance=80)[0]:  # ~8 h apart at 6 min
-            t = o.index[p]
-            mw = m[t - pd.Timedelta("3h") : t + pd.Timedelta("3h")]
-            if len(mw):
-                rows.append({"gauge": name, "time": t, "obs_m": o.iloc[p], "model_m": float(mw.max())})
-    d = pd.DataFrame(rows)
-    d["diff_m"] = d.model_m - d.obs_m
-    return d
+        rows.append(waterlevel.match_highs(o, zs[f"usgs_{site}"]).assign(gauge=name))
+    return pd.concat(rows, ignore_index=True)[["gauge", "time", "obs_m", "model_m", "diff_m"]]
 
 
 def peak_from_ship_john(hi: pd.DataFrame) -> pd.DataFrame:

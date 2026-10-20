@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-10-17** (all 22 storm runs in; no local tide-gate knowledge exists: public sources only).
+Last updated: **2026-10-19** (storm NDVI null, §38; storm runs checked, §39; creek-tide experiments, §40).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent. It comes
@@ -19,10 +19,26 @@ NJ-VA, event-based. Gate: does modeled Sandy flooding explain crop change beyond
   README); first look in `reports/sandy_panel.md` (§34).
 - The progress notebook for the ag-econ group: `notebooks/model_progress_agecon.ipynb`.
 
+## In progress: creek tides (§39-§40)
+The model's side creeks carry about half the real tide (lows far too high, highs short), which
+makes the per-field storm flooding noisy. Alloway's closure is fixed (`dikes_open.weir`, not yet
+in v1). Depth is the only lever found; resolution, marsh creeks and roughness do little. Open:
+- the bay-shore deficit (entrances 0.8 of the published range; Bivalve lows +0.15 m): check the
+  bay boundary and the NJ-side flats before the creeks;
+- real creek depths: no Cohansey soundings in ENC or eHydro; NOAA raster chart 12304, USACE
+  Philadelphia District, or a field survey are the user's call;
+- if neither settles it: calibrate an effective creek depth on the calm-window gauges only, judge
+  on the held-out tide stations, storm peaks and Landsat (§39).
+Resolution is for the field edges (a 100 m creek-side cell holds channel, bank and field at one
+level), not the creek tide (E3).
+
 ## Next, in order
 0. **Storm-history land-use test: first look done** (§35, §37). Null in fields storms flood
    only sometimes; a weak corn → soy tilt and slow cropland loss in the 100 fields wet on
-   ordinary tides today, which flood in every storm. The 2011 corn dip is not confirmed. Next: show the colleague
+   ordinary tides today, which flood in every storm. The 2011 corn dip is not confirmed. Landsat
+   greenness agrees: no summer NDVI drop after a spring storm tide (§38). But the runs' field-by-field
+   flooding is noisy (§39: right places, too wide, creek peaks 0.1-0.2 m low in the Cohansey /
+   Alloway), so these nulls are "not detectable", not "no effect". Next: show the colleague
    and the advisor (`reports/storm_panel.md`; the hand-off table is `data/analysis/storm_panel/`).
    Open choices: model the unmodelled storm tides (Irene 2011, Oct 2018, Isaias 2020, Jan 2024,
    Aug 2025; ~10 min each); or drop the storm-by-storm test and use exposure as one number per

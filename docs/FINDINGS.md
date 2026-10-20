@@ -1088,3 +1088,113 @@ Descriptive. Panel: `data/analysis/storm_panel/` (field × CDL year exposure, 20
     it is to CDL "wetland", likely standing water in that summer's image.
   - Against never-flooded fields "main crop changed" is +21 [+5, +35]: the few never-flooded
     fields as low as the flooded ones carry large height weights. Not trusted.
+
+## 38. Greenness after a spring storm tide: flooded fields are not less green (2026-10-19; `reports/storm_ndvi.md`, `scripts/storm_ndvi.py`)
+
+Preliminary, descriptive. §37's design with Landsat NDVI (`data/landsat/field_scene_stats.parquet`,
+§24) as the outcome instead of CDL crop shares.
+- **Fields:** 631 of §37's 943 match a Landsat field unit (98% of the area; 287 flood-prone). The
+  rest are too small for a clean 30 m pixel (median 0.3 ha).
+- **Outcomes:** summer peak NDVI (90th percentile of clear June-September scenes; ~0.80 on a
+  flood-prone field in a quiet year, the field's own year-to-year SD ~0.05) and the July-August mean.
+- **Main result: nothing.** Pooled over the 7 storms, flooded − prone-dry, peak NDVI:
+  - storm season −0.005 [−0.020, +0.007];
+  - next season +0.002 [−0.015, +0.017].
+  - Placebo (each storm's two groups measured in nearby quiet years instead): ±0.016. Same for
+    July-August, tide plus rain, and the deepest quarter (≥ 0.25 m: −0.004 [−0.046, +0.035]).
+    No sign of a dose response.
+- **Per storm, signs flip** (peak +0.032 in 2014, −0.037 in 2022, 25 fields), inside or at the
+  edge of each storm's placebo range.
+- **Month by month:** April −0.019 [−0.041, 0.000], at the placebo edge (−0.016): likely water or
+  wet soil on the field at the storm, not crop. June catches up; July-September dip ~0.01-0.02
+  within chance.
+- **Against never-flooded fields, peak −0.022 [−0.036, −0.009], just outside the placebo
+  (±0.015).** Not trusted:
+  - fields the same storms missed are no browner than never-flooded ones (−0.003);
+  - the never group is worth only ~16 fields per storm after height weighting (§37's problem).
+- **Reading:** a spring storm tide leaves no greenness signal in the low crop fields larger than
+  about ±0.02 NDVI (a few % of a summer canopy). This agrees with §37's CDL null. NDVI is
+  greenness, not yield. The flood map behind it is noisy field by field (§39), which pulls a
+  real difference toward zero.
+
+## 39. Do the spring storm runs get the floods right? Place yes, extent and creek peaks no (2026-10-19; `reports/storm_gauges.md`, `reports/storm_landsat.md`, `scripts/validate_storm_{gauges,landsat}.py`)
+
+Asked before reading §38's null. Two independent checks of the 7 spring storm-tide runs.
+- **Interior gauges** (every high tide in the run windows, model max within ±3 h):
+
+  | Gauge | High tides, all | Storm peak (where observed) | Low tides |
+  |---|---|---|---|
+  | Bivalve (Maurice) | −0.07 m | −0.05 (4 storms) | +0.19 |
+  | Greenwich (Cohansey) | −0.14 | −0.09 (4) | +0.65 |
+  | Hancocks Bridge (Alloway, Salem; 2022+) | −0.19 | −0.15 (3) | +0.45 |
+
+  - The gauges often go out at the storm peak (Bivalve 2010-12, Greenwich 2012 / 2014), as in
+    Sandy (§33); those peaks are unscored.
+  - In the smaller creeks the tide is damped (lows far too high, highs short) and the Alloway
+    lags: too little creek conveyance at 100 m, the §16 bias, now seen at the HIGHS too. Rain
+    changes creek peaks by ≤ 1 cm.
+  - On flat bayshore fields, 0.1-0.2 m of peak matters (§33): the runs likely miss some
+    flooding along the Cohansey and Alloway.
+- **Landsat water** (MNDWI > 0 on field interiors, new since a pre-storm scene). Only 3 storms
+  have a clear scene within ~1.5 days:
+  - **2011-04-17** (13 h after the peak, ~1 h after the next high tide): the only informative case.
+    - Place is right. The deeper the model's water at the overpass, the more often Landsat sees
+      water: 0.6% of model-dry pixels, 7% at 5-15 cm, 11% at 15-30, 18% at ≥ 30 cm. The MNDWI rise
+      grows the same way. In western Salem, the observed water sits inside the model's patches.
+    - 69% of the new water on low fields lies inside the run's PEAK footprint (77% with rain).
+    - Extent is too big. Landsat confirms only 13% of the model's water at the overpass on low
+      fields (151 ha in the model, 41 ha seen), and < 1 pixel in 5 under ≥ 30 cm of model water.
+      Possible causes: real water hidden by stubble or cover, water draining faster than the model
+      (§16), or banks and ground holding better than modelled. They can't be separated here.
+    - Per field (≥ 10% wet), all fields: 129 seen flooded, 99 model-flooded at the overpass, only
+      22 both. Many seen-only fields are upland: 36 mm of rain fell that day.
+  - **2023-06-05** (1.5 days after, a dry storm, crops up): no agreement (1 ha overlap).
+  - **2012-06-06:** cloud and Landsat 7 stripes; nothing scored.
+- **For §37 / §38:** the exposure map is right about WHERE storms flood but noisy field by field:
+  too wide at the overpass, too low in the Cohansey / Alloway creeks. Misclassified fields pull a
+  flooded-vs-dry difference toward zero. So §37 and §38 show no detectable effect WITH THIS
+  EXPOSURE MEASURE, not proof of no effect.
+
+## 40. Creek tides: one Alloway bug fixed; the side creeks still carry about half the tide (2026-10-19; `reports/creek_tides.md`, `scripts/check_creek_tides.py`, `scripts/open_creek_links.py`)
+
+Step 2 of the §39 follow-up. Nothing below is adopted into v1 yet; the test models are on
+scratch (`models/e{2,3,4a,4b,5a,5b,6}_100m`, beds and roughness in `data_bulk/experiments/`).
+- **Yardstick** (`check_creek_tides.py`, event `tidecal2023may`, calm tides 2023-05-24..31):
+  - TUNING: highs / lows at Bivalve, Greenwich, Hancocks Bridge;
+  - HELD OUT: CO-OPS published mean ranges (type R ratios to Reedy Point / Philadelphia) at 26
+    stations up the creeks, × the reference's observed range those days. Checked against the
+    gauges: Greenwich 1.37 m observed vs 1.40 expected; good to ~10%. Four station points fall
+    in marsh / bank cells (Woodbury, Newport Landing, Abbots Meadow, Coopers Creek bridge) and
+    are left out.
+  - The storm peaks (§39) and Landsat stay held out for after a fix is chosen.
+- **Alloway Creek was closed by its own banks (bug, fixed):** three NLD bank lines within half a
+  cell of the creek land on the creek's cell links (SFINCS puts a weir on every link a segment
+  crosses), so the upper 13 km (Quinton) never saw a tide. `open_creek_links.py` drops the 25
+  weir segments that cut links along the 10 tidal centrelines → `dikes_open.weir`. Quinton
+  0 → 0.34 of the published range. Hancocks Bridge got worse (highs −0.14 → −0.23 m): the
+  reopened creek has to fill through the same channel. No other creek was affected.
+- **Today (v1): the unsurveyed side creeks carry 0.36-0.45 of the published range** (Cohansey
+  0.36, Oldmans 0.36, Stow 0.43, Big Timber 0.45); the surveyed Salem River 0.98-1.19. Even the
+  bay-shore entrances read 0.79-0.87 and Bivalve's lows are +0.15 m: part of the deficit is
+  already in the bay along the NJ shore.
+- **Experiments** (all on the opened weirs except E0 / E3; median ratio per creek):
+
+  | Run | Change | Cohansey | Stow | Oldmans | Big Timber | Greenwich lows |
+  |---|---|---|---|---|---|---|
+  | E0 | v1 | 0.36 | 0.43 | 0.36 | 0.45 | +0.51 |
+  | E2 | chart-class beds −0.6 m (TAIL_MLLW_M 1.8, the chart's limit) | 0.42 | 0.46 | 0.46 | 0.42 | +0.44 |
+  | E3 | 25 m cells along Cohansey + Alloway | 0.38 | 0.43 | 0.36 | 0.45 | +0.50 |
+  | E4a / E4b | beds −1.2 / −1.8 m (beyond the chart) | 0.48 / 0.53 | 0.52 / 0.60 | 0.55 / 0.63 | 0.39 / 0.38 | +0.39 / +0.35 |
+  | E5a | open-water roughness on the carved channels (NLCD calls 33% of them marsh / woods) | 0.37 | 0.44 | 0.42 | 0.61 | +0.50 |
+  | E5b | E5a + E4a beds | 0.49 | 0.55 | 0.62 | 0.59 | +0.38 |
+  | E6 | E5b + 420 km of NHD marsh creeks carved to −1.0 m | 0.49 | 0.55 | 0.60 | 0.57 | +0.38 |
+
+- **Reading:** depth is the only big lever; resolution, marsh creeks and roughness add almost
+  nothing (roughness helps the wooded Big Timber). It is not a face choke: the lower Cohansey's
+  face conveyance matches the Salem's (median 17,000 vs 13,800 m³/s at unit slope). It is not
+  storage in the wrong place: calm tides wet 138 km² of marsh and only ~5 km² of cropland.
+  A Manning estimate says a 2-4 m deep, ~200 m channel cannot fill and drain the model's marsh
+  on each tide without losing ~1-2 m of head over 7 km. So either the real creeks are much
+  deeper than any chart we have (none has Cohansey soundings), or the model's marsh holds more
+  water per tide than the real one, or the tide arriving at the mouths is already short.
+  Unresolved.

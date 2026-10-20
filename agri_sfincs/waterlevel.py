@@ -13,6 +13,12 @@ John Shoal) take the transfer bight uses (nj_bight_sfincs
 scripts/download_noaa_sandy_wl.py ``navd_minus_mllw``):
     NAVD88 - MLLW = (MSL - MLLW)_station + mean over neighbours of (NAVD88 - MSL)
 which is uncertain by about 0.1 m at Ship John Shoal.
+
+``match_highs`` pairs every observed high tide at a gauge with the model's highest level
+near it (scripts/validate_sandy.py, scripts/validate_storm_gauges.py); ``match_extremes``
+does highs or lows where the 6-min record is complete around them; ``usgs_event_series``
+reads a fetched gauge series (scripts/fetch_usgs_event.py) in m; ``his_series`` a run's
+observation points.
 """
 
 from __future__ import annotations
@@ -97,3 +103,62 @@ def fill_gaps(
             src[need] = d
         levels[st], source[st] = out, src
     return pd.DataFrame(levels), pd.DataFrame(source)
+
+
+def match_highs(obs: pd.Series, model: pd.Series, window: str = "3h", distance: int = 80) -> pd.DataFrame:
+    """Every high tide of ``obs`` (find_peaks, peaks at least ``distance`` samples apart: ~8 h
+    at 6 min) with the max of ``model`` within +-``window``: time, obs_m, model_m, diff_m
+    (model - obs). Highs with no model value near them are dropped."""
+    from scipy.signal import find_peaks
+
+    obs = obs.dropna()
+    rows = []
+    for p in find_peaks(obs.values, distance=distance)[0]:
+        t = obs.index[p]
+        mw = model[t - pd.Timedelta(window) : t + pd.Timedelta(window)]
+        if len(mw):
+            rows.append({"time": t, "obs_m": float(obs.iloc[p]), "model_m": float(mw.max())})
+    d = pd.DataFrame(rows, columns=["time", "obs_m", "model_m"])
+    d["diff_m"] = d.model_m - d.obs_m
+    return d
+
+
+FT = 0.3048
+
+
+def usgs_event_series(event: str, site: str, param: str = "72279") -> pd.Series | None:
+    """A gauge series fetched for ``event`` (data/gauges/usgs_events/<event>/<site>_<param>.csv),
+    feet -> m, UTC without tz; None if missing or nearly empty."""
+    from agri_sfincs import config
+
+    p = config.GAUGE_DIR / "usgs_events" / event / f"{site}_{param}.csv"
+    if not p.exists():
+        return None
+    o = pd.read_csv(p)
+    o = pd.Series(o["value"].values * FT, index=pd.to_datetime(o["time"], utc=True, format="mixed").dt.tz_convert(None))
+    return o.dropna() if o.notna().sum() > 100 else None
+
+
+def covered(o: pd.Series, t: pd.Timestamp, half: str, step: str = "6min", share: float = 0.9) -> bool:
+    """At least ``share`` of the ``step`` samples present within +-``half`` of ``t``."""
+    w = pd.Timedelta(half)
+    return o[t - w : t + w].size >= share * (2 * w / pd.Timedelta(step) + 1)
+
+
+def match_extremes(obs: pd.Series, model: pd.Series, lows: bool = False) -> pd.DataFrame:
+    """``match_highs`` on the highs, or on the lows (model's lowest level near each observed
+    low; diff still model - obs), keeping only those where ``obs`` is complete within +-1 h:
+    gauges often go out at a storm peak, and a gap's edge is not a high."""
+    d = match_highs(-obs, -model) if lows else match_highs(obs, model)
+    if lows:
+        d[["obs_m", "model_m", "diff_m"]] *= -1
+    return d[[covered(obs, t, "1h") for t in d.time]] if len(d) else d
+
+
+def his_series(run) -> dict[str, pd.Series]:
+    """A run's observation points, {name: water level series}."""
+    import xarray as xr
+
+    with xr.open_dataset(run / "sfincs_his.nc") as h:
+        names = [s.strip() for s in h["station_name"].values.astype(str)]
+        return {n: h["point_zs"].isel(stations=i).to_series() for i, n in enumerate(names)}

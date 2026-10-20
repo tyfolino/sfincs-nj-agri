@@ -68,6 +68,20 @@ class TestMapGrid(unittest.TestCase):
         np.testing.assert_array_equal(d, [1.0, 1.0])
 
 
+class TestCentrelineLinks(unittest.TestCase):
+    def test_straight_and_diagonal(self):
+        from shapely.geometry import LineString
+
+        g = runs.MapGrid(0.0, 0.0, 100.0, 5, 5)
+        straight = runs.centreline_links(g, LineString([(50, 50), (250, 50)]))
+        self.assertEqual(straight, [((50.0, 50.0), (150.0, 50.0)), ((150.0, 50.0), (250.0, 50.0))])
+        # through the corner (100, 100) the line steps diagonally: both detours, 4 links
+        diag = runs.centreline_links(g, LineString([(50, 50), (150, 150)]), step=50 * 2**0.5)
+        self.assertEqual(len(diag), 4)
+        self.assertIn(((50.0, 50.0), (150.0, 50.0)), diag)
+        self.assertIn(((50.0, 150.0), (150.0, 150.0)), diag)
+
+
 class TestDepth(unittest.TestCase):
     def test_block_days_and_depth(self):
         z = np.zeros((2, 3, 3))

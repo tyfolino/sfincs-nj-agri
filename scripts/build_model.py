@@ -14,12 +14,17 @@ first, cheap model for the Sep 2023 / May 2025 event runs (a smoke test, FINDING
 v1_100m (2026-10-05): same grid, bed_v1 (river-bed burn, FINDINGS §11), NLD dikes as
 weirs + farm-dike check valves at the LOW gate coefficient (FINDINGS §10); the high
 coefficient is swapped in per run (setup_event.py --drn).
+
+--catalog adds a hydromt data catalog (for a test bed on scratch); --refinement a quadtree
+refinement layer (polygons with a ``refinement_level`` column; level k = res / 2**k);
+--manning-first a Manning's n raster that wins over land-cover roughness where it has data.
 """
 
 from __future__ import annotations
 
 import argparse
 import time
+from pathlib import Path
 
 from agri_sfincs.build import StaticConfig, build_static
 
@@ -33,12 +38,17 @@ def main() -> None:
     ap.add_argument("--elevation", default="bed_merged", help="catalog source of the bed")
     ap.add_argument("--weir", default=None, help="weir file to stage as sfincs.weir")
     ap.add_argument("--drn", default=None, help="drainage file to stage as sfincs.drn")
+    ap.add_argument("--catalog", action="append", default=[], help="extra data catalog (repeatable)")
+    ap.add_argument("--refinement", default=None, help="quadtree refinement polygons (refinement_level column)")
+    ap.add_argument("--manning-first", action="append", default=[],
+                    help="catalog source of a Manning's n raster that overrides land cover where it has data")
     a = ap.parse_args()
     structures = {k: v for k, v in (("weirfile", a.weir), ("drnfile", a.drn)) if v}
     cfg = StaticConfig(
         name=a.name, res=a.res, nr_subgrid_pixels=a.subgrid,
         hsg="hsg_drained" if a.drained else "hsg_undrained",
-        elevation=a.elevation, structures=structures,
+        elevation=a.elevation, structures=structures, catalogs=tuple(a.catalog), manning_first=tuple(a.manning_first),
+        refinement=Path(a.refinement) if a.refinement else None,
     )  # fmt: skip
     t0 = time.time()
     root = build_static(cfg)

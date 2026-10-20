@@ -1,5 +1,6 @@
 """Shared pieces of the land-use panel analyses (scripts/storm_overlap.py,
-scripts/plot_storm_panel.py): the low-crop-field set and height reweighting. Pure, tested."""
+scripts/plot_storm_panel.py, scripts/storm_ndvi.py): the low-crop-field set, height reweighting
+and the flooded - comparison estimate against quiet years. Pure, tested."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ import pandas as pd
 MAX_H = 1.5  # m above MHHW
 PRE = range(2008, 2013)  # CDL years before Sandy
 H_BIN = 0.25  # m, height bins for reweighting
+QUIET_WINDOW = 5  # years: a storm season is measured against the quiet years this close
 CDL_CHANGE = 2024  # CDL product change: cropland drops on every low field from here (FINDINGS §37)
 # land-use classes of sandy_panel/field_year.csv; a field's main class is the largest of them
 CLASSES = ["share_corn", "share_soybeans", "share_other_grains", "share_hay", "share_idle", "share_other_crops",
@@ -54,3 +56,19 @@ def height_weights(height: pd.Series, ha: pd.Series, target: pd.Series, comp: pd
     w[target] = ha[target]
     w[comp] = ha[comp].values * scale
     return w
+
+
+def deviations(v: pd.DataFrame, year: int, quiet: list[int], k: int, window: int = QUIET_WINDOW) -> pd.Series:
+    """field x year table ``v``: each field's value in year + k minus its mean over the quiet
+    years within ``window`` of ``year``."""
+    base = [t for t in quiet if abs(t - year) <= window]
+    return v[year + k] - v[base].mean(axis=1)
+
+
+def estimate(d: pd.Series, w_t: pd.Series, w_c: pd.Series, boot: np.ndarray, scale: float = 100.0) -> np.ndarray:
+    """scale * (flooded - comparison) weighted means of ``d`` for the point (column 0) and each
+    bootstrap weight column of ``boot`` (field x draw). Fields where ``d`` is NaN drop out."""
+    ok = d.notna().values
+    dv, wt, wc = d.fillna(0).values, w_t.values * ok, w_c.values * ok
+    W = np.column_stack([np.ones(len(dv)), boot])  # field x draw
+    return scale * ((dv * wt) @ W / (wt @ W) - (dv * wc) @ W / (wc @ W))

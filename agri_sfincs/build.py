@@ -57,6 +57,12 @@ class StaticConfig:
     effective: float = 0.5  # initial seff = effective * smax (spin-up adjusts)
     refinement: Path | None = None  # quadtree refinement polygons (later versions)
     elevation: str = "bed_merged"  # catalog source of the ONE pre-merged bed
+    #: extra hydromt data catalogs (after config.CATALOG), e.g. for a test bed kept on scratch
+    catalogs: tuple = ()
+    #: catalog sources of Manning's n rasters that win over the land-cover roughness where they
+    #: have data (hydromt merges the roughness list first-wins), e.g. open water on the carved
+    #: channels, which 30 m NLCD often calls marsh or woods (FINDINGS §40)
+    manning_first: tuple = ()
     #: Structure files staged into the model as sfincs.weir / sfincs.drn (FINDINGS §10):
     #: keys "weirfile" / "drnfile" -> source path. Empty = none (v0).
     structures: dict = field(default_factory=dict)
@@ -78,7 +84,7 @@ def build_static(cfg: StaticConfig) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     outline = region.load_outline().to_crs(domain.EPSG)
 
-    sf = SfincsModel(data_libs=[str(config.CATALOG)], root=str(root), mode="w+",
+    sf = SfincsModel(data_libs=[str(config.CATALOG), *map(str, cfg.catalogs)], root=str(root), mode="w+",
                      write_gis=True)  # fmt: skip
 
     # 1. Grid ------------------------------------------------------------------
@@ -113,7 +119,8 @@ def build_static(cfg: StaticConfig) -> Path:
           f"(bed {np.nanmin(z[mask == 2]):+.1f}..{np.nanmax(z[mask == 2]):+.1f} m)")  # fmt: skip
 
     # 4. Roughness + subgrid ---------------------------------------------------
-    roughness_list = [{"lulc": "nlcd_2021", "reclass_table": str(ROUGHNESS_TABLE)}]
+    roughness_list = [{"manning": m} for m in cfg.manning_first]
+    roughness_list.append({"lulc": "nlcd_2021", "reclass_table": str(ROUGHNESS_TABLE)})
     sf.quadtree_roughness.create(roughness_list=roughness_list, nrmax=200)
     sf.quadtree_subgrid.create(
         elevation_list=elevation_list,

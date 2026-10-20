@@ -131,3 +131,22 @@ class TestNetworkWalk(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDropCrossings(unittest.TestCase):
+    def test_split_at_link(self):
+        x = np.arange(0.0, 50.0, 10.0)  # 0 .. 40 along y = 5
+        y = np.full(5, 5.0)
+        z = np.arange(5.0)
+        links = [((25.0, 0.0), (25.0, 10.0))]  # crosses the segment 20 -> 30 only
+        out, n = dikes.drop_crossings([("bank", x, y, z)], links)
+        self.assertEqual(n, 1)
+        self.assertEqual([o[0] for o in out], ["bank_0", "bank_1"])
+        self.assertEqual(out[0][1].tolist(), [0.0, 10.0, 20.0])
+        self.assertEqual(out[1][1].tolist(), [30.0, 40.0])
+
+    def test_untouched_and_stubs(self):
+        x, y, z = np.array([0.0, 10.0]), np.array([5.0, 5.0]), np.array([1.0, 1.0])
+        out, n = dikes.drop_crossings([("far", x + 100, y, z), ("stub", x, y, z)], [((5.0, 0.0), (5.0, 10.0))])
+        self.assertEqual(n, 1)  # the stub's only segment goes; nothing of 2+ vertices is left
+        self.assertEqual([o[0] for o in out], ["far"])
