@@ -49,6 +49,12 @@ from agri_sfincs import config, domain
 #: Gauges within this distance of a water-level boundary face force it (m). Cape May is
 #: ~9 km from the southern bay cut, Reedy Point ~4 km from the mid-river edge.
 WL_BUFFER_M = 15_000.0
+#: The "chain" boundary (FINDINGS §41, the default since 2026-10-20): one point per
+#: BND_SPACING_M square of boundary cells, each the lag-aware blend of its two neighbours on
+#: waterlevel.CHAIN, at BND_STEP. "gauges" = v1 before that: the 5 observed gauges as points,
+#: blended by SFINCS (loses range between gauges an hour or more apart in phase).
+BND_SPACING_M = 1000.0
+BND_STEP = "6min"
 #: Initial water level (m NAVD88). With 0 m every diked field below 0 m started FULL and
 #: could leave only through its check valve (v1, 2026-10-05); at -1 m they start drained,
 #: and channels / the bay refill from the tide boundary within hours of the 2-week spin-up.
@@ -177,14 +183,18 @@ def obs_points() -> gpd.GeoDataFrame:
     )  # fmt: skip
 
 
-def forcing_gauges():
+def forcing_gauges(ids: list[str] | None = None):
     """The gap-filled gauge levels as hydromt wants them: INTEGER station index (it
     refuses the NOAA id strings: "gdf index must be unique integers") and no string
-    variables. The NOAA ids stay on as a ``noaa_id`` coordinate."""
+    variables. The NOAA ids stay on as a ``noaa_id`` coordinate. ``ids``: these stations
+    only (default: all in the file, virtual gauges included)."""
     import xarray as xr
 
     ds = xr.open_dataset(config.GAUGE_DIR / "waterlevel_forcing_navd88.nc")
-    ds = ds[["waterlevel"]].load()
+    ds = ds[["waterlevel"]]
+    if ids is not None:
+        ds = ds.sel(stations=list(ids))
+    ds = ds.load()
     ids = ds.stations.values.astype(str)
     ds = ds.assign_coords(stations=np.arange(1, len(ids) + 1), noaa_id=("stations", ids))
     # Without a CRS hydromt takes lon/lat as model (UTM) metres and slices every gauge
@@ -192,6 +202,49 @@ def forcing_gauges():
     import hydromt  # noqa: F401  (registers the .vector accessor)
 
     ds.vector.set_crs(4326)  # in place
+    return ds
+
+
+def boundary_points(root: Path) -> tuple[np.ndarray, np.ndarray]:
+    """(x, y) in the model CRS: one water-level boundary face (mask 2 in ``root``/sfincs.nc)
+    per BND_SPACING_M square, the first in face order."""
+    import xarray as xr
+
+    with xr.open_dataset(Path(root) / "sfincs.nc") as g:
+        on = g["mask"].values == 2
+        x, y = g["mesh2d_face_x"].values[on], g["mesh2d_face_y"].values[on]
+    key = pd.Series(list(zip(np.floor(x / BND_SPACING_M), np.floor(y / BND_SPACING_M))))
+    first = (~key.duplicated()).to_numpy()
+    return x[first], y[first]
+
+
+def chain_forcing(root: Path, t0, t1, epsg: int):
+    """The chain boundary (BND_STEP, ``root``'s boundary faces) as a hydromt GeoDataset like
+    forcing_gauges(): integer stations, lon/lat, a ``pair`` label per point."""
+    import hydromt  # noqa: F401  (registers the .vector accessor)
+    import xarray as xr
+    from pyproj import Transformer
+
+    from agri_sfincs import waterlevel
+
+    g = forcing_gauges(waterlevel.CHAIN)
+    pad = pd.Timedelta("3h")
+    lv = g.waterlevel.sel(time=slice(pd.Timestamp(t0) - pad, pd.Timestamp(t1) + pad)).to_pandas()
+    lv.columns = g.noaa_id.values
+    to_m = Transformer.from_crs(4326, epsg, always_xy=True)
+    gx, gy = to_m.transform(g.lon.values, g.lat.values)
+    x, y = boundary_points(root)
+    index = pd.date_range(t0, t1, freq=BND_STEP)
+    zs, pair = waterlevel.chain_boundary(lv, x, y, gx, gy, index)
+    if zs.isna().any().any():
+        raise ValueError("chain boundary has gaps (forcing file shorter than the event?)")
+    lon, lat = Transformer.from_crs(epsg, 4326, always_xy=True).transform(x, y)
+    ds = xr.Dataset(
+        {"waterlevel": (("time", "stations"), zs.to_numpy("float32"))},
+        coords={"time": index, "stations": np.arange(1, len(x) + 1), "lon": ("stations", lon),
+                "lat": ("stations", lat), "pair": ("stations", pair)},
+    )  # fmt: skip
+    ds.vector.set_crs(4326)
     return ds
 
 
@@ -221,7 +274,8 @@ def zero_precip(run: Path) -> None:
 
 def setup_event(static_root: Path, event: Event, run_name: str | None = None,
                 structures: dict | None = None, zsini: float = ZSINI,
-                precip: str | None = None, wl_offset: float = 0.0) -> Path:  # fmt: skip
+                precip: str | None = None, wl_offset: float = 0.0,
+                boundary: str = "chain") -> Path:  # fmt: skip
     """Copy ``static_root`` to config.MODELS/<static>/runs/<run_name> and add forcing.
 
     ``structures`` ({"drnfile": path} ...) REPLACES the static model's structure files in
@@ -229,8 +283,14 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
     (m NAVD88; FINDINGS §14 / §16). ``precip`` overrides the event's precipitation
     source (a catalog source or a product, see precip_source); ``"none"`` = no rain
     (a tide-only run). ``wl_offset`` (m) is added to the boundary water levels: sea-level
-    rise."""
+    rise. ``boundary``: "chain" (default) or "gauges" (v1 before 2026-10-20, to reproduce
+    older runs); see BND_STEP."""
     from hydromt_sfincs import SfincsModel
+
+    from agri_sfincs import waterlevel
+
+    if boundary not in ("chain", "gauges"):
+        raise ValueError(f"boundary must be 'chain' or 'gauges', not {boundary!r}")
 
     run = static_root / "runs" / (run_name or event.name)
     if run.exists():
@@ -263,7 +323,10 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
             "twet_threshold": 0.05,
         }
     )
-    gauges = forcing_gauges()
+    if boundary == "chain":
+        gauges = chain_forcing(run, t0, t1, domain.EPSG)
+    else:
+        gauges = forcing_gauges(waterlevel.FORCING)
     if wl_offset:
         gauges["waterlevel"] = gauges.waterlevel + float(wl_offset)
     sf.water_level.create(geodataset=gauges, buffer=WL_BUFFER_M, merge=False)

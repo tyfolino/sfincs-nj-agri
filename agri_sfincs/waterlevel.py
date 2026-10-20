@@ -14,6 +14,12 @@ scripts/download_noaa_sandy_wl.py ``navd_minus_mllw``):
     NAVD88 - MLLW = (MSL - MLLW)_station + mean over neighbours of (NAVD88 - MSL)
 which is uncertain by about 0.1 m at Ship John Shoal.
 
+Virtual gauges (FINDINGS §41): Fortescue and Bidwell Creek entrance have harmonic
+predictions but no observations; ``fill_virtual`` gives them predicted tide + a donor's
+residual, so the boundary along the Cumberland shore is not Cape May's smaller tide.
+``chain_boundary`` builds the boundary itself: one point per ~1 km of boundary, each a
+LAG-AWARE blend of its two neighbours on CHAIN (agri_sfincs.events.setup_event).
+
 ``match_highs`` pairs every observed high tide at a gauge with the model's highest level
 near it (scripts/validate_sandy.py, scripts/validate_storm_gauges.py); ``match_extremes``
 does highs or lows where the 6-min record is complete around them; ``usgs_event_series``
@@ -44,16 +50,72 @@ DONORS = {
 }
 
 
+#: Virtual gauges (domain.VIRTUAL_STATIONS) -> donor of the non-tidal residual: level = own
+#: predicted tide + the donor's (filled level - predicted tide).
+VIRTUAL_DONOR = {"8536931": "8537121", "8536581": "8536110"}
+
+#: The water-level boundary chain, bay mouth to Philadelphia (FINDINGS §41), and the tide's
+#: travel time from each point to the next (h; lag of peak correlation between 2023 hourly
+#: predictions, cubic to 6 min). Blending two neighbours ~1.3 h apart without moving them to
+#: a common phase first loses ~6-8% of range midway.
+CHAIN = ["8536110", "8536581", "8536931", "8537121", "8551910", "8540433", "8545240"]
+CHAIN_LAG_H = [0.5, 0.4, 0.5, 1.2, 1.3, 1.2]
+
+
+def chain_pair(x: float, y: float, gx, gy) -> tuple[int, float]:
+    """For a boundary point (x, y): (i, w) such that the point lies between chain points i and
+    i + 1 at fraction w (0 at i, 1 at i + 1). The pair is the nearest chain point and the
+    nearer of its two chain neighbours; w is SFINCS's inverse-distance weight."""
+    import numpy as np
+
+    d = np.hypot(np.asarray(gx) - x, np.asarray(gy) - y)
+    n = int(np.argmin(d))
+    nb = [i for i in (n - 1, n + 1) if 0 <= i < len(d)]
+    m = min(nb, key=lambda i: d[i])
+    a, b = min(n, m), max(n, m)
+    return a, float(d[a] / (d[a] + d[b]))
+
+
+def lag_blend(a: pd.Series, b: pd.Series, w: float, lag_h: float, index: pd.DatetimeIndex):
+    """(1 - w) a(t - w lag) + w b(t + (1 - w) lag) on ``index``: ``b``'s tide arrives ``lag_h``
+    after ``a``'s, and both are moved to the phase of a point at fraction ``w`` before they
+    are weighted. Linear in time between the series' samples; NaN outside them."""
+    import numpy as np
+
+    lag = pd.Timedelta(hours=lag_h)
+    ns = lambda i: pd.DatetimeIndex(i).as_unit("ns").asi8  # noqa: E731
+    at = lambda s, t: np.interp(ns(t), ns(s.index), s.to_numpy(float), left=np.nan, right=np.nan)  # noqa: E731
+    return (1 - w) * at(a, index - w * lag) + w * at(b, index + (1 - w) * lag)
+
+
+def chain_boundary(levels: pd.DataFrame, x, y, gx, gy, index: pd.DatetimeIndex) -> tuple[pd.DataFrame, list[str]]:
+    """Water level at each boundary point (x[k], y[k]) on ``index``: the lag-aware blend of its
+    two CHAIN neighbours. ``levels``: one column per CHAIN id (hourly is fine: it is taken to
+    6 min by cubic interpolation first); gx, gy: the CHAIN points' coordinates, same CRS as
+    x, y. Returns (levels, one label per point "<id a>-<id b>:<w>")."""
+    import numpy as np
+
+    fine = levels[CHAIN].resample("6min").interpolate("cubic")
+    cols, names = [], []
+    for xk, yk in zip(x, y):
+        i, w = chain_pair(xk, yk, gx, gy)
+        cols.append(lag_blend(fine[CHAIN[i]], fine[CHAIN[i + 1]], w, CHAIN_LAG_H[i], index))
+        names.append(f"{CHAIN[i]}-{CHAIN[i + 1]}:{w:.2f}")
+    return pd.DataFrame(np.array(cols).T, index=index), names
+
+
 def datums(station: str) -> dict[str, float]:
     """CO-OPS tidal datums for a station, metres on station datum."""
     j = get(f"{MDAPI}/{station}/datums.json", {"units": "metric"}).json()
     return {d["name"]: float(d["value"]) for d in j.get("datums") or []}
 
 
-def navd_minus_mllw(station: str, navd_from: list[str] | None = None) -> tuple[float, str]:
-    """(NAVD88 - MLLW in m, how it was obtained) — see the module docstring."""
+def navd_minus_mllw(station: str, navd_from: list[str] | None = None,
+                    own_tie: bool = True) -> tuple[float, str]:  # fmt: skip
+    """(NAVD88 - MLLW in m, how it was obtained) — see the module docstring. ``own_tie=False``
+    transfers from ``navd_from`` even if the station has a NAVD88 tie of its own."""
     own = datums(station)
-    if "NAVD88" in own:
+    if "NAVD88" in own and own_tie:
         return own["NAVD88"] - own["MLLW"], "CO-OPS NAVD88 tie"
     if not navd_from:
         raise ValueError(f"{station} has no NAVD88 tie and no navd_from neighbours")
@@ -103,6 +165,19 @@ def fill_gaps(
             src[need] = d
         levels[st], source[st] = out, src
     return pd.DataFrame(levels), pd.DataFrame(source)
+
+
+def fill_virtual(pred: dict[str, pd.Series], levels: pd.DataFrame,
+                 index: pd.DatetimeIndex) -> tuple[pd.DataFrame, pd.DataFrame]:  # fmt: skip
+    """Every VIRTUAL_DONOR station on ``index``: its predicted tide + the donor's non-tidal
+    residual (``levels`` = fill_gaps output, so a filled donor hour counts). Same datum
+    convention as fill_gaps (each station's own MLLW). source = "virtual:<donor>" or ""."""
+    out, source = {}, {}
+    for st, d in VIRTUAL_DONOR.items():
+        v = pred[st].reindex(index) + (levels[d] - pred[d].reindex(index))
+        out[st] = v
+        source[st] = pd.Series("", index=index, dtype=object).mask(v.notna(), f"virtual:{d}")
+    return pd.DataFrame(out), pd.DataFrame(source)
 
 
 def match_highs(obs: pd.Series, model: pd.Series, window: str = "3h", distance: int = 80) -> pd.DataFrame:

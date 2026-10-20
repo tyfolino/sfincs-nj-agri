@@ -109,6 +109,18 @@ NOAA_STATIONS = [
 SHIP_JOHN = "8537121"  # Ship John Shoal: the bay gauge nearest the Cumberland bayshore
 CAPE_MAY = "8536110"  # the one forcing gauge on the ocean side
 
+#: VIRTUAL forcing gauges on the Cumberland / Cape May shore (FINDINGS §41): NOAA harmonic
+#: stations with no observations here, whose tide is bigger than Cape May's. Their own
+#: NAVD88 ties are set aside (Fortescue's sits ~0.08 m off Bivalve's, Ship John's and Cape
+#: May's); navd_from = the NAVD88-tied neighbours used instead. Bivalve 8535055 is a
+#: CO-OPS datum station with a NAVD88 tie.
+VIRTUAL_STATIONS = [
+    {"id": "8536931", "name": "Fortescue Creek, NJ",       "lon": -75.1750, "lat": 39.2383,
+     "navd_from": ["8535055"]},
+    {"id": "8536581", "name": "Bidwell Creek entrance, NJ", "lon": -74.8920, "lat": 39.1280,
+     "navd_from": ["8535055", "8536110"]},
+]
+
 #: USGS sites known to matter (the nj_bight_sfincs v4 lists). Labels are short
 #: reminders; the inventory script reports the official names from the USGS API and
 #: also discovers every other site inside the ring.

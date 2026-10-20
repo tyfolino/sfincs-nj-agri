@@ -25,7 +25,12 @@ scripts/make_dike_scenarios.py. Run names: <event>_<dikes>_slr<cm>[_rain]
 Writes each run not yet staged to config.MODELS/<model>/runs/<name> (scripts/setup_event.py's
 setup_event). ``--submit`` sbatches hpc/sfincs_run.slurm for every run without a sfincs_map.nc.
 
+Boundary: every run staged so far used v1's "gauges" boundary, so this script keeps it by
+default and a run added to the matrix stays comparable with its siblings. ``--boundary chain``
+(FINDINGS §41) is for re-staging a whole set, under new names or after the old runs are moved.
+
 Usage:  python scripts/setup_scenarios.py [--model v1_100m] [--breaches] [--restore] [--storms] [--submit] [--only NAME...]
+            [--boundary gauges|chain]
 """
 
 from __future__ import annotations
@@ -105,6 +110,7 @@ def main() -> None:
     ap.add_argument("--storms", action="store_true")
     ap.add_argument("--submit", action="store_true")
     ap.add_argument("--only", nargs="*", default=None)
+    ap.add_argument("--boundary", default="gauges", choices=["gauges", "chain"])
     a = ap.parse_args()
     static = config.MODELS / a.model
     for r in matrix(a.breaches, a.restore, a.storms):
@@ -114,7 +120,7 @@ def main() -> None:
         if not run.exists():
             setup_event(static, EVENTS[r["event"]], r["name"],
                         structures={k: r[v] for k, v in (("weirfile", "weir"), ("drnfile", "drn")) if r.get(v)} or None,
-                        precip=r["precip"], wl_offset=r["slr"])  # fmt: skip
+                        precip=r["precip"], wl_offset=r["slr"], boundary=a.boundary)  # fmt: skip
         if a.submit and not (run / "sfincs_map.nc").exists():
             out = subprocess.run(["sbatch", "-J", f"agri-{r['name'][:20]}", "hpc/sfincs_run.slurm", str(run)],
                                  capture_output=True, text=True, check=True).stdout.strip()  # fmt: skip

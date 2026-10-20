@@ -6,12 +6,15 @@ Two scores, kept apart on purpose:
     the model's highest / lowest level within +-3 h (agri_sfincs.waterlevel.match_extremes),
     over the scoring days of the calm window.
   HELD OUT (never tuned to): the published mean tide range at the CO-OPS datum stations up
-    the creeks (data/channels/coops_offsets.csv, type R ratios to Reedy Point 8551910 or
-    Philadelphia 8545240; the 20 stations referred to Lewes are left out, Lewes is not
-    observed here). Expected range = the station's ratio x the reference's observed mean
-    range over the same days (hourly gauge levels, data/gauges/waterlevel_forcing_navd88.nc);
+    the creeks (data/channels/coops_offsets.csv, type R ratios to Reedy Point 8551910,
+    Philadelphia 8545240 or Lewes 8557380). Expected range = the station's long-term mean
+    range (ratio x the reference's published MN, 1983-2001) x the scoring week's fraction of
+    MN, interpolated (inverse distance) between the two nearest observed gauges in WEEK_GAUGES
+    (FINDINGS §41: the fraction runs from ~0.74 at Lewes to ~0.95 at Philadelphia in
+    2023-05-24..31, so the reference's own week overstated lower-bay targets by 5-8%). Week
+    ranges from the observed hourly gauge files (data/gauges/noaa/<id>_hourly_mllw.csv.gz);
     model range = mean high - mean low of the station's observation point, resampled hourly
-    like the reference. Ratios are for the 1983-2001 epoch. A station whose cell bed is above
+    like the gauges. A station whose cell bed is above
     OFF_CHANNEL_M sits on the marsh or bank beside the channel (its coordinates are given to
     ~150 m): it is listed but left out of the per-creek medians.
 The storm peaks (scripts/validate_storm_gauges.py) and Landsat (validate_storm_landsat.py)
@@ -33,12 +36,16 @@ import pandas as pd
 import xarray as xr
 from scipy.signal import find_peaks
 
-from agri_sfincs import config, runs, waterlevel
+from agri_sfincs import config, domain, runs, waterlevel
 from agri_sfincs.report import md_table
 
 GAUGES = {"01412150": "Bivalve (Maurice)", "01413038": "Greenwich (Cohansey)", "01483050": "Hancocks Bridge (Alloway)"}
 OBS_EVENT = "storm2023jun"  # its fetched gauge files cover the calm window
-REFS = {"8551910": "Reedy Point", "8545240": "Philadelphia"}
+REFS = {"8551910": "Reedy Point", "8545240": "Philadelphia", "8557380": "Lewes"}
+#: Published mean range MN = MHW - MLW (m, CO-OPS datums, epoch 1983-2001, fetched 2026-10-20)
+#: of the observed gauges whose scoring-week fraction of MN is interpolated to each station.
+WEEK_GAUGES = {"8557380": 1.242, "8536110": 1.478, "8537121": 1.698, "8551910": 1.628,
+               "8540433": 1.712, "8545240": 1.859}
 OFF_CHANNEL_M = -0.3  # cell bed above this: the point is not in a channel cell
 
 
@@ -48,6 +55,29 @@ def mean_range(s: pd.Series) -> tuple[float, float]:
     hi = v.values[find_peaks(v.values, distance=8)[0]]
     lo = v.values[find_peaks(-v.values, distance=8)[0]]
     return float(hi.mean()), float(lo.mean())
+
+
+def week_fraction(t0, t1) -> dict[str, tuple[float, float, float]]:
+    """{gauge: (lon, lat, observed mean range over t0..t1 / published MN)} for WEEK_GAUGES."""
+    ll = {s["id"]: (s["lon"], s["lat"]) for s in domain.NOAA_STATIONS}
+    out = {}
+    for g, mn in WEEK_GAUGES.items():
+        f = config.GAUGE_DIR / "noaa" / f"{g}_hourly_mllw.csv.gz"
+        o = pd.read_csv(f, index_col=0, parse_dates=True)["wl_m_mllw"][t0:t1]
+        if o.notna().sum() < 24:
+            continue
+        hi, lo = mean_range(o)
+        out[g] = (*ll[g], (hi - lo) / mn)
+    return out
+
+
+def local_fraction(lon: float, lat: float, frac: dict) -> float:
+    """Inverse-distance blend of the two nearest gauges' week fractions (degrees scaled by
+    cos(lat) for distance; the gauges are within ~1.2 degrees of each other)."""
+    c = np.cos(np.radians(lat))
+    d = {g: np.hypot((v[0] - lon) * c, v[1] - lat) for g, v in frac.items()}
+    a, b = sorted(d, key=d.get)[:2]
+    return (frac[a][2] * d[b] + frac[b][2] * d[a]) / (d[a] + d[b])
 
 
 def creek_of() -> dict[str, str]:
@@ -71,8 +101,7 @@ def score(run, t0, t1) -> tuple[pd.DataFrame, pd.DataFrame]:
         hi, lo = waterlevel.match_extremes(o, m), waterlevel.match_extremes(o, m, lows=True)
         g.append({"gauge": name, "high bias": hi.diff_m.mean(), "high rmse": float(np.sqrt((hi.diff_m**2).mean())),
                   "low bias": lo.diff_m.mean(), "n": len(hi)})  # fmt: skip
-    with xr.open_dataset(config.GAUGE_DIR / "waterlevel_forcing_navd88.nc") as ds:
-        ref = {k: mean_range(ds["waterlevel"].sel(stations=k).to_series()[t0:t1]) for k in REFS}
+    frac = week_fraction(t0, t1)
     off = pd.read_csv(config.CHANNELS_DIR / "coops_offsets.csv", dtype={"id": str, "ref": str})
     off = off[off.ref.isin(list(REFS))]
     creek = creek_of()
@@ -85,7 +114,7 @@ def score(run, t0, t1) -> tuple[pd.DataFrame, pd.DataFrame]:
         if s.notna().sum() < 24:
             continue
         hi, lo = mean_range(s)
-        exp = (r.h_high + r.h_low) / 2 * (ref[r.ref][0] - ref[r.ref][1])
+        exp = (r.h_high + r.h_low) / 2 * WEEK_GAUGES[r.ref] * local_fraction(r.lon, r.lat, frac)
         rows.append({"station": r.name[:40], "id": r.id, "creek": creek.get(r.id, ""), "expected_m": exp,
                      "model_m": hi - lo, "ratio": (hi - lo) / exp, "off_channel": bool(zb[name] > OFF_CHANNEL_M)})  # fmt: skip
     return pd.DataFrame(g).set_index("gauge"), pd.DataFrame(rows)

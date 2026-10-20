@@ -1,12 +1,15 @@
-"""Hourly NAVD88 water levels at the five forcing gauges, 2002-2025, gaps filled.
+"""Hourly NAVD88 water levels at the five forcing gauges and the two virtual NJ-shore gauges,
+2002-2025, gaps filled.
 
 Inputs: the observed hourly MLLW files from scripts/gauge_inventory.py
 (data/gauges/noaa/<id>_hourly_mllw.csv.gz). Downloads and caches NOAA hourly tide
-predictions per station-year (data/gauges/noaa/<id>_pred_mllw.csv.gz).
+predictions per station-year (data/gauges/noaa/<id>_pred_mllw.csv.gz). The virtual gauges
+(domain.VIRTUAL_STATIONS: Fortescue, Bidwell Creek entrance) are predicted tide + a donor's
+non-tidal residual at every hour (waterlevel.fill_virtual, FINDINGS §41).
 
 Writes data/gauges/waterlevel_forcing_navd88.nc:
   waterlevel(time, stations)  m NAVD88, UTC hourly
-  source(time, stations)      "obs" | donor id (residual-filled) | "" (missing)
+  source(time, stations)      "obs" | donor id (residual-filled) | "virtual:<donor>" | "" (missing)
   lon, lat, name(stations); attrs carry each station's NAVD88-MLLW and how it was got
 and prints, per station and year, the % observed and % filled.
 
@@ -26,7 +29,8 @@ from agri_sfincs.cli import parse_years
 
 NOAA_DIR = config.GAUGE_DIR / "noaa"
 OUT = config.GAUGE_DIR / "waterlevel_forcing_navd88.nc"
-STATIONS = {s["id"]: s for s in domain.NOAA_STATIONS}
+STATIONS = {s["id"]: s for s in domain.NOAA_STATIONS + domain.VIRTUAL_STATIONS}
+VIRTUAL = {s["id"] for s in domain.VIRTUAL_STATIONS}
 
 
 def observed(st: str) -> pd.Series:
@@ -62,17 +66,19 @@ def main() -> None:
 
     involved = sorted(set(waterlevel.FORCING) | {d for v in waterlevel.DONORS.values() for d in v})
     obs = {s: observed(s) for s in involved}
-    pred = {s: predicted(s, years) for s in involved}
+    pred = {s: predicted(s, years) for s in involved + sorted(VIRTUAL)}
     levels, source = waterlevel.fill_gaps(obs, pred, index)
+    vlev, vsrc = waterlevel.fill_virtual(pred, levels, index)
+    levels, source = levels.join(vlev), source.join(vsrc)
 
+    ids = waterlevel.FORCING + sorted(VIRTUAL)
     offsets, hows = {}, {}
-    for st in waterlevel.FORCING:
-        off, how = waterlevel.navd_minus_mllw(st, STATIONS[st].get("navd_from"))
+    for st in ids:
+        off, how = waterlevel.navd_minus_mllw(st, STATIONS[st].get("navd_from"), own_tie=st not in VIRTUAL)
         offsets[st], hows[st] = off, how
         levels[st] = levels[st] - off
         print(f"  {st} {STATIONS[st]['name']}: NAVD88-MLLW {off:.3f} m ({how})")
 
-    ids = waterlevel.FORCING
     ds = xr.Dataset(
         {
             "waterlevel": (("time", "stations"), levels[ids].to_numpy("float32")),
@@ -86,7 +92,7 @@ def main() -> None:
             "name": ("stations", [STATIONS[s]["name"] for s in ids]),
         },
         attrs={
-            "title": "Hourly water level at the Delaware forcing gauges, gap-filled",
+            "title": "Hourly water level at the Delaware forcing gauges (+ virtual NJ-shore gauges), gap-filled",
             "units": "m NAVD88",
             "fill_method": "predicted tide + donor non-tidal residual "
             "(agri_sfincs.waterlevel.DONORS)",
@@ -104,10 +110,10 @@ def main() -> None:
             s = source.loc[yr == y, st]
             rows.append({"station": f"{st} {STATIONS[st]['name']}", "year": y,
                          "obs%": round(100 * (s == "obs").mean(), 1),
-                         "filled%": round(100 * ((s != "obs") & (s != "")).mean(), 1),
+                         "filled%": round(100 * ((s != "obs") & (s != "")).mean(), 1),  # virtual: all filled
                          "missing%": round(100 * (s == "").mean(), 1)})  # fmt: skip
     t = pd.DataFrame(rows)
-    bad = t[t["obs%"] < 100]
+    bad = t[(t["obs%"] < 100) & ~t.station.str[:7].isin(VIRTUAL)]  # virtual: never observed
     print("\nstation-years not fully observed:\n" + bad.to_string(index=False))
     print(f"still missing anywhere: {int((source == '').to_numpy().sum())} station-hours")
     print(f"NAVD88 range per station (m): "

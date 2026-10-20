@@ -11,6 +11,8 @@ Usage:  python scripts/setup_event.py --model v1_100m --event sep2023 [--name RU
                                                          "none" = tide-only)
             [--weir data/structures/dikes_removed.weir] (replaces sfincs.weir in this run)
             [--wl-offset 0.6]                           (sea-level rise on the boundary, m)
+            [--boundary gauges]                         (v1's boundary before 2026-10-20, to
+                                                         reproduce older runs; default chain)
 Year runs:  python scripts/setup_event.py --model v1_100m --event y2023 --name y2023_zsini0 --zsini 0
             (the first staging of a window builds data/precip/forcing/<product>_<event>.nc
             and its data-catalog entry, ~1 min for a year)
@@ -37,11 +39,13 @@ def main() -> None:
                     help="precipitation override: mrms | stage4 | a catalog source")  # fmt: skip
     ap.add_argument("--weir", default=None, help="weir file for this run only (dike scenarios)")
     ap.add_argument("--wl-offset", type=float, default=0.0, help="sea-level rise, m")
+    ap.add_argument("--boundary", default="chain", choices=["chain", "gauges"],
+                    help="water-level boundary (FINDINGS §41)")  # fmt: skip
     a = ap.parse_args()
     structures = {k: v for k, v in (("drnfile", a.drn), ("weirfile", a.weir)) if v}
     run = setup_event(config.MODELS / a.model, EVENTS[a.event], a.name,
                       structures=structures or None, zsini=a.zsini, precip=a.precip,
-                      wl_offset=a.wl_offset)  # fmt: skip
+                      wl_offset=a.wl_offset, boundary=a.boundary)  # fmt: skip
     print(run)
 
 

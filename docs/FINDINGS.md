@@ -1198,3 +1198,115 @@ scratch (`models/e{2,3,4a,4b,5a,5b,6}_100m`, beds and roughness in `data_bulk/ex
   deeper than any chart we have (none has Cohansey soundings), or the model's marsh holds more
   water per tide than the real one, or the tide arriving at the mouths is already short.
   Unresolved.
+
+## 41. The bay boundary: why the bay shore was short, and why the creek shortfall is not the boundary (2026-10-20; `reports/creek_tides.md`; scripts and inputs in `data_bulk/experiments/e7_boundary/`)
+
+Step 3 of the §39 follow-up: the bay-shore deficit (§40) checked at the boundary, before the creeks.
+- **How v1 forces the bay:** 5 NOAA gauges (Philadelphia, Marcus Hook, Reedy Point, Ship John
+  Shoal, Cape May) as boundary points; SFINCS gives each of the 1,353 boundary cells a
+  distance-weighted blend of its 2 nearest points (reproduced exactly from the map output).
+  Boundary beds are −5 to −15 m, so the cells hold the range they are given.
+- **Two losses in that blend:**
+  - **phase cancellation:** neighbouring gauges are 1.2-1.5 h apart in tide phase; averaging two
+    tides that far apart loses ~6-8% of range midway (boundary 1.31-1.38 m between Ship John
+    and Reedy Point, which both read 1.44 m);
+  - **the wrong gauge:** the Cumberland shore's tide is bigger than Cape May's (published mean
+    range Fortescue 1.78, Bidwell Creek 1.73, Bivalve 1.72 m against Cape May 1.48, Ship John
+    1.70), but the boundary there blends Cape May in. Boundary 1.18-1.24 m vs ~1.35 needed.
+- **Yardstick fix (side agent's flag, checked):** expected ranges were ratio × the reference's
+  range IN THE SCORING WEEK. That week the tide ran at a different fraction of its long-term
+  mean range along the estuary (Lewes 0.74, Cape May 0.76, Ship John 0.85, Reedy 0.88,
+  Marcus Hook 0.91, Philadelphia 0.95), so Reedy-referenced targets in the lower bay came out
+  ~5-8% high. Dredging is not the cause: Reedy and Ship John both read 0.98 of their
+  1983-2001 means over 2023. Better: station mean range (ratio × reference's published MN) ×
+  that week's fraction interpolated between the 2 nearest gauges. This reconciles the
+  neighbours that disagreed: Fishing Creek entrance (Reedy-referenced) 1.46 → 1.35 m,
+  Dividing Creek entrance (Lewes-referenced) 1.23 → 1.35 m. It also scores the 20
+  Lewes-referenced stations (Maurice, Cape May shore). Now `check_creek_tides.py`'s yardstick
+  (2026-10-20); `reports/creek_tides.md` is on it, so its numbers differ by a few points from
+  the §40 table.
+- **Experiments** (on E1open; ranges as model / expected on the new yardstick):
+  - E7a: + virtual gauges at Fortescue 8536931 and Bidwell Creek 8536581 (own harmonic
+    prediction + Ship John / Cape May non-tidal residual), hourly, SFINCS blending;
+  - E7b: the same 7-gauge chain, 196 boundary points (~1 per km), each a LAG-AWARE blend of its
+    2 chain neighbours (both shifted to the point's phase first), 6-min.
+
+  | | E1open | E7b |
+  |---|---|---|
+  | bay-shore entrances (Fishing, Dividing, Back, Cedar, Money Is., Salem Canal, Artificial Is.) | 0.79-0.89 | 0.82-1.00 |
+  | Maurice: Mauricetown / Millville / East Point | 0.89 / 0.76 / 0.21 | 0.99 / 0.80 / 0.31 |
+  | Bivalve gauge: highs / lows (m, model − obs) | −0.04 / +0.15 | +0.08 / +0.10 |
+  | Cohansey / Stow / Oldmans / Big Timber (median, old yardstick) | 0.36 / 0.43 / 0.36 / 0.45 | 0.36 / 0.44 / 0.36 / 0.47 |
+  | Greenwich / Hancocks Bridge lows (m) | +0.51 / +0.55 | +0.51 / +0.55 |
+
+- **Reading:** the boundary explains most of the bay-shore deficit and Bivalve's range (now
+  right within 0.02 m), and NOTHING in the side creeks. So the creek shortfall is inside the
+  creeks (depth, or marsh storage), as §40 suspected; the "tide already short at the mouths"
+  option is ruled out. E7a gets most of E7b's gain; lag-aware blending adds ~1-5 points.
+- **E7 put Bivalve ~0.1 m high** at both highs and lows: the virtual gauges' datum. The
+  1983-2001 MSL in NAVD88 spreads 0.13 m along the lower bay (Cape May −0.136, Ship John
+  −0.068, Bivalve −0.085, Fortescue −0.008 m), and E7 used Fortescue's own tie (the outlier)
+  and a Cape May / Fortescue mean for Bidwell.
+- **Adopted (user, 2026-10-20) as the "chain" boundary, the default for new runs**
+  (`waterlevel.CHAIN` / `chain_boundary` / `fill_virtual`, `events.chain_forcing`,
+  `domain.VIRTUAL_STATIONS`; the virtual gauges are in `waterlevel_forcing_navd88.nc`, the five
+  observed ones unchanged bit for bit). The virtual gauges are tied by transfer instead of
+  their own ties: Fortescue from Bivalve (NAVD88 − MLLW 1.059), Bidwell from Bivalve + Cape May
+  (1.073). E8chain (tidecal2023may, opened weirs): **Bivalve highs / lows +0.02 / +0.04 m**
+  (E1open −0.04 / +0.15); entrances 0.84-1.02, Mauricetown 1.03, Millville 0.84; Greenwich
+  lows +0.49, Hancocks Bridge +0.55, the side creeks unchanged. `--boundary gauges` restages
+  the old boundary; `setup_scenarios.py` keeps it by default so the existing scenario matrix
+  stays comparable with itself.
+
+## 42. Creek depth sources: real soundings for Big Timber and Oldmans, none inside the Cohansey (2026-10-20, research agent + nj_bight_sfincs)
+
+- **NOS digital soundings** (NCEI HYD93 XYZ, m, small files; e.g.
+  `data.ngdc.noaa.gov/platforms/ocean/nos/coast/H08001-H10000/H09886/GEODAS/H09886.a93.gz`):
+  - Big Timber: H09886 (1980, **MLW**), ~370 soundings from the mouth past Westville, 2.5-4.5 m,
+    ~1 m at the top. nj_bight_sfincs takes MLW = −0.908 m NAVD88 (mean of Philadelphia
+    8545240 and Pier 11 8545530; `build_riverbeds_tidal_v4.py`, "bigtimber").
+  - Oldmans: H10027 (1982, MLLW), ~300 soundings to ~5.5 km (Pedricktown), median ~3 m.
+  - Alloway: H10112 (1983, MLLW), lowest 1-2 km, ~3.4 m.
+  - Cohansey: D00081 (1987) / H11070 (2001), the mouth only. Stow: nothing inside.
+- So **Oldmans and Big Timber are ~1.5-2 m deeper than our convention bed** (1.2 m below MLLW,
+  §11). That matches E4b (−1.8 m), where Oldmans reached ~0.6.
+- **Cohansey:** a federal channel (USACE National Channel Framework `CENAP_CO_01_CRC`, 6 ft
+  authorized, 100 ft wide, 2.7 mi, about Fairton to Bridgeton). eHydro has no surveys for it;
+  the last maintenance dredging found was ~1985. Coast Pilot 3 ch. 6 (2026): controlling depth
+  ~7 ft at the entrance, 4-6 ft shoals either side (Alloway ~3 ft to Quinton). That is only
+  ~0.6-0.9 m deeper than our bed. The 1905-06 Corps survey maps with soundings along the whole
+  river are scanned at Rutgers RUcore (rutgers-lib:56574 mouth, 56588 Bridgeton to Lupton's
+  Landing; ft, probably MLW).
+- No USGS cross-sections (Greenwich 01413038 has only water-level checks), nothing from NJDOT,
+  PDE or NERRS. nj_bight_sfincs has no Cohansey data either: same 1.2 m-below-MLLW bed; its
+  Greenwich range is ~0.62 of observed (§54 there).
+- **Reading:** if the Cohansey's real depth is ~2 m below MLLW and the tide still wants much
+  more, the depth gap is not the whole story there, and marsh storage (§40) is the suspect.
+
+## 43. Measured depths give the measured tide: Big Timber fixed, Oldmans halfway, Cohansey short (2026-10-20; `reports/creek_tides.md`, `scripts/build_bed_e9.py`, soundings in `data/channels/nos/`)
+
+E9 (`models/e9_100m`) = E8chain (chain boundary, opened weirs) with a bed from data instead of
+the 1.2 m-below-MLLW convention (`scripts/build_bed_e9.py`, lower-only, painted on v1's tidal strip):
+- Big Timber: NOS H09886 (MLW → MLLW −0.058 m), 309 soundings over 10 km, lowered a median 2.4 m;
+- Oldmans: NOS H10027, 123 soundings over the lowest 5 km (to ~Pedricktown), lowered 1.7 m;
+- Cohansey: 7 ft below MLLW (Coast Pilot controlling depth at the entrance) from the mouth to
+  Fairton (39.381 N), 16 km, lowered 0.9 m; above Fairton unchanged;
+- Alloway: H10112's soundings lie in the open-water mouth (CUDEM already), so unchanged;
+- Stow: no data, unchanged (the control).
+
+| Station (model / expected range) | E8chain | E9 |
+|---|---|---|
+| Big Timber, Westville | 0.47 | **0.97** |
+| Oldmans, Pedricktown (sounded reach) / Auburn (above it) | 0.40 / 0.31 | 0.68 / 0.42 |
+| Cohansey, Greenwich Pier / Tindalls Wharf (at Fairton, above the change) | 0.55 / 0.20 | 0.72 / 0.26 |
+| Greenwich gauge lows / highs (m, model − obs) | +0.49 / −0.12 | +0.32 / −0.07 |
+| Stow (3 stations), Alloway, Bivalve | — | unchanged |
+
+- **Reading:** where the bed is measured all the way (Big Timber), the model gets the measured
+  tide. So the side-creek shortfall is mostly the convention bed being too shallow, not model
+  physics, and probably not marsh storage there (Big Timber has little marsh). Oldmans is fixed
+  only as far as the soundings go. The Cohansey at 7 ft is still short; 7 ft is the SHALLOWEST
+  point at the entrance, so the channel is probably deeper elsewhere, and the upper river
+  (Fairton to Bridgeton, the federal 6 ft channel, unmaintained since ~1985) has no data at all.
+- E9 is judged on the calm-tide window only (tidecal2023may); not yet on the storm peaks
+  or Landsat (§39).
