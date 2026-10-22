@@ -29,8 +29,13 @@ Boundary: every run staged so far used v1's "gauges" boundary, so this script ke
 default and a run added to the matrix stays comparable with its siblings. ``--boundary chain``
 (FINDINGS §41) is for re-staging a whole set, under new names or after the old runs are moved.
 
+Creek links: the scenario weir files are cut from dikes.weir, whose banks close some tidal
+creeks at 100 m (FINDINGS §40). A model built on dikes_open.weir (e9_100m and later) takes
+``--open``: every scenario weir file is swapped for its ``<stem>_open.weir`` twin, made with
+``scripts/open_creek_links.py --weir <file> --out <stem>_open.weir``.
+
 Usage:  python scripts/setup_scenarios.py [--model v1_100m] [--breaches] [--restore] [--storms] [--submit] [--only NAME...]
-            [--boundary gauges|chain]
+            [--boundary gauges|chain] [--open]
 """
 
 from __future__ import annotations
@@ -111,11 +116,16 @@ def main() -> None:
     ap.add_argument("--submit", action="store_true")
     ap.add_argument("--only", nargs="*", default=None)
     ap.add_argument("--boundary", default="gauges", choices=["gauges", "chain"])
+    ap.add_argument("--open", action="store_true", help="use the <stem>_open.weir twin of every scenario weir file")
     a = ap.parse_args()
     static = config.MODELS / a.model
     for r in matrix(a.breaches, a.restore, a.storms):
         if a.only and r["name"] not in a.only:
             continue
+        if a.open and r.get("weir"):
+            r["weir"] = r["weir"].with_name(f"{r['weir'].stem}_open.weir")
+            if not r["weir"].exists():
+                raise SystemExit(f"{r['weir']} missing: scripts/open_creek_links.py --weir <closed file> --out {r['weir']}")
         run = static / "runs" / r["name"]
         if not run.exists():
             setup_event(static, EVENTS[r["event"]], r["name"],

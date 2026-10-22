@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-10-20** (bay boundary adopted, §41; creek depth sources, §42; measured-depth run E9, §43).
+Last updated: **2026-10-22** (E9 preview runs submitted; ag-econ direction: dike pay-off).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -13,8 +13,14 @@ NJ-VA. Gate: does modeled Sandy flooding explain crop change beyond elevation (E
 et al. 2023, `docs/refs/27000.pdf`)? If yes, Delaware Bay (both shores) next.
 
 ## Resume here
-- Sandy validated against the interior gauges (§33); 2012-field panel in
-  `data/analysis/sandy_panel/`, first look `reports/sandy_panel.md` (§34).
+- **E9 preview, 18 runs** (chain boundary, `setup_scenarios.py --open`; submit log
+  `models/e9_100m/runs/submit_e9_preview.log`): tide2024oct {intact, removed} × SLR {0, 0.3};
+  7 spring storms, tide and rain. Then: does §29's 1,117 ha dike-dependent move (sent to
+  Seowoo/James as ~2,760 acres)? And `validate_storm_{gauges,landsat}.py --model e9_100m` vs §39.
+- **Ag-econ direction (2026-10-22):** joint project = **dike pay-off** (repair cost vs farmland
+  kept farmable, over SLR; input = Next 3). Seowoo's exit result (leave ag 1-2 yr after a flood)
+  fails a rough re-check: gone without CDL 2024-25, fields return by yr 2-3. She was asked for
+  definitions + a 2008-23 re-run; Delaware model only if it holds. Crop choice, marsh on hold.
 - Ag-econ progress notebook: `notebooks/model_progress_agecon.ipynb`.
 
 ## In progress: creek beds (§39-§43)
@@ -40,8 +46,10 @@ Big Timber 0.47 → 0.97, Oldmans fixed as far as its soundings go, Cohansey at 
    per field (n_storms_tide).
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
-3. **Per-system breach runs** (18 systems) on tide2024oct with a scoured sill (MLLW): the
-   farmland each bank protects, against repair costs ($0.75-14 M). (§27, §30)
+3. **Per-system breach runs** (18 systems) on tide2024oct × SLR with a scoured sill (MLLW): the
+   farmland each bank protects, against repair costs ($0.75-14 M). (§27, §30) Now the dike
+   pay-off's input; run once on v2 beds with `--open`. Prep: MLLW-sill weirs for the 16 systems
+   that have only marsh-level breaches (only Middle Neck, Durham have them), plus `_open` twins.
 4. **Wetness exposure for the conversion model** (§31): rain-event ponding per field + SSURGO
    drainage → `data/analysis/farm_units.csv`. Decide first on open-water evaporation
    (`agri_sfincs/evap.py`; −40% cropland area-days wet on Sep 2023, §17).
