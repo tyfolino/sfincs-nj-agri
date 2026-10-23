@@ -80,5 +80,20 @@ class TestFillVirtual(unittest.TestCase):
             self.assertEqual(list(src[st]), [f"virtual:{d}"] * 2 + [""] + [f"virtual:{d}"])
 
 
+class TestSideChains(unittest.TestCase):
+    def test_de_chain_is_lewes_then_nj(self):
+        nj, nj_lag = waterlevel.CHAINS["nj"]
+        de, de_lag = waterlevel.CHAINS["de"]
+        self.assertEqual(de[0], "8557380")
+        self.assertEqual(de[1:], nj)
+        self.assertEqual(de_lag[1:], nj_lag)
+        for ids, lags in waterlevel.CHAINS.values():
+            self.assertEqual(len(lags), len(ids) - 1)
+
+    def test_lewes_is_filled_and_written(self):
+        self.assertIn("8557380", waterlevel.DONORS)
+        self.assertIn("8557380", waterlevel.EXTRA)
+
+
 if __name__ == "__main__":
     unittest.main()

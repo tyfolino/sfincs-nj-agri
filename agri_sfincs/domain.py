@@ -17,6 +17,8 @@ WBD spells Mantua Creek "Manuta Creek"; the name is kept as WBD serves it.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 EPSG = 32618  # UTM 18N, as nj_bight_sfincs
 STATE_FIPS = "34"
 
@@ -151,19 +153,35 @@ def huc12_codes() -> list[str]:
 #: Above ``head`` the stream is non-tidal and gets the surface-minus-depth rule.
 #: ``ehydro`` = the USACE eHydro channel name whose surveys REPLACE the chart soundings
 #: where they reach (user, 2026-10-05).
+#: v2 beds (2026-10-23, FINDINGS §42-43): ``nos`` = NOS hydrographic surveys (NCEI HYD93,
+#: data/channels/nos/<id>.a93.gz) as (survey id, MLW - MLLW in m: 0 for an MLLW survey), which
+#: come after eHydro and before the chart; ``stated`` = (lon, lat, depth below MLLW): from the
+#: centreline point nearest (lon, lat) down to the mouth, the bed is at least that deep (a
+#: charted controlling depth, or a calibrated effective depth where nothing was measured).
 TIDAL_REACHES = {
     "maurice":    {"river": "Maurice River",   "head": (-75.053997, 39.401027),
-                   "note": "head = Union Lake dam, Millville", "ehydro": "Maurice River"},
+                   "note": "head = Union Lake dam, Millville", "ehydro": "Maurice River",
+                   "ehydro_prefix": "MA_"},
     "cohansey":   {"river": "Cohansey River",  "head": (-75.235098, 39.446669),
-                   "note": "head = Bridgeton"},
+                   "note": "head = Bridgeton",
+                   # D00081 (1987) / H11070 (2001): the mouth to 39.349 N, MLLW
+                   "nos": [("D00081", 0.0), ("H11070", 0.0)],
+                   # From Fairton landing down: an EFFECTIVE depth, calibrated 2026-10-23 on the
+                   # calm-window tide (FINDINGS §45): 2.13 (7 ft, the Coast Pilot entrance
+                   # depth, e9) / 3.0 / 4.5 / 6.0 m took Greenwich 0.77 / 0.80 / 0.84 / 0.87
+                   # and the held-out Tindalls Wharf 0.36 / 0.47 / 0.63 / 0.75; 6 m is inside
+                   # the 1906 survey (30-40 ft, one ~7 ft bar) and the CSB (4.5-8.4 m), and
+                   # likely also stands in for channel width the painted strip lacks
+                   "stated": (-75.2301, 39.3811, 6.0)},
     "salem":      {"river": "Salem River",     "head": (-75.477245, 39.670411),
-                   "note": "head = NJDEP point north of Salem", "ehydro": "Salem River"},
+                   "note": "head = NJDEP point north of Salem", "ehydro": "Salem River",
+                   "ehydro_prefix": "SA_"},
     "alloway":    {"river": "Alloway Creek",   "head": (-75.360844, 39.564649),
-                   "note": "head = Alloway Lake dam, Alloway"},
+                   "note": "head = Alloway Lake dam, Alloway", "nos": [("H10112", 0.0)]},
     "stow":       {"river": "Stow Creek",      "head": (-75.361918, 39.465272),
                    "note": "head = NJDEP point"},
     "oldmans":    {"river": "Oldmans Creek",   "head": (-75.341584, 39.704183),
-                   "note": "head = NJDEP point above Auburn"},
+                   "note": "head = NJDEP point above Auburn", "nos": [("H10027", 0.0)]},
     "raccoon":    {"river": "Raccoon Creek",   "head": (-75.276262, 39.742546),
                    "note": "head = Swedesboro"},
     "mantua":     {"river": "Mantua Creek",    "head": (-75.155693, 39.786579),
@@ -172,7 +190,9 @@ TIDAL_REACHES = {
                    "note": "head = Woodbury"},
     "big_timber": {"river": "Big Timber Creek", "head": (-75.081778, 39.809432),
                    "note": "head = NJDEP point on the South Branch (the North "
-                           "Branch is all Camden County)"},
+                           "Branch is all Camden County)",
+                   # H09886 (1980) is on MLW: MLW - MLLW = 0.058 m (Philadelphia, Pier 11)
+                   "nos": [("H09886", 0.058)]},
 }
 # fmt: on
 
@@ -199,3 +219,137 @@ ZOOMS = {
     "Cumberland bayshore: Greenwich to the Maurice River": (-75.40, 39.21, -74.93, 39.42),
 }
 # fmt: on
+
+
+# ── the two sides (2026-10-23) ────────────────────────────────────────────────
+# Delaware state joins as a TWIN grid (user, 2026-10-23): the bay-draining watersheds from
+# the C&D Canal south to Lewes, its own SFINCS model, forced on the same mid-bay state line as
+# NJ with the same gauge chain. One region, one analysis. The NJ constants above stay as they
+# were (every NJ script reads them); ``SIDES`` holds both sides for code that takes --side.
+
+# fmt: off
+#: Delaware: HUC12 -> WBD name, north (the canal) to south (Lewes). WBD spellings kept
+#: ("Smryna", "Lepsic", "Issac", "Missipillion"). NOT 020402050705 "Chesapeake and Delaware
+#: Canal-Frontal Delaware River": the canal is the north edge (user, 2026-10-23), nor the
+#: Christina / Brandywine units north of it.
+DE_HUC12 = {
+    # HUC8 02040205 Brandywine-Christina, south of the canal
+    "020402050801": "Augustine Creek-Frontal Delaware River",
+    "020402050802": "Appoquinimink River-Frontal Delaware River",
+    "020402050803": "Blackbird Creek-Frontal Delaware River",
+    # HUC8 02040207 Broadkill-Smyrna
+    "020402070101": "Duck Creek",
+    "020402070102": "Smryna River",
+    "020402070103": "Cedar Swamp-Frontal Delaware Bay",
+    "020402070201": "Upper Leipsic River",
+    "020402070202": "Lower Lepsic River",
+    "020402070203": "Duck Creek-Frontal Delaware Bay",
+    "020402070204": "Simons River-Frontal Delaware Bay",
+    "020402070205": "Little River-Frontal Delaware Bay",
+    "020402070301": "Upper Saint Jones River",
+    "020402070302": "Issac Branch",
+    "020402070303": "Tidbury Creek",
+    "020402070304": "Lower Saint Jones River",
+    "020402070401": "Spring Branch-Murderkill River",
+    "020402070402": "Browns Branch",
+    "020402070403": "Spring Creek",
+    "020402070404": "Ash Gut-Murderkill River",
+    "020402070405": "Murderkill River",
+    "020402070406": "Brockonbridge Gut-Frontal Delaware Bay",
+    "020402070501": "Upper Mispillion River",
+    "020402070502": "Upper Cedar Creek",
+    "020402070503": "Middle Mispillion River",
+    "020402070504": "Slaughter Creek-Frontal Delaware Bay",
+    "020402070505": "Lower Cedar Creek",
+    "020402070506": "Lower Missipillion River",
+    "020402070507": "Grecos Canal-Delaware Bay",
+    "020402070601": "Round Pole Branch-Broadkill River",
+    "020402070602": "Primehook Creek",
+    "020402070603": "Beaverdam Creek-Broadkill River",
+    "020402070604": "Canary Creek-Broadkill River",
+    "020402070605": "Breakwater Harbor-Delaware Bay",
+}
+DE_COUNTIES = {"10003": "New Castle", "10001": "Kent", "10005": "Sussex"}
+#: Delaware's tidal reaches, as TIDAL_REACHES. ``head`` = the lowest dam (USACE NID,
+#: data/structures/structures_de.gpkg), else nj_bight_sfincs' head of tide (its
+#: scripts/build_riverbeds_hierarchy_v4.py, whose survey lists these copy). MLW surveys:
+#: MLW - MLLW = 0.05 m (Lewes 0.048, Reedy Point 0.055, CO-OPS 1983-2001).
+DE_TIDAL_REACHES = {
+    "appoquinimink": {"river": "Appoquinimink River", "head": (-75.6831, 39.4344),
+                      "note": "head = Noxontown Pond dam", "nos": [("H10200", 0.0)]},
+    "blackbird":     {"river": "Blackbird Creek",     "head": (-75.6510, 39.3765),
+                      "note": "head = bight's head of tide (no dam)", "nos": [("H10200", 0.0)]},
+    "smyrna":        {"river": "Smyrna River",        "head": (-75.6004, 39.2968),
+                      "note": "head = Lake Como dam, Smyrna", "nos": [("D00081", 0.0)]},
+    "duck":          {"river": "Duck Creek",          "head": (-75.6227, 39.3082),
+                      "note": "head = Duck Creek Pond dam"},
+    "leipsic":       {"river": "Leipsic River",       "head": (-75.5884, 39.2440),
+                      "note": "head = Garrisons Lake dam", "nos": [("H10255", 0.0)]},
+    "little_river":  {"river": "Little River",        "head": (-75.4632, 39.1615),
+                      "note": "head = Cartanza dam", "ehydro": "Little River", "ehydro_prefix": "LI_"},
+    "st_jones":      {"river": "St Jones River",      "head": (-75.5216, 39.1683),
+                      "note": "head = Silver Lake dam, Dover", "nos": [("H10079", 0.0)]},
+    "murderkill":    {"river": "Murderkill River",    "head": (-75.5105, 38.9889),
+                      "note": "head = Coursey Pond dam", "ehydro": "Murderkill River",
+                      "ehydro_prefix": "MU_", "nos": [("H10079", 0.0), ("H06254", 0.05)]},
+    "mispillion":    {"river": "Mispillion River",    "head": (-75.4330, 38.9113),
+                      "note": "head = Silver Lake dam, Milford"},
+    "cedar_de":      {"river": "Cedar Creek",         "head": (-75.3774, 38.8691),
+                      "note": "head = Swiggetts Pond dam"},
+    "broadkill":     {"river": "Broadkill River",     "head": (-75.3129, 38.7773),
+                      "note": "head = Wagamons Pond dam, Milton",
+                      "nos": [("H09202", 0.05), ("H09203", 0.05), ("H07034", 0.05)]},
+}
+#: Delaware gauges known to matter (nj_bight_sfincs v4's DE list)
+DE_USGS_SITES = {
+    "01484085": "Murderkill R. at Bowers (tidal)",
+    "01484080": "Murderkill R. at Frederica (tidal)",
+    "01483700": "St Jones R. at Dover",
+    "01484100": "Beaverdam Br. at Houston (Mispillion)",
+}
+#: The open-bay HUC12 between the DE frontal units and NJ's ring. NJ's frontal units run out to
+#: the state line but Delaware's stop up to ~8 km offshore, so the bay unit (both states) fills
+#: the gap: with it the DE ring meets NJ's along the state line (133 km), the line both grids
+#: are forced on. Clipped at ``DE_BAY_MAX_LAT`` (Reedy Point, the canal's mouth): north of it
+#: the unit is the river beside the Christina basin, outside the DE side.
+DE_BAY_HUC12 = "020402040000"
+DE_BAY_MAX_LAT = 39.558
+#: The C&D Canal unit: NOT in DE_HUC12, but its part SOUTH of the canal (DE land between the
+#: canal and Augustine Creek, and its river frontage to Port Penn) is in the DE ring, from
+#: data/region/de_canal_south.geojson (scripts/split_canal_unit.py).
+DE_CANAL_HUC12 = "020402050705"
+# fmt: on
+
+
+@dataclass(frozen=True)
+class Side:
+    """Everything that differs between the NJ and DE models. ``files`` = the suffix of the
+    side's region files and model names ("" for NJ, which keeps its original names)."""
+
+    key: str
+    state: str  # postal abbreviation, also agri_sfincs.fields' state key
+    state_fips: str
+    huc12: dict
+    counties: dict
+    counties_fringe: dict
+    foreign_fips: dict  # states whose LAND is cut out of the model outline
+    tidal_reaches: dict
+    usgs_sites: dict
+    ref_gauge: str  # the bay gauge that times a storm's peak (FINDINGS §37)
+    files: str
+    bay_huc12: str = ""  # an open-water HUC12 added to the ring, clipped north at bay_max_lat
+    bay_max_lat: float = 90.0
+
+
+SIDES = {
+    "nj": Side("nj", "NJ", STATE_FIPS, HUC12, COUNTIES, COUNTIES_FRINGE, {"42": "PA", "10": "DE"},
+               TIDAL_REACHES, USGS_SITES, SHIP_JOHN, ""),
+    "de": Side("de", "DE", "10", DE_HUC12, DE_COUNTIES, {}, {"34": "NJ", "42": "PA", "24": "MD"},
+               DE_TIDAL_REACHES, DE_USGS_SITES, SHIP_JOHN, "_de", DE_BAY_HUC12, DE_BAY_MAX_LAT),
+}  # fmt: skip
+
+
+def side(key: str = "nj") -> Side:
+    if key not in SIDES:
+        raise ValueError(f"no side {key!r} (have {sorted(SIDES)})")
+    return SIDES[key]

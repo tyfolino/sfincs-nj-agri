@@ -1,5 +1,5 @@
-"""Hourly NAVD88 water levels at the five forcing gauges and the two virtual NJ-shore gauges,
-2002-2025, gaps filled.
+"""Hourly NAVD88 water levels at the five forcing gauges, the two virtual NJ-shore gauges and
+Lewes (waterlevel.EXTRA: the DE chain's mouth end, 2026-10-23), 2002-2025, gaps filled.
 
 Inputs: the observed hourly MLLW files from scripts/gauge_inventory.py
 (data/gauges/noaa/<id>_hourly_mllw.csv.gz). Downloads and caches NOAA hourly tide
@@ -67,11 +67,11 @@ def main() -> None:
     involved = sorted(set(waterlevel.FORCING) | {d for v in waterlevel.DONORS.values() for d in v})
     obs = {s: observed(s) for s in involved}
     pred = {s: predicted(s, years) for s in involved + sorted(VIRTUAL)}
-    levels, source = waterlevel.fill_gaps(obs, pred, index)
+    levels, source = waterlevel.fill_gaps(obs, pred, index, waterlevel.FORCING + waterlevel.EXTRA)
     vlev, vsrc = waterlevel.fill_virtual(pred, levels, index)
     levels, source = levels.join(vlev), source.join(vsrc)
 
-    ids = waterlevel.FORCING + sorted(VIRTUAL)
+    ids = waterlevel.FORCING + sorted(VIRTUAL) + waterlevel.EXTRA
     offsets, hows = {}, {}
     for st in ids:
         off, how = waterlevel.navd_minus_mllw(st, STATIONS[st].get("navd_from"), own_tie=st not in VIRTUAL)

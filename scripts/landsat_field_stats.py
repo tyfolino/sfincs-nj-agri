@@ -28,11 +28,8 @@ Usage:  python scripts/landsat_field_stats.py [--workers 12] [--limit N] [--merg
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import threading
 import time
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import geopandas as gpd
@@ -46,12 +43,11 @@ from rasterio.vrt import WarpedVRT
 
 from agri_sfincs import config, domain
 from agri_sfincs import landsat as ls
+from agri_sfincs.landsat_stac import Token, search
 
 UNITS = config.LANDUSE_DIR / "field_units.gpkg"
 PARTS = config.LANDSAT_DIR / "parts"
 OUT = config.LANDSAT_DIR / "field_scene_stats.parquet"
-STAC = "https://planetarycomputer.microsoft.com/api/stac/v1/search"
-SAS = "https://planetarycomputer.microsoft.com/api/sas/v1/token/landsat-c2-l2"
 MAX_CLOUD, INSET_M, RES = 60, 15.0, 30.0
 BANDS = ["blue", "green", "red", "nir08", "swir16", "qa_pixel"]
 CRS = f"EPSG:{domain.EPSG}"
@@ -59,41 +55,6 @@ CRS = f"EPSG:{domain.EPSG}"
 os.environ.update({"GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR", "GDAL_HTTP_MAX_RETRY": "5",
                    "GDAL_HTTP_RETRY_DELAY": "3", "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": ".tif",
                    "GDAL_CACHEMAX": "256"})  # fmt: skip
-
-
-class Token:
-    """Planetary Computer SAS token for landsat-c2, refreshed every 20 minutes."""
-
-    def __init__(self):
-        self._lock, self._tok, self._t = threading.Lock(), None, 0.0
-
-    def get(self) -> str:
-        with self._lock:
-            if self._tok is None or time.time() - self._t > 1200:
-                with urllib.request.urlopen(SAS, timeout=60) as r:
-                    self._tok = json.load(r)["token"]
-                self._t = time.time()
-            return self._tok
-
-
-def search(bbox_ll) -> list[dict]:
-    body = {"collections": ["landsat-c2-l2"], "bbox": list(bbox_ll), "limit": 1000,
-            "datetime": "1984-01-01T00:00:00Z/2025-12-31T23:59:59Z",
-            "query": {"eo:cloud_cover": {"lt": MAX_CLOUD}}}  # fmt: skip
-    feats, req = [], urllib.request.Request(STAC, data=json.dumps(body).encode(),
-                                            headers={"Content-Type": "application/json"})  # fmt: skip
-    while req is not None:
-        with urllib.request.urlopen(req, timeout=180) as r:
-            d = json.load(r)
-        feats += d["features"]
-        nxt = [lk for lk in d.get("links", []) if lk.get("rel") == "next"]
-        req = None
-        if nxt:
-            n = nxt[0]
-            req = urllib.request.Request(n["href"], data=json.dumps(n.get("body", {})).encode()
-                                         if n.get("method", "GET") == "POST" else None,
-                                         headers={"Content-Type": "application/json"})  # fmt: skip
-    return feats
 
 
 def grid_and_labels(units: gpd.GeoDataFrame, inset_m: float = INSET_M):
@@ -184,7 +145,7 @@ def main() -> None:
     tr, shape, labels = grid_and_labels(units, a.inset)
     n_units = int(units.unit.max())
     print(f"grid {shape}, {np.unique(labels).size - 1} of {n_units} units have interior pixels")
-    items = search(units.to_crs(4326).total_bounds)
+    items = search(units.to_crs(4326).total_bounds, max_cloud=MAX_CLOUD)
     items.sort(key=lambda f: f["properties"]["datetime"])
     if a.limit:
         items = items[: a.limit]

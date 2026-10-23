@@ -5,6 +5,9 @@ data/*
 data/*/*
 !data/region/ring.geojson
 !data/region/model_outline.geojson
+!data/region/ring_de.geojson
+!data/region/model_outline_de.geojson
+!data/region/de_canal_south.geojson
 !data/gauges/*.csv
 
 logs/

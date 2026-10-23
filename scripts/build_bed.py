@@ -22,11 +22,16 @@ Rules, per pixel on the lidar's own grid (3.505e-5 deg, ~3.9 m):
   5  ... else GMRT ~100 m                                                  src=5
 Other sources are resampled bilinearly onto the lidar grid.
 
+Delaware (``--side de``, 2026-10-23): the same rules with the DE statewide lidar
+(USGS 3DEP 1 m DE_Statewide_B23, hydro-flattened, on the NJ lidar's lattice:
+scripts/fetch_de_lidar.py) in the lidar's place, over the DE outline.
+
 Writes data/elevation/bed_merged.tif (float32, m NAVD88, nodata -9999) and
 data/elevation/bed_source.tif (uint8 codes above), both over the model outline bbox +
-1 km, tiled and compressed, then prints the area per source.
+1 km, tiled and compressed, then prints the area per source. Delaware: bed_merged_de.tif,
+bed_source_de.tif.
 
-Usage:  python scripts/build_bed.py [--overwrite]
+Usage:  python scripts/build_bed.py [--side nj|de] [--overwrite]
 """
 
 from __future__ import annotations
@@ -46,7 +51,8 @@ DEEPER_M = 0.5
 TILE = 4096
 NODATA = -9999.0
 OUT_DIR = config.ELEV_DIR
-LIDAR = config.BIGHT_DATA / "elevation_v4/nj_10ft_dem_v4.tif"
+LIDAR = {"nj": config.BIGHT_DATA / "elevation_v4/nj_10ft_dem_v4.tif",
+         "de": config.DATA_BULK / "elevation/de_lidar_b23.tif"}
 OTHERS = {  # src code -> path, in fall-through order
     3: config.BIGHT_DATA / "elevation_v4/cudem_delaware_v4.vrt",
     4: config.BIGHT_DATA / "elevation_v4/dep3_v4.vrt",
@@ -78,15 +84,17 @@ def _read(ds, win, shape) -> np.ndarray:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
     ap.add_argument("--overwrite", action="store_true")
     a = ap.parse_args()
-    out_bed, out_src = OUT_DIR / "bed_merged.tif", OUT_DIR / "bed_source.tif"
+    sfx = domain.side(a.side).files
+    out_bed, out_src = OUT_DIR / f"bed_merged{sfx}.tif", OUT_DIR / f"bed_source{sfx}.tif"
     if out_bed.exists() and not a.overwrite:
         raise SystemExit(f"{out_bed} exists; pass --overwrite")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    with rasterio.open(LIDAR) as li:
-        b = region.load_outline().to_crs(domain.EPSG).buffer(1000).to_crs(li.crs).total_bounds
+    with rasterio.open(LIDAR[a.side]) as li:
+        b = region.load_outline(a.side).to_crs(domain.EPSG).buffer(1000).to_crs(li.crs).total_bounds
         full = from_bounds(*b, transform=li.transform).round_offsets().round_lengths()
         tr = li.window_transform(full)
         prof = dict(driver="GTiff", width=full.width, height=full.height, count=1,

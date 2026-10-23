@@ -58,7 +58,7 @@ import xarray as xr
 from rasterio.features import rasterize
 from rasterio.windows import from_bounds
 
-from agri_sfincs import cdl, config, domain, exposure, fieldflood, landuse, runs
+from agri_sfincs import cdl, config, domain, exposure, fieldflood, fields, landuse, runs
 from agri_sfincs.events import EVENTS
 
 OUT = config.ANALYSIS_DIR / "sandy_panel"
@@ -77,21 +77,9 @@ STORMS = ["sandy2012", "storm2012dec", "storm2016jan", "storm2021oct", "storm201
 
 
 def load_fields() -> gpd.GeoDataFrame:
-    """LU/LC farm polygons of 2012 in the study counties: field_id 1..N, ha, county,
-    behind_levee, lulc2012 / 2015 / 2020 (EPSG:32618)."""
-    g = gpd.read_file(config.LANDUSE_DIR / "njlulc_2012_2015.gpkg").to_crs(domain.EPSG)
-    g = g[g.prev.map(landuse.is_farmed)].explode(index_parts=False).reset_index(drop=True)
-    g = fieldflood.add_county_levee(g[["prev", "next", "geometry"]])
-    g = g.rename(columns={"prev": "lulc2012", "next": "lulc2015"})
-    g["field_id"] = np.arange(1, len(g) + 1)
-    g["ha"] = g.area / 1e4
-    l20 = gpd.read_file(config.LANDUSE_DIR / "njlulc_2015_2020.gpkg").to_crs(domain.EPSG)[["next", "geometry"]]
-    x = gpd.overlay(g[["field_id", "geometry"]], l20, how="intersection", keep_geom_type=True)
-    x["a"] = x.area
-    best = x.sort_values("a", ascending=False).drop_duplicates("field_id").set_index("field_id")["next"]
-    farm15 = g.lulc2015.map(landuse.is_farmed)
-    g["lulc2020"] = g.field_id.map(best).where(farm15).astype("Int64")
-    return g[["field_id", "county", "ha", "behind_levee", "lulc2012", "lulc2015", "lulc2020", "geometry"]]
+    """LU/LC farm polygons of 2012 in the study counties (agri_sfincs.fields): field_id 1..N,
+    ha, county, behind_levee, lulc2012 / 2015 / 2020 (EPSG:32618)."""
+    return fields.load("NJ").drop(columns="state")
 
 
 def sandy_columns(g: gpd.GeoDataFrame, px) -> pd.DataFrame:
@@ -188,30 +176,8 @@ def soil_columns(g: gpd.GeoDataFrame) -> pd.DataFrame:
 
 def cdl_panel(g: gpd.GeoDataFrame) -> tuple[pd.DataFrame, pd.DataFrame, list[int]]:
     """Per field: n_cdl_px, cdl_px_fallback. Per field x year: group shares, cropland,
-    dom_code, dom_name. Also the CDL years not on disk."""
-    with rasterio.open(cdl.path(2025)) as c:
-        gg = g.to_crs(c.crs)
-        win = from_bounds(*gg.total_bounds, transform=c.transform).round_offsets().round_lengths()
-        tr, shape = c.window_transform(win), (int(win.height), int(win.width))
-    zone, flat, fallback = cdl.polygon_pixels(gg.geometry, shape, tr)
-    n, fid = len(g), g.field_id.values
-    crop_cols = [f"share_{k}" for k in ("corn", "soybeans", "other_grains", "hay", "idle", "other_crops")]
-    rows, missing = [], []
-    for y in YEARS:
-        if not cdl.path(y).exists():
-            missing.append(y)
-            continue
-        t = cdl.zone_cover(zone, cdl.read(y, win).ravel()[flat], n)
-        t.insert(0, "field_id", fid)
-        t.insert(1, "year", y)
-        t["cropland"] = t[crop_cols].sum(axis=1, min_count=1)
-        t["dom_name"] = t.dom_code.map(lambda c: cdl.name(c) if c >= 0 else "")
-        rows.append(t)
-    fy = pd.concat(rows, ignore_index=True)
-    fy = fy[[c for c in fy.columns if c not in ("dom_code", "dom_name")] + ["dom_code", "dom_name"]]
-    static = pd.DataFrame({"n_cdl_px": rows[0].n_px.values, "cdl_px_fallback": False}, index=fid)
-    static.loc[fid[fallback - 1], "cdl_px_fallback"] = True
-    return static, fy.drop(columns="n_px"), missing
+    dom_code, dom_name. Also the CDL years not on disk (agri_sfincs.cdl.field_years)."""
+    return cdl.field_years(g, YEARS)
 
 
 def _shift(fy: pd.DataFrame, f: pd.DataFrame) -> str:

@@ -36,6 +36,24 @@ class TestDomainRegistry(unittest.TestCase):
         for east_of_west_creek in ("020402060701", "020402060702"):
             self.assertNotIn(east_of_west_creek, domain.HUC12)
 
+    def test_sides(self):
+        de = domain.side("de")
+        self.assertEqual(len(de.huc12), 33)
+        self.assertTrue(all(len(c) == 12 and c.isdigit() for c in de.huc12))
+        self.assertFalse(set(de.huc12) & set(domain.HUC12))
+        self.assertNotIn("020402050705", de.huc12)  # the C&D Canal unit is the edge, not in
+        self.assertNotIn(de.bay_huc12, de.huc12)
+        self.assertEqual(domain.side("nj").huc12, domain.HUC12)
+        self.assertEqual(domain.side("nj").files, "")
+        with self.assertRaises(ValueError):
+            domain.side("md")
+
+    def test_side_files(self):
+        self.assertEqual(region.ring_file("nj"), region.RING_FILE)
+        self.assertEqual(region.outline_file("nj"), region.OUTLINE_FILE)
+        self.assertEqual(region.ring_file("de").name, "ring_de.geojson")
+        self.assertEqual(region.huc12_layer("de"), "domain_de")
+
     def test_study_and_fringe_counties_disjoint(self):
         self.assertFalse(set(domain.COUNTIES) & set(domain.COUNTIES_FRINGE))
 

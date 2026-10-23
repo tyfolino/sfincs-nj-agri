@@ -9,8 +9,9 @@ SFINCS's job there is the same event under different conditions (farmed vs resto
 vs breached bank, today vs sea-level rise). The insurance question is kept as a basic
 cross-county flood × rain test without SFINCS (done, null; archived 2026-10-15).
 
-The plan is `~/.claude/plans/compressed-humming-eclipse.md` (approved 2026-10-05; it supersedes
-`dynamic-squishing-heron.md`, 2026-10-02). What is happening now is in [docs/STATUS.md](docs/STATUS.md); what is believed true is in
+The plan is `~/.claude/plans/no-need-to-draft-idempotent-goblet.md` (approved 2026-10-23:
+cleanup, v2 creek beds, a Delaware twin model, the Delaware exit check; it supersedes
+`compressed-humming-eclipse.md`, 2026-10-05). What is happening now is in [docs/STATUS.md](docs/STATUS.md); what is believed true is in
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
 ## Decisions (user, 2026-10-02)
@@ -18,13 +19,20 @@ The plan is `~/.claude/plans/compressed-humming-eclipse.md` (approved 2026-10-05
 - **Whole watersheds.** The domain is 38 WBD HUC12s from Big Timber Creek (the
   Camden/Gloucester line) to West Creek (the Cumberland/Cape May line). Area outside
   the three counties stays in the model and is clipped out at analysis time.
-- **Delaware side only.** Gloucester's Great Egg Harbor headwaters are out. They hold
+- **Delaware-draining side only.** Gloucester's Great Egg Harbor headwaters are out. They hold
   ~10% of Gloucester cropland (`reports/cropland_coverage.md`).
 - **Downstream boundary:** observed NOAA Delaware River/Bay gauges. Flooding is
   expected to be mostly pluvial/fluvial.
 - **Rain:** MRMS where it exists (gauge-corrected hourly from mid-2015; Pass2 from
   October 2020), Stage IV before that. Whether sub-hourly (flash-flood) rain matters
   is TESTED on a few convective events, not assumed.
+
+## Decisions (user, 2026-10-23)
+
+- **Delaware state joins as a TWIN grid**, C&D Canal south to Lewes (Appoquinimink …
+  Broadkill; no Christina / Brandywine, no PA). Its bay edge is the same mid-bay state line
+  NJ is forced on, with the same gauge chain; one region, one analysis, two SFINCS grids.
+- **Defunct scripts are deleted** (git keeps them), not archived.
 
 ## Layout
 

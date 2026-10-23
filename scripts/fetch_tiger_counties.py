@@ -1,4 +1,5 @@
-"""Download New Jersey county boundaries (Census TIGERweb) to data/region/counties.gpkg.
+"""Download New Jersey and Delaware county boundaries (Census TIGERweb) to
+data/region/counties.gpkg (one file, both sides; agri_sfincs.domain.SIDES).
 
 Columns: ``fips`` (5-digit), ``name`` (e.g. "Salem"), geometry (EPSG:4326).
 
@@ -26,13 +27,15 @@ def main() -> None:
         raise SystemExit(f"{region.COUNTIES_FILE} exists; pass --overwrite")
     config.REGION_DIR.mkdir(parents=True, exist_ok=True)
 
-    gdf = arcgis_query(TIGER_COUNTIES, f"STATE='{domain.STATE_FIPS}'", "STATE,COUNTY,NAME")
+    states = sorted({sd.state_fips for sd in domain.SIDES.values()})
+    gdf = arcgis_query(TIGER_COUNTIES, "STATE IN (" + ",".join(f"'{s}'" for s in states) + ")", "STATE,COUNTY,NAME")
     gdf["fips"] = gdf["STATE"] + gdf["COUNTY"]
     gdf["name"] = gdf["NAME"].str.replace(" County", "", regex=False)
     gdf = gdf[["fips", "name", "geometry"]].sort_values("fips").reset_index(drop=True)
-    if len(gdf) != 21:
-        raise RuntimeError(f"expected NJ's 21 counties, got {len(gdf)}")
-    for fips, name in {**domain.COUNTIES, **domain.COUNTIES_FRINGE}.items():
+    if len(gdf) != 21 + 3:
+        raise RuntimeError(f"expected NJ's 21 and DE's 3 counties, got {len(gdf)}")
+    want = {k: v for sd in domain.SIDES.values() for k, v in {**sd.counties, **sd.counties_fringe}.items()}
+    for fips, name in want.items():
         if gdf.loc[gdf.fips == fips, "name"].tolist() != [name]:
             raise RuntimeError(f"county {fips} is not {name!r} in TIGER")
     gdf.to_file(region.COUNTIES_FILE, driver="GPKG")

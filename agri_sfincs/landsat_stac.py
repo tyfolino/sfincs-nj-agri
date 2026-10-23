@@ -1,9 +1,11 @@
 """Read whole Landsat C2 L2 scenes of one day from Microsoft Planetary Computer onto a grid.
 
-For single-scene checks (scripts/validate_storm_landsat.py). The 40-year per-field pipeline,
-scripts/landsat_field_stats.py, keeps its own threaded copy of the search and token code.
+For single-scene checks (scripts/validate_storm_landsat.py) and the 40-year per-field pipeline
+(scripts/landsat_field_stats.py, which uses ``search`` and the thread-safe ``Token``).
 
 * ``items_on(day, bbox_ll)``: every ``landsat-c2-l2`` item acquired that UTC day over the box.
+* ``search(bbox_ll, start, end, max_cloud)``: every item over the box in a date range, paged.
+* ``Token``: the SAS token, shared across threads and refreshed every 20 minutes.
 * ``mosaic(items, bands, tr, shape, crs)``: each band read through a WarpedVRT onto the grid
   (nearest), items in the order given; a pixel keeps the first item with a valid QA there.
 """
@@ -12,6 +14,8 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
 import urllib.request
 
 import numpy as np
@@ -31,8 +35,39 @@ os.environ.setdefault("GDAL_HTTP_RETRY_DELAY", "3")
 def _json(url: str, body: dict | None = None) -> dict:
     req = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})  # fmt: skip
-    with urllib.request.urlopen(req, timeout=120) as r:
+    with urllib.request.urlopen(req, timeout=180) as r:
         return json.load(r)
+
+
+class Token:
+    """Planetary Computer SAS token for landsat-c2, refreshed every 20 minutes."""
+
+    def __init__(self):
+        self._lock, self._tok, self._t = threading.Lock(), None, 0.0
+
+    def get(self) -> str:
+        with self._lock:
+            if self._tok is None or time.time() - self._t > 1200:
+                self._tok, self._t = _json(SAS)["token"], time.time()
+            return self._tok
+
+
+def search(bbox_ll, start: str = "1984-01-01", end: str = "2025-12-31", max_cloud: float = 60) -> list[dict]:
+    """Every ``landsat-c2-l2`` item over ``bbox_ll`` (lon/lat) from ``start`` to ``end``
+    (YYYY-MM-DD, inclusive) with cloud cover below ``max_cloud`` %, following "next" pages."""
+    body = {"collections": ["landsat-c2-l2"], "bbox": list(bbox_ll), "limit": 1000,
+            "datetime": f"{start}T00:00:00Z/{end}T23:59:59Z",
+            "query": {"eo:cloud_cover": {"lt": max_cloud}}}  # fmt: skip
+    feats, url = [], STAC
+    while url is not None:
+        d = _json(url, body)
+        feats += d["features"]
+        nxt = [lk for lk in d.get("links", []) if lk.get("rel") == "next"]
+        url, body = None, None
+        if nxt:
+            url = nxt[0]["href"]
+            body = nxt[0].get("body", {}) if nxt[0].get("method", "GET") == "POST" else None
+    return feats
 
 
 def items_on(day: str, bbox_ll) -> list[dict]:

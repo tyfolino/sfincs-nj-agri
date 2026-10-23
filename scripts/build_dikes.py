@@ -41,39 +41,22 @@ from agri_sfincs.cdl import CROPLAND
 from agri_sfincs.dikes import (
     C_HI,
     C_LO,
+    RIDGE_HALF_M,
+    STEP_M,
     Bed,
     fill_notches,
     lines_of,
+    ridge_along,
     write_drn,
     write_weir,
 )
 from agri_sfincs.report import md_table
 
 STRUCT = config.STRUCT_DIR
-STEP_M = 5.0
-RIDGE_HALF_M = 20.0
-RIDGE_OFFSETS = np.arange(-RIDGE_HALF_M, RIDGE_HALF_M + 0.1, 4.0)
 FARM_CROP_KM2 = 0.1
 CDL_YEAR = 2023
 GATE_RMIN, GATE_RMAX, GATE_GRID = 120.0, 400.0, 20.0
 GATE_CLEAR_M, GATE_SEP_M = 60.0, 150.0
-def ridge_along(line: LineString, bed: Bed):
-    """Stations s, points (x, y) every STEP_M, and the ridge = max bed across ±RIDGE_HALF_M."""
-    s = np.append(np.arange(0.0, line.length, STEP_M), line.length)
-    pts = [line.interpolate(v) for v in s]
-    x, y = np.array([p.x for p in pts]), np.array([p.y for p in pts])
-    tx, ty = np.gradient(x), np.gradient(y)
-    norm = np.hypot(tx, ty)
-    norm[norm == 0] = 1.0
-    nx, ny = -ty / norm, tx / norm
-    X = x[:, None] + nx[:, None] * RIDGE_OFFSETS[None, :]
-    Y = y[:, None] + ny[:, None] * RIDGE_OFFSETS[None, :]
-    z = bed.sample(X.ravel(), Y.ravel()).reshape(X.shape)
-    with np.errstate(all="ignore"):
-        ridge = np.where(np.isfinite(z).any(axis=1), np.nanmax(z, axis=1), np.nan)
-    return s, x, y, ridge
-
-
 def cropland_km2(areas: gpd.GeoDataFrame) -> np.ndarray:
     with rasterio.open(cdl.path(CDL_YEAR)) as c:
         with WarpedVRT(c, crs=f"EPSG:{domain.EPSG}", resolution=30) as v:

@@ -97,42 +97,6 @@ class TestScenarios(unittest.TestCase):
         self.assertTrue((out[8:13] == 0.8).all())
 
 
-class TestNetworkWalk(unittest.TestCase):
-    """build_dike_outlets.walk: along a 3-reach chain A -> B -> C (each 100 m, west to east)."""
-
-    def setUp(self):
-        import sys
-
-        import geopandas as gpd
-        from shapely.geometry import LineString
-
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-        import build_dike_outlets
-
-        self.walk = build_dike_outlets.walk
-        self.fl = gpd.GeoDataFrame(
-            {"hydroseq": [3.0, 2.0, 1.0], "dnhydroseq": [2.0, 1.0, 0.0]},
-            geometry=[LineString([(0, 0), (100, 0)]), LineString([(100, 0), (200, 0)]),
-                      LineString([(200, 0), (300, 0)])], crs=32618)  # fmt: skip
-
-    def test_downstream_crosses_reaches_and_stops(self):
-        x, _, d = self.walk(self.fl, 3.0, 50.0, down=True, max_m=180.0)
-        self.assertAlmostEqual(x[0], 50.0)
-        self.assertLessEqual(d.max(), 180.0)
-        self.assertGreater(x.max(), 200.0)  # reached reach C
-        self.assertTrue(np.all(np.diff(x) > 0))
-
-    def test_upstream_goes_west(self):
-        x, _, d = self.walk(self.fl, 1.0, 50.0, down=False, max_m=120.0)
-        self.assertAlmostEqual(x[0], 250.0)
-        self.assertLess(x.min(), 200.0)  # into reach B
-        self.assertTrue(np.all(np.diff(x) < 0))
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestDropCrossings(unittest.TestCase):
     def test_split_at_link(self):
         x = np.arange(0.0, 50.0, 10.0)  # 0 .. 40 along y = 5
@@ -150,3 +114,7 @@ class TestDropCrossings(unittest.TestCase):
         out, n = dikes.drop_crossings([("far", x + 100, y, z), ("stub", x, y, z)], [((5.0, 0.0), (5.0, 10.0))])
         self.assertEqual(n, 1)  # the stub's only segment goes; nothing of 2+ vertices is left
         self.assertEqual([o[0] for o in out], ["far"])
+
+
+if __name__ == "__main__":
+    unittest.main()

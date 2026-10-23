@@ -2,6 +2,12 @@
 
 Durable facts, each with where it came from. STATUS holds what is in progress.
 
+**Scripts deleted 2026-10-23** (closed lines; in git at `4c8dd95`): storm_ndvi, plot_sandy_panel,
+storm_overlap, imagery_spotcheck, lulc_spotcheck, dike_freeboard, bayshore_exposure (its method is
+`agri_sfincs/exposure.py`), field_history (superseded by field_classes), build_dike_outlets,
+fetch_preserved_farms; build_bed_e9 (its NOS / stated depths are now sources in
+build_riverbeds.py, the v2 beds). Their reports stay where sections below cite them.
+
 ## 1. Domain and coverage (2026-10-02)
 
 - **Ring:** 38 HUC12s, 3,564 km² once dissolved (WBD's own areas sum to 3,567). It is one
@@ -1310,3 +1316,82 @@ the 1.2 m-below-MLLW convention (`scripts/build_bed_e9.py`, lower-only, painted 
   (Fairton to Bridgeton, the federal 6 ft channel, unmaintained since ~1985) has no data at all.
 - E9 is judged on the calm-tide window only (tidecal2023may); not yet on the storm peaks
   or Landsat (§39).
+
+## 44. Delaware's record shows the NJ exit pattern: low ground leaves farming ~1.5 %/yr in both states, in the same years (2026-10-23; `reports/exit_history.md`, `scripts/exit_history.py`)
+
+Before any DE flood model: each state's LU/LC farm polygons of 2012 (`agri_sfincs.fields`; DE =
+FirstMap DE_LULC 2012, `scripts/fetch_delulc.py`, in the DE ring) that were >= 50% CDL cropland
+in 2008-12; exit = the storm panel's `left_cropland`; height = median above recent MHHW
+(`agri_sfincs.exposure`, DE: the 2023 statewide lidar, MHHW from Reedy Point / Ship John / Lewes).
+- Crop fields: NJ 7,650 (71,172 ha), DE 3,557 (73,646 ha; of 4,443 farm polygons, 75,888 ha).
+  Below 1.5 m above MHHW: NJ 1,041 fields / 4,298 ha, DE 184 / 2,363 ha (DE fields are larger).
+- **Mean exit rate 2009-23 (% of area at risk per year):** below 1.5 m NJ 1.51, DE 1.50; above
+  3 m NJ 0.71, DE 0.47. Low ground leaves ~2× (NJ) to ~3× (DE) faster than upland.
+- **Spike years are shared by both states and every height band** (2011-13, 2019, 2021; 2024 =
+  the CDL product change, NJ 8.8%, DE 3.9%). A spike common to both shores and to upland is CDL
+  or regional weather, not a local flood: a flood → exit regression needs year effects and has
+  to compare fields within a year. The LOW-ground excess is largest in 2010, 2013, 2019 and 2020
+  in both states (see the report's table).
+- LU/LC: 2012 farm area not farmed by the last edition: NJ 0.9-4.9% by county (2020), DE
+  3.3-9.7% (2022; New Castle highest, development).
+- Not yet: whether the DE low-ground exits follow modelled storm flooding (needs the DE runs).
+
+## 45. v2 creek beds (NJ): measured sources in one builder; the Cohansey needs an effective 6 m (2026-10-23; `reports/creek_tides.md`, `scripts/build_riverbeds.py --tag v2`)
+
+- **One builder:** `build_riverbeds.py` takes, per tidal reach, eHydro → NOS surveys (new, code 8)
+  → crowdsourced CSB soundings (new, code 9; `fetch_channels.py csb`: NCEI tracks crossing the
+  channel, tide-reduced at the nearest CO-OPS gauge, +0.5 m draft) → ENC → stated / calibrated
+  depth (code 10, a floor from a point down to the mouth) → 1.2 m below MLLW. Measured points
+  more than 120 m from the centreline or on open water are dropped (the Mantua's CSB points
+  were Delaware River soundings at Paulsboro, ~10 m deep). `build_bed_e9.py` is gone.
+- **v2 reproduces e9** where e9 had data (calm window 2023-05-24..31, model / expected range:
+  Big Timber 0.97, Oldmans 0.55, Alloway 0.65, Stow 0.45, Maurice 0.84; unchanged).
+- **Cohansey:** NOS D00081 + CSB (61,000 soundings, 2024-26; Sandy repo's
+  `logs/cohansey_sources_2026-10-22/`) deepen the lowest ~5 km to 5-8 m below MLLW. The middle
+  river has no soundings; a stated depth from Fairton down was calibrated:
+
+  | depth below MLLW | Greenwich gauge range | lows bias | Greenwich Pier* | Tindalls Wharf* |
+  |---|---|---|---|---|
+  | e9 (7 ft, by latitude) | — | +0.32 | 0.72 | 0.26 |
+  | 2.13 m (along channel) | 0.77 | +0.27 | 0.77 | 0.36 |
+  | 3.0 m | 0.80 | +0.24 | 0.80 | 0.47 |
+  | 4.5 m | 0.84 | +0.19 | 0.83 | 0.63 |
+  | **6.0 m (adopted)** | 0.87 | +0.16 | 0.86 | 0.75 |
+
+  (* held out; highs stay within −0.04..−0.02 m.) 6 m is inside the 1906 survey (30-40 ft with
+  one ~7 ft bar) and the CSB, and is EFFECTIVE: it likely also stands in for channel width the
+  painted strip lacks. Still short (Greenwich lows +0.16 m).
+- **NJ marsh creeks need no fix:** named tidal creeks (Hope, Oranoaken, Mad Horse, Little ...)
+  connect at -1.07 m, the NJ lidar's hydro-flat MLW plane; the creeks with sills above 0 m are
+  gated / diked systems (Repaupo, Pargey, Fenwick, Clonmell), which the dike weirs handle. The
+  Sandy repo's 55-creek problem came from CUDEM-first beds.
+- Model: `v2_100m` (bed_v2, `dikes_open.weir`, `dike_gates_lo.drn`); calibration models
+  `v2c{30,45,60}_100m` on scratch.
+
+## 46. Delaware twin model, first pass: the creeks need their beds, and the DE shore gets too much tide (2026-10-23; `reports/creek_tides_de.md`)
+
+- **Region:** 33 HUC12s (Augustine … Breakwater Harbor) + the open-bay unit 020402040000
+  clipped at 39.558 N (DE's frontal units stop up to 8 km offshore; with it the DE ring meets
+  NJ's along 102 km of state line) + the C&D Canal unit south of the canal
+  (`scripts/split_canal_unit.py`, 67 km², DE land the plan's extent includes): 3,299 km².
+- **Bed:** DE 2023 statewide lidar (3DEP 1 m, read from its COG overviews onto the NJ lidar's
+  lattice, `fetch_de_lidar.py`), CUDEM below; in the ring: lidar 1,843 km², CUDEM channels
+  181, open bay 1,192; no 3DEP / GMRT. Lakes are lidar water surfaces (no fake beds).
+- **Open water for the boundary** is bed_source {2, 3} in DE (3 alone in NJ): DE's lidar covers
+  the river beside its shore. Boundary: 866 faces on the state line, 108 on the mouth, 59 on the
+  canal / river cut; forcing = the chain with Lewes first (Cape May leads Lewes by 0.1 h), so
+  the state-line points get the same pairs as NJ's.
+- **Dikes:** NLD has ~nothing in DE; NWI "h" (diked/impounded) perimeters as raw-ridge weirs
+  (`build_dikes_nwi.py`, 63 lines, 137 km; crest medians ~1.1-1.2 m NAVD88, i.e. much of each
+  perimeter is marsh, not bank). Water-control structures not modelled.
+- **Creek beds (v2):** NOS for Blackbird, Leipsic, St Jones, Murderkill, Broadkill; eHydro
+  Little River, Murderkill; CSB only at the Broadkill inlet (open water, unused).
+- **Calm-window tide** (tidecal2023may, tide only), merged bed → v2 beds:
+  Odessa (Appoquinimink) 0.09 → 0.26 of the observed range (lows +1.07 → +0.88 m: still barely
+  drains); Cedar Creek 0.54 → 0.82 (lows +0.46 → +0.21); Bowers (Murderkill, gage height)
+  0.86 → **1.15**; held-out Murderkill / Mispillion entrances and Woodland Beach **1.19-1.21**.
+- **Open problem:** the DE shore gets ~15-20% too much tide while NJ's bay shore gets 0.84, both
+  on the same state-line forcing built from NJ-shore gauges (+ Lewes at the mouth). The real
+  tide differs across the bay (Lewes MN 1.24 vs Cape May 1.48); the boundary needs a DE-shore
+  rail (Lewes, Brandywine Shoal, DE subordinate stations as virtual gauges) blended by
+  cross-bay position, as §41 did for NJ.

@@ -4,7 +4,7 @@ From the model's dike weirs (data/structures/dikes.weir, scripts/build_dikes.py)
 
   dikes_removed.weir      every crest capped at the local marsh level (recent MHHW
                           - MARSH_BELOW_MHHW, IDW between the bay gauges as in
-                          scripts/bayshore_exposure.py): the banks are gone. Lowered crests,
+                          agri_sfincs/exposure.py): the banks are gone. Lowered crests,
                           not deleted weirs: the ridges are partly in the subgrid DEM, and a
                           weir at marsh level overrides them (FINDINGS §10, §14).
   breach_all_farm.weir    one BREACH_M breach in EVERY farm system at once

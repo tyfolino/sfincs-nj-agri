@@ -11,6 +11,10 @@ Two different polygons, on purpose:
   (Marcus Hook / Chester heights, 25-120 m; 81 km2), and 22 km2 of DE land rides along
   near New Castle (measured 2026-10-02). The river and bay water stay in;
 * the **analysis cells** are ring x county: what the loss data can be compared with.
+
+Delaware (2026-10-23) is a second SIDE (agri_sfincs.domain.SIDES) with its own HUC12 layer
+(``domain_de``), ring (ring_de.geojson) and outline (model_outline_de.geojson, the ring minus
+NJ / PA / MD land); NJ keeps the original names. Loaders take ``side="nj"`` / ``"de"``.
 """
 
 from __future__ import annotations
@@ -71,9 +75,21 @@ def remove_foreign_land(ring: Polygon, foreign_land) -> Polygon:
     return out
 
 
-def load_huc12(layer: str = "domain") -> gpd.GeoDataFrame:
-    """The domain's HUC12s, or ``layer="great_egg_gloucester"``: the ones left out."""
-    return gpd.read_file(HUC12_FILE, layer=layer)
+def ring_file(side: str = "nj"):
+    return config.REGION_DIR / f"ring{domain.side(side).files}.geojson"
+
+
+def outline_file(side: str = "nj"):
+    return config.REGION_DIR / f"model_outline{domain.side(side).files}.geojson"
+
+
+def huc12_layer(side: str = "nj") -> str:
+    return f"domain{domain.side(side).files}"
+
+
+def load_huc12(layer: str = "domain", side: str = "nj") -> gpd.GeoDataFrame:
+    """The side's domain HUC12s, or ``layer="great_egg_gloucester"``: NJ's ones left out."""
+    return gpd.read_file(HUC12_FILE, layer=huc12_layer(side) if layer == "domain" else layer)
 
 
 def load_counties() -> gpd.GeoDataFrame:
@@ -84,10 +100,10 @@ def load_states() -> gpd.GeoDataFrame:
     return gpd.read_file(STATES_FILE)
 
 
-def load_ring() -> gpd.GeoDataFrame:
-    return gpd.read_file(RING_FILE)
+def load_ring(side: str = "nj") -> gpd.GeoDataFrame:
+    return gpd.read_file(ring_file(side))
 
 
-def load_outline() -> gpd.GeoDataFrame:
-    """The MODEL outline (ring minus PA/DE land). Use this, not the ring, to build."""
-    return gpd.read_file(OUTLINE_FILE)
+def load_outline(side: str = "nj") -> gpd.GeoDataFrame:
+    """The MODEL outline (ring minus other states' land). Use this, not the ring, to build."""
+    return gpd.read_file(outline_file(side))

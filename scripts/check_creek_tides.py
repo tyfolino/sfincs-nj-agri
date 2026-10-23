@@ -24,7 +24,12 @@ Runs are named as in config.MODELS/<model>/runs (``<model>/<run>`` or a bare run
 staged on the tidecal2023may event (agri_sfincs.events) with the datum stations as
 observation points.
 Writes reports/creek_tides.md (every run given, side by side).
-Usage:  python scripts/check_creek_tides.py RUN [RUN ...] [--start 2023-05-24] [--stop 2023-06-01]
+Delaware (``--side de``, runs of a DE model): tuning gauges DE_GAUGES (Odessa and Cedar Creek
+on NAVD88, 62620; Murderkill at Bowers on gage height, so its high/low BIASES mean nothing
+there, only the range), held-out stations from data/channels/de/, report
+reports/creek_tides_de.md.
+
+Usage:  python scripts/check_creek_tides.py RUN [RUN ...] [--start 2023-05-24] [--stop 2023-06-01] [--side de]
 """
 
 from __future__ import annotations
@@ -40,6 +45,10 @@ from agri_sfincs import config, domain, runs, waterlevel
 from agri_sfincs.report import md_table
 
 GAUGES = {"01412150": "Bivalve (Maurice)", "01413038": "Greenwich (Cohansey)", "01483050": "Hancocks Bridge (Alloway)"}
+#: Delaware's tidal USGS gauges with a record in the calm window: site -> (name, parameter)
+DE_GAUGES = {"01483158": ("Odessa (Appoquinimink)", "62620"), "01484235": ("Slaughter Beach (Cedar Cr.)", "62620"),
+             "01484085": ("Bowers (Murderkill), gage ht", "00065")}  # fmt: skip
+SIDE = "nj"
 OBS_EVENT = "storm2023jun"  # its fetched gauge files cover the calm window
 REFS = {"8551910": "Reedy Point", "8545240": "Philadelphia", "8557380": "Lewes"}
 #: Published mean range MN = MHW - MLW (m, CO-OPS datums, epoch 1983-2001, fetched 2026-10-20)
@@ -81,8 +90,8 @@ def local_fraction(lon: float, lat: float, frac: dict) -> float:
 
 
 def creek_of() -> dict[str, str]:
-    """CO-OPS station id -> tidal reach (river_table.csv's datum_nodes)."""
-    t = pd.read_csv(config.ELEV_DIR / "river_table.csv")
+    """CO-OPS station id -> tidal reach (river_table[_de_v2].csv's datum_nodes)."""
+    t = pd.read_csv(config.ELEV_DIR / ("river_table.csv" if SIDE == "nj" else "river_table_de_v2.csv"))
     out = {}
     for r in t[t.kind == "tidal"].itertuples():
         for sid in str(r.datum_nodes).split():
@@ -95,14 +104,17 @@ def score(run, t0, t1) -> tuple[pd.DataFrame, pd.DataFrame]:
     with xr.open_dataset(run / "sfincs_his.nc") as h:
         zb = dict(zip([s.strip() for s in h["station_name"].values.astype(str)], h["point_zb"].values))
     g = []
-    for site, name in GAUGES.items():
-        o = waterlevel.usgs_event_series(OBS_EVENT, site)[t0:t1]
+    gauges = {k: (v, "72279") for k, v in GAUGES.items()} if SIDE == "nj" else DE_GAUGES
+    for site, (name, param) in gauges.items():
+        o = waterlevel.usgs_event_series(OBS_EVENT, site, param)[t0:t1]
         m = zs[f"usgs_{site}"][t0:t1]
         hi, lo = waterlevel.match_extremes(o, m), waterlevel.match_extremes(o, m, lows=True)
+        oh, ol = mean_range(o.resample("1h").mean())
+        mh, ml = mean_range(m.resample("1h").first())
         g.append({"gauge": name, "high bias": hi.diff_m.mean(), "high rmse": float(np.sqrt((hi.diff_m**2).mean())),
-                  "low bias": lo.diff_m.mean(), "n": len(hi)})  # fmt: skip
+                  "low bias": lo.diff_m.mean(), "range ratio": (mh - ml) / (oh - ol), "n": len(hi)})  # fmt: skip
     frac = week_fraction(t0, t1)
-    off = pd.read_csv(config.CHANNELS_DIR / "coops_offsets.csv", dtype={"id": str, "ref": str})
+    off = pd.read_csv(config.channels_dir(SIDE) / "coops_offsets.csv", dtype={"id": str, "ref": str})
     off = off[off.ref.isin(list(REFS))]
     creek = creek_of()
     rows = []
@@ -117,7 +129,8 @@ def score(run, t0, t1) -> tuple[pd.DataFrame, pd.DataFrame]:
         exp = (r.h_high + r.h_low) / 2 * WEEK_GAUGES[r.ref] * local_fraction(r.lon, r.lat, frac)
         rows.append({"station": r.name[:40], "id": r.id, "creek": creek.get(r.id, ""), "expected_m": exp,
                      "model_m": hi - lo, "ratio": (hi - lo) / exp, "off_channel": bool(zb[name] > OFF_CHANNEL_M)})  # fmt: skip
-    return pd.DataFrame(g).set_index("gauge"), pd.DataFrame(rows)
+    cols = ["station", "id", "creek", "expected_m", "model_m", "ratio", "off_channel"]
+    return pd.DataFrame(g).set_index("gauge"), pd.DataFrame(rows, columns=cols)  # no stations: an empty table
 
 
 def main() -> None:
@@ -125,13 +138,20 @@ def main() -> None:
     ap.add_argument("runs", nargs="+")
     ap.add_argument("--start", default="2023-05-24")
     ap.add_argument("--stop", default="2023-06-01")
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
     a = ap.parse_args()
+    global SIDE
+    SIDE = a.side
     t0, t1 = pd.Timestamp(a.start), pd.Timestamp(a.stop)
     gauges, stations = {}, {}
     for spec in a.runs:
         gauges[spec], stations[spec] = score(runs.resolve(spec), t0, t1)
     g = pd.concat(gauges, names=["run"]).reset_index()
     st = pd.concat(stations, names=["run"]).reset_index(level=0)
+    st["off_channel"] = st.off_channel.astype(bool)  # an empty run's table makes it object
+    if st.empty:  # runs staged before their side had datum stations: gauges only
+        print(md_table(g, floatfmt="{:+.2f}"))
+        return
     st["creek"] = st.creek.replace("", "(bay shore / other)")
     st.loc[st.off_channel, "station"] += " *"
     wide = st.pivot_table(index=["creek", "station"], columns="run", values="ratio").reindex(columns=a.runs)
@@ -157,7 +177,7 @@ All stations (* = the point's cell is not a channel cell, left out above):
 
 {md_table(wide, floatfmt="{:.2f}")}
 """
-    out = config.REPORTS / "creek_tides.md"
+    out = config.REPORTS / f"creek_tides{domain.side(SIDE).files}.md"
     out.write_text(md)
     print(md_table(g, floatfmt="{:+.2f}"))
     print(md_table(by_creek, floatfmt="{:.2f}"))

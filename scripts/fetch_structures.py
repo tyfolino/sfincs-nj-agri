@@ -16,10 +16,14 @@ gates (13) are the only tide-gate-like records. The ring+1km clip also catches a
 PA-side lines (Tinicum / John Heinz refuge). NJDEP's waterbody LEVELELEV field is
 EMPTY for every lake here, so lake levels must come from the DEM or the dam heights.
 
-Writes data/structures/structures.gpkg, one layer per source (EPSG:4326), and prints
-counts. Layers that come back empty are written as empty and SAID so.
+Delaware (``--side de``): NID and NLD, and since NLD holds almost none of its banks (2
+alignments, 1 leveed area in the DE ring), USFWS NWI wetlands with the "h" special modifier
+(diked / impounded: the refuge pools, diked marsh, mill ponds) as ``nwi_impounded``.
 
-Usage:  python scripts/fetch_structures.py [--overwrite]
+Writes data/structures/structures.gpkg (Delaware: structures_de.gpkg), one layer per source (EPSG:4326), and prints counts. Layers that come back empty
+are written as empty and SAID so.
+
+Usage:  python scripts/fetch_structures.py [--side nj|de] [--overwrite]
 """
 
 from __future__ import annotations
@@ -43,7 +47,10 @@ LAYERS = {
     "nld_pump_stations": f"{USACE}/NLD/Public/FeatureServer/4",
     "njdep_head_of_tide": f"{NJDEP}/Hydrography/MapServer/2",
     "njdep_waterbody_2015": f"{NJDEP}/Hydrography/MapServer/33",
+    "nwi_impounded": "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/0",
 }
+#: layers fetched for one side only
+ONLY_SIDE = {"njdep_head_of_tide": "nj", "njdep_waterbody_2015": "nj", "nwi_impounded": "de"}
 #: Per-layer query options. The waterbody layer holds 9,157 features in the bbox,
 #: mostly marsh and tiny ponds, and a full page of its polygons times out. Keep
 #: lakes/ponds (FTYPE 390) and reservoirs (436) of 1 ha or more, in small pages.
@@ -52,27 +59,31 @@ OPTIONS = {
         "where": "FTYPE IN (390, 436) AND AREASQKM >= 0.01",
         "page_size": 200,
     },
+    "nwi_impounded": {"where": "ATTRIBUTE LIKE '%h'", "page_size": 500},
 }
 CLIP_PAD_M = 1000.0
-OUT = config.STRUCTURES
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--only", nargs="*", help="fetch just these layers")
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
     a = ap.parse_args()
+    OUT = config.structures_file(a.side)
     if OUT.exists() and not (a.overwrite or a.only):
         raise SystemExit(f"{OUT} exists; pass --overwrite (or --only LAYER ...)")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     if OUT.exists() and not a.only:
         OUT.unlink()
 
-    ring = region.load_ring()
+    ring = region.load_ring(a.side)
     bbox = tuple(ring.to_crs(4326).total_bounds)
     clip = ring.to_crs(domain.EPSG).buffer(CLIP_PAD_M).to_crs(4326)
     for name, url in LAYERS.items():
         if a.only and name not in a.only:
+            continue
+        if ONLY_SIDE.get(name, a.side) != a.side:
             continue
         gdf = arcgis_query(url, bbox=bbox, **OPTIONS.get(name, {}))
         n_box = len(gdf)

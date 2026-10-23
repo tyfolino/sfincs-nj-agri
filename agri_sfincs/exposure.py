@@ -1,6 +1,12 @@
 """Tidal exposure on the 30 m CDL grid: recent high water spread over the domain, ground
-height, and the "connected low ground" bathtub. Method: scripts/bayshore_exposure.py
-(FINDINGS §21), which first built these; most of the land-change scripts reuse them.
+height, and the "connected low ground" bathtub. Method: FINDINGS §21 (first built by
+scripts/bayshore_exposure.py, deleted 2026-10-23, in git); most of the land-change scripts
+reuse them.
+
+Delaware (``side="de"``, 2026-10-23): the same on the DE bed (bed_merged_de.tif) and DE CDL,
+with high water from the recent records at Reedy Point, Ship John and Lewes plus every
+NAVD88-tied CO-OPS datum sheet inside the DE ring (data/channels/de/coops_datums.csv), moved
+to the recent epoch by Reedy Point's shift, as NJ's Fortescue and Bivalve sheets are.
 """
 
 from __future__ import annotations
@@ -18,8 +24,9 @@ from rasterio.features import rasterize
 from rasterio.vrt import WarpedVRT
 from rasterio.windows import from_bounds
 from scipy import ndimage
+from shapely.geometry import Point
 
-from agri_sfincs import cdl, config, dikes, domain, waterlevel
+from agri_sfincs import cdl, config, dikes, domain, region, waterlevel
 from agri_sfincs.riverbed import coops_datum_navd88
 
 BED = config.ELEV_DIR / "bed_merged.tif"
@@ -29,6 +36,9 @@ PX_KM2 = 0.03 * 0.03
 FORCING = [s for s in waterlevel.FORCING if s != domain.CAPE_MAY]
 EPOCH_SHEETS = ["8536931", "8535055"]  # Fortescue, Bivalve: 1983-2001 datum sheets
 EPOCH_REF = "8551910"  # Reedy Point: has both a sheet and a recent record
+LEWES = "8557380"
+#: Delaware: the observed gauges nearest its shore (Lewes from its own hourly record)
+DE_RECENT = ["8551910", "8537121", LEWES]
 
 
 def recent_levels(y0=2021, y1=2025) -> pd.DataFrame:
@@ -47,14 +57,34 @@ def recent_levels(y0=2021, y1=2025) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("id")
 
 
-def high_water_stations() -> pd.DataFrame:
+def lewes_levels(y0=2021, y1=2025) -> pd.Series:
+    """Lewes MHHW / median annual max (m NAVD88) from its hourly MLLW record and NAVD88 tie,
+    as ``recent_levels`` (Lewes is a donor, not a forcing gauge, so not in that file)."""
+    h = pd.read_csv(config.GAUGE_DIR / "noaa" / f"{LEWES}_hourly_mllw.csv.gz", parse_dates=["time"]).set_index("time")
+    sep, _ = waterlevel.navd_minus_mllw(LEWES)
+    x = h.wl_m_mllw[(h.index.year >= y0) & (h.index.year <= y1)].dropna() - sep
+    d = x.resample("D").max()[x.resample("D").count() >= 20]
+    return pd.Series({"name": "Lewes, DE", "lon": -75.1193, "lat": 38.7828, "mhhw": d.mean(),
+                      "annmax": x.groupby(x.index.year).max().median()})  # fmt: skip
+
+
+def high_water_stations(side: str = "nj") -> pd.DataFrame:
     rec = recent_levels()
-    sheets = pd.read_csv(config.CHANNELS_DIR / "coops_datums.csv", dtype={"id": str}).set_index("id")
+    if side != "nj":
+        rec.loc[LEWES] = lewes_levels()
+    sheets = pd.read_csv(config.channels_dir(side) / "coops_datums.csv", dtype={"id": str}).set_index("id")
     sheet_mhhw = {i: coops_datum_navd88(r, "MHHW") for i, r in sheets.iterrows()}
     shift = rec.loc[EPOCH_REF, "mhhw"] - sheet_mhhw[EPOCH_REF]
-    surge = (rec.loc[FORCING, "annmax"] - rec.loc[FORCING, "mhhw"]).mean()
-    st = rec.loc[FORCING, ["name", "lon", "lat", "mhhw", "annmax"]].assign(source="2021-25 obs")
-    for i in EPOCH_SHEETS:
+    recent = FORCING if side == "nj" else DE_RECENT
+    surge = (rec.loc[recent, "annmax"] - rec.loc[recent, "mhhw"]).mean()
+    st = rec.loc[recent, ["name", "lon", "lat", "mhhw", "annmax"]].assign(source="2021-25 obs")
+    if side == "nj":
+        epoch = EPOCH_SHEETS
+    else:  # every NAVD88-tied sheet inside the side's ring, not already an observed gauge
+        ring = region.load_ring(side).to_crs(4326).union_all()
+        epoch = [i for i, r in sheets.iterrows() if np.isfinite(sheet_mhhw[i]) and i not in st.index
+                 and ring.contains(Point(r["lon"], r["lat"]))]  # fmt: skip
+    for i in epoch:
         st.loc[i] = [sheets.loc[i, "name"], sheets.loc[i, "lon"], sheets.loc[i, "lat"],
                      sheet_mhhw[i] + shift, sheet_mhhw[i] + shift + surge,
                      f"sheet + {shift:.2f} m"]  # fmt: skip
@@ -75,11 +105,13 @@ def connected_low(zmean, zmax, level, seed) -> tuple[np.ndarray, np.ndarray]:
     return low, low & ndimage.binary_dilation(reach)
 
 
-def load_grid() -> SimpleNamespace:
-    """The 30 m CDL window over the model domain: ``win``, ``tr``, ``crs``, ``shape``; ground
-    ``z_mean`` / ``z_max`` (NaN off the DEM); high water ``hw["mhhw"]`` / ``hw["annmax"]``
-    (IDW, m NAVD88); ``hab`` = z_mean - MHHW."""
-    with rasterio.open(cdl.path(2025)) as c, rasterio.open(BED) as b:
+def load_grid(side: str = "nj") -> SimpleNamespace:
+    """The 30 m CDL window over the side's model domain: ``win``, ``tr``, ``crs``, ``shape``;
+    ground ``z_mean`` / ``z_max`` (NaN off the DEM); high water ``hw["mhhw"]`` /
+    ``hw["annmax"]`` (IDW, m NAVD88); ``hab`` = z_mean - MHHW."""
+    sd = domain.side(side)
+    bed = config.ELEV_DIR / f"bed_merged{sd.files}.tif"
+    with rasterio.open(cdl.path(2025, sd.state_fips)) as c, rasterio.open(bed) as b:
         bnd = rasterio.warp.transform_bounds(b.crs, c.crs, *b.bounds)
         win = from_bounds(*bnd, transform=c.transform).round_offsets().round_lengths()
         tr, crs = c.window_transform(win), c.crs
@@ -89,7 +121,7 @@ def load_grid() -> SimpleNamespace:
         for k, rs in (("mean", Resampling.average), ("max", Resampling.max)):
             with WarpedVRT(b, resampling=rs, src_nodata=b.nodata, dtype="float32", **grid) as v:
                 z[k] = v.read(1)
-    st = high_water_stations()
+    st = high_water_stations(side)
     xs = tr.c + tr.a * (np.arange(0, shape[1], 20) + 0.5)
     ys = tr.f + tr.e * (np.arange(0, shape[0], 20) + 0.5)
     coarse = {k: idw(st, k, *np.meshgrid(xs, ys), crs) for k in ("mhhw", "annmax")}
@@ -98,10 +130,10 @@ def load_grid() -> SimpleNamespace:
                            z_max=z["max"], hw=hw, hab=z["mean"] - hw["mhhw"], stations=st)  # fmt: skip
 
 
-def add_exposure(g):
+def add_exposure(g, side: str = "nj"):
     """``g`` (polygons) plus ``m_above_mhhw`` (median height above recent MHHW) and
     ``leveed_share``, on the 30 m grid of ``load_grid`` (FINDINGS §21)."""
-    G = load_grid()
+    G = load_grid(side)
     gg = g.to_crs(G.crs)
     lab = np.zeros(G.shape, dtype="int64")
     # rasterize in chunks keyed by row number + 1 (small polygons may miss every cell centre)
@@ -110,7 +142,7 @@ def add_exposure(g):
         r = rasterize([(geom, i + 1) for i, geom in zip(range(k, k + len(sub)), sub.geometry)],
                       out_shape=G.shape, transform=G.tr, fill=0, dtype="int64")  # fmt: skip
         lab = np.where(r > 0, r, lab)
-    lev = dikes.leveed_areas(G.crs)
+    lev = dikes.leveed_areas(G.crs, side)
     leveed = rasterize([(x, 1) for x in lev.geometry], out_shape=G.shape, transform=G.tr,
                        fill=0, dtype="uint8")  # fmt: skip
     ok = (lab > 0) & np.isfinite(G.hab)

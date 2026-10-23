@@ -26,7 +26,13 @@ from shapely.geometry import box
 LULC2020_URL = ("https://services1.arcgis.com/QWdNfRs7lkPq4g4Q/arcgis/rest/services/Land_Use_2020/"
                 "FeatureServer/5")  # fmt: skip
 
-FARMED = frozenset({2100, 2140, 2200, 2300, 2400})
+#: Delaware's LU/LC (FirstMap DE_LULC, Delaware Modified Anderson, 3-digit codes; 2007, 2012,
+#: 2017, 2022): 211 cropland, 212 pasture, 213 idle fields, 220 orchards / nurseries,
+#: 230 confined feeding, 240 farmsteads, 290 other agriculture, the counterparts of NJ's
+#: 2100-2400. Delaware has no "agricultural wetland" class (NJ 2140). Its codes are 3-digit and
+#: NJ's 4-digit, so one FARMED set serves both states.
+DE_FARMED = frozenset({211, 212, 213, 220, 230, 240, 290})
+FARMED = frozenset({2100, 2140, 2200, 2300, 2400}) | DE_FARMED
 FORMER_AG_WETLAND = 2150
 FARMED_WETLAND = 2140
 ARTIFICIAL_LAKE = 5300

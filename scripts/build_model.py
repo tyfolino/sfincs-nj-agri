@@ -26,6 +26,7 @@ import argparse
 import time
 from pathlib import Path
 
+from agri_sfincs import domain
 from agri_sfincs.build import StaticConfig, build_static
 
 
@@ -40,6 +41,7 @@ def main() -> None:
     ap.add_argument("--drn", default=None, help="drainage file to stage as sfincs.drn")
     ap.add_argument("--catalog", action="append", default=[], help="extra data catalog (repeatable)")
     ap.add_argument("--refinement", default=None, help="quadtree refinement polygons (refinement_level column)")
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
     ap.add_argument("--manning-first", action="append", default=[],
                     help="catalog source of a Manning's n raster that overrides land cover where it has data")
     a = ap.parse_args()
@@ -48,7 +50,7 @@ def main() -> None:
         name=a.name, res=a.res, nr_subgrid_pixels=a.subgrid,
         hsg="hsg_drained" if a.drained else "hsg_undrained",
         elevation=a.elevation, structures=structures, catalogs=tuple(a.catalog), manning_first=tuple(a.manning_first),
-        refinement=Path(a.refinement) if a.refinement else None,
+        refinement=Path(a.refinement) if a.refinement else None, side=a.side,
     )  # fmt: skip
     t0 = time.time()
     root = build_static(cfg)

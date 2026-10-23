@@ -1,5 +1,5 @@
 """Forcing inputs: water-level gap filling, SSURGO ksat averaging, and the bed merges
-(build_bed.py, merge_bed_v1.py) — synthetic, no network."""
+(build_bed.py, merge_bed.py) — synthetic, no network."""
 
 from __future__ import annotations
 
@@ -94,10 +94,10 @@ class TestBedMerge(unittest.TestCase):
 
 
 class TestMergeBedV1(unittest.TestCase):
-    """merge_bed_v1.py: the river-bed burn only ever lowers the bed; NoData passes through."""
+    """merge_bed.py: the river-bed burn only ever lowers the bed; NoData passes through."""
 
     def test_lower_only_and_nodata(self):
-        from merge_bed_v1 import merge
+        from merge_bed import merge
 
         nd = -9999.0
         bed = np.array([1.0, 1.0, nd, 2.0], dtype="float32")

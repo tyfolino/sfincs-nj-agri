@@ -3,7 +3,8 @@ field grows (CDL) and when / how long / how deep it floods (SFINCS), in the shap
 crop damage calculation needs (start date, duration, depth).
 
 Fields and their ids = data/analysis/field_flood_classes.gpkg (scripts/field_flood_classes.py:
-NJDEP LU/LC 2020 farm polygons). Depth per 10 m pixel per day = zsmax of its model cell - the
+agri_sfincs.fields, NJDEP LU/LC farm polygons of 2012); the output keeps those still farmed in
+2020. Depth per 10 m pixel per day = zsmax of its model cell - the
 pixel's ground, as field_flood_classes.py. A field is WET on a day when >= fieldflood.SHARE (10%)
 of its pixels are > 5 cm deep that day; it FLOODS in the run when >= 10% of its pixels are
 > 5 cm on at least one day (the §29 rule, so `flooded` matches field_flood_classes.csv).
@@ -113,7 +114,7 @@ the flooded part of them is {f.flooded_ha.sum():,.0f} ha.
 |---|---|
 | field_id | field id (same ids as `field_flood_classes.csv`) |
 | county, ha | county, field area (hectares) |
-| lulc2020, lulc2020_label | NJDEP land-use code; 2140 = "agricultural wetland", wet farmland |
+| lulc2020 | NJDEP land-use code; 2140 = "agricultural wetland", wet farmland |
 | behind_levee | at least half the field inside a mapped levee-protected area (USACE NLD) |
 | flood_class | when the field first floods across all the scenarios (today, +0.3, +0.6, +1.0 m; with/without dikes) |
 | cdl{year}_main, _main_pct | the most common USDA CDL {year} class on the field, and its % of the field |
@@ -155,7 +156,7 @@ def main() -> None:
     year = EVENTS[EVENT].focus_start.year
 
     src = gpd.read_file(config.ANALYSIS_DIR / "field_flood_classes.gpkg")
-    g = src[["field_id", "county", "lulc2020", "lulc2020_label", "ha", "behind_levee", "cls", "geometry"]]
+    g = src[["field_id", "county", "lulc2020", "farmed2020", "ha", "behind_levee", "cls", "geometry"]]
     g = g.rename(columns={"cls": "flood_class"}).sort_values("field_id").reset_index(drop=True)
     assert (g.field_id.values == np.arange(1, len(g) + 1)).all()
     n = len(g)
@@ -182,6 +183,9 @@ def main() -> None:
     # A field can flood (10% over the month) without 10% on any single day: no dates for it.
     odd = int((g.flooded & ~anyw).sum())
 
+    keep = g.farmed2020.values
+    g, pct, dep = g[keep].reset_index(drop=True), pct[:, keep], dep[:, keep]
+    anyw = anyw[keep]
     name = run.name
     out = config.ANALYSIS_DIR / f"sample_{name}"
     out.mkdir(parents=True, exist_ok=True)

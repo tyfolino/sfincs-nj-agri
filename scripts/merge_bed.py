@@ -1,14 +1,18 @@
-"""Merge the river-bed burn into the pre-merged bed: bed_v1 = fmin(bed_merged, burn).
+"""Merge the river-bed burn into the pre-merged bed: bed_<tag> = fmin(bed_merged, burn).
 
 The burn (scripts/build_riverbeds.py, FINDINGS §11) is on bed_merged's own grid and can
 only LOWER the bed; it is merged here, ONCE, rather than stacked in an elevation list
 (never prepend a burn raster to the list — bight trap, CLAUDE.md). Burn nodata leaves
 the bed as it was.
 
-Writes data/elevation/bed_v1.tif (float32, m NAVD88, nodata -9999, tiled + deflate) and
-prints the area lowered and by how much. The catalog source is ``bed_v1``.
+Writes data/elevation/bed_<tag>.tif (float32, m NAVD88, nodata -9999, tiled + deflate) and
+prints the area lowered and by how much. The catalog source is ``bed_<tag>``. Tag v1 (the
+default) reads riverbed_burn.tif, which build_riverbeds.py writes without a tag; any other tag
+reads riverbed_burn_<tag>.tif (``build_riverbeds.py --tag <tag>``). Was merge_bed_v1.py.
 
-Usage:  python scripts/merge_bed_v1.py [--overwrite]
+Delaware (``--side de``): bed_merged_de + riverbed_burn_de_<tag> -> bed_de_<tag>.tif.
+
+Usage:  python scripts/merge_bed.py [--tag v2] [--side de] [--overwrite]
 """
 
 from __future__ import annotations
@@ -18,11 +22,9 @@ import argparse
 import numpy as np
 import rasterio
 
-from agri_sfincs import config
+from agri_sfincs import config, domain
 
-BED = config.ELEV_DIR / "bed_merged.tif"
-BURN = config.ELEV_DIR / "riverbed_burn.tif"
-OUT = config.ELEV_DIR / "bed_v1.tif"
+
 
 
 def merge(bed: np.ndarray, burn: np.ndarray, nodata: float) -> np.ndarray:
@@ -35,8 +37,14 @@ def merge(bed: np.ndarray, burn: np.ndarray, nodata: float) -> np.ndarray:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--tag", default="v1")
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
     ap.add_argument("--overwrite", action="store_true")
     a = ap.parse_args()
+    s = domain.side(a.side).files
+    BED = config.ELEV_DIR / f"bed_merged{s}.tif"
+    BURN = config.ELEV_DIR / ("riverbed_burn.tif" if (a.tag, s) == ("v1", "") else f"riverbed_burn{s}_{a.tag}.tif")
+    OUT = config.ELEV_DIR / f"bed{s}_{a.tag}.tif"
     if OUT.exists() and not a.overwrite:
         raise FileExistsError(f"{OUT} exists (--overwrite)")
     with rasterio.open(BED) as sb, rasterio.open(BURN) as sr:

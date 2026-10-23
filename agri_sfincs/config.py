@@ -30,7 +30,20 @@ EVAP_DIR = DATA / "evap"  # gridMET daily reference ET (pet) clipped to the BBOX
 LANDUSE_DIR = DATA / "landuse"  # NJDEP Land Use/Land Cover editions + farm-to-wetland transitions
 LANDSAT_DIR = DATA / "landsat"  # Landsat C2 L2 per-field per-scene stats (bulk; symlink to /scratch)
 STRUCT_DIR = DATA / "structures"  # NID, NLD levees, head of tide, lakes; dike weirs and gates
-STRUCTURES = STRUCT_DIR / "structures.gpkg"
+STRUCTURES = STRUCT_DIR / "structures.gpkg"  # NJ; Delaware: structures_file("de")
+
+
+def channels_dir(side: str = "nj"):
+    """The river-bed inputs of a side: data/channels/ (NJ) or data/channels/de/. NOS surveys
+    are shared (data/channels/nos/)."""
+    return CHANNELS_DIR if side == "nj" else CHANNELS_DIR / side
+
+
+def structures_file(side: str = "nj"):
+    """data/structures/structures<suffix>.gpkg of a side (agri_sfincs.domain.SIDES)."""
+    from agri_sfincs import domain
+
+    return STRUCT_DIR / f"structures{domain.side(side).files}.gpkg"
 SOILS_DIR = DATA / "soils"  # SSURGO hydrologic soil groups and ksat
 LANDCOVER_DIR = DATA / "landcover"  # NLCD
 EASEMENT_DIR = DATA / "easements"  # NRCS conservation easements

@@ -164,20 +164,46 @@ def breach(x: np.ndarray, y: np.ndarray, z: np.ndarray, at: int, length_m: float
     return out
 
 
-def leveed_areas(crs=None):
-    """NLD leveed areas (data/structures/structures.gpkg, scripts/fetch_structures.py), in
-    ``crs`` if given."""
+def leveed_areas(crs=None, side: str = "nj"):
+    """NLD leveed areas (data/structures/structures[_de].gpkg, scripts/fetch_structures.py),
+    in ``crs`` if given."""
     import geopandas as gpd
 
-    la = gpd.read_file(config.STRUCTURES, layer="nld_leveed_areas")
+    la = gpd.read_file(config.structures_file(side), layer="nld_leveed_areas")
     return la if crs is None else la.to_crs(crs)
 
 
-class Bed:
-    """Window reads of the pre-merged bed (EPSG:4326, ~3.9 m) at UTM points."""
+#: the dike crest = the highest pre-merged bed pixel within ±RIDGE_HALF_M of the line (NLD and
+#: NWI lines lie a few metres off the crest), every STEP_M (scripts/build_dikes*.py)
+STEP_M = 5.0
+RIDGE_HALF_M = 20.0
+RIDGE_OFFSETS = np.arange(-RIDGE_HALF_M, RIDGE_HALF_M + 0.1, 4.0)
 
-    def __init__(self):
-        self.src = rasterio.open(config.ELEV_DIR / "bed_merged.tif")
+
+def ridge_along(line, bed: "Bed"):
+    """Stations s, points (x, y) every STEP_M, and the ridge = max bed across ±RIDGE_HALF_M.
+    Moved here from scripts/build_dikes.py (2026-10-23) for the DE builder."""
+    s = np.append(np.arange(0.0, line.length, STEP_M), line.length)
+    pts = [line.interpolate(v) for v in s]
+    x, y = np.array([p.x for p in pts]), np.array([p.y for p in pts])
+    tx, ty = np.gradient(x), np.gradient(y)
+    norm = np.hypot(tx, ty)
+    norm[norm == 0] = 1.0
+    nx, ny = -ty / norm, tx / norm
+    X = x[:, None] + nx[:, None] * RIDGE_OFFSETS[None, :]
+    Y = y[:, None] + ny[:, None] * RIDGE_OFFSETS[None, :]
+    z = bed.sample(X.ravel(), Y.ravel()).reshape(X.shape)
+    with np.errstate(all="ignore"):
+        ridge = np.where(np.isfinite(z).any(axis=1), np.nanmax(z, axis=1), np.nan)
+    return s, x, y, ridge
+
+
+class Bed:
+    """Window reads of the pre-merged bed (EPSG:4326, ~3.9 m) at UTM points; ``side``'s
+    bed_merged[_de].tif."""
+
+    def __init__(self, side: str = "nj"):
+        self.src = rasterio.open(config.ELEV_DIR / f"bed_merged{domain.side(side).files}.tif")
         self.to_ll = Transformer.from_crs(domain.EPSG, self.src.crs, always_xy=True)
 
     def sample(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:

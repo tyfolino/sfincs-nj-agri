@@ -15,6 +15,11 @@ it is no longer the main line, and Fork 1 tested null.
 | Cheap predictors vs losses (track A) | fetch_nwm_soil, rain_metrics, rain_compare, a4_first_test; module `cropweights.py` | nwm_soil.md, rain_metrics.md, a4_first_test.md |
 | Fork 1: cross-county flood x rain | fork1_counties, fetch_prism_monthly, flood_prone_share, fork1_panel; module `panel.py` | fork1_flood_rain.md |
 
+`experiments/e7_boundary/` (copied from scratch 2026-10-23, FINDINGS §41): the bay-boundary
+experiment that led to the "chain" boundary now in `agri_sfincs/waterlevel.py`
+(`bnd_experiment.py`, `yardstick2.py`, the two virtual-gauge predictions). It ran from the
+scratch folder; its paths are as they were.
+
 `rma.py`, `cropweights.py` and `panel.py` are library modules (no `main`). They sit next to
 the scripts, so the scripts find them with no path setup.
 

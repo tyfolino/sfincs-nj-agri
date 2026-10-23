@@ -1,7 +1,13 @@
 """Burn river beds (FINDINGS §11): a raster of river-bed elevations on the bed grid,
 to be MERGED into ``bed_merged.tif`` by a later step (never stacked on top of it).
 
-    python scripts/build_riverbeds.py [--da-min 10] [--min-width 10] [--no-raster]
+    python scripts/build_riverbeds.py [--da-min 10] [--min-width 10] [--no-raster] [--tag v2] [--side de]
+
+Delaware (``--side de``, 2026-10-23): the same rules over the DE bed (bed_merged_de.tif),
+inputs from data/channels/de/ (fetch_channels.py --side de), reaches
+``domain.DE_TIDAL_REACHES`` whose heads are the lowest dams (no NJDEP head-of-tide layer
+there: the non-tidal burn starts at those heads only), and outputs with a _de suffix
+(before the tag: riverbed_burn_de_v2.tif).
 
 Inputs (``scripts/fetch_channels.py``, data/channels/): NOAA ENC soundings and depth
 areas, NHDPlus HR flowlines / StreamRiver areas / lakes, USGS channel measurements,
@@ -23,6 +29,13 @@ leaks across meanders), painted flat across the channel. Sources, in precedence:
                survey covering >= ``EHYDRO_COVER_FRAC`` of the best survey's length;
                running median +-``EHYDRO_WINDOW_M``, linear inside the surveyed span.
                It REPLACES the chart there (user, 2026-10-05).             src code 6
+  * NOS        v2 (2026-10-23, FINDINGS §42-43): NOS hydrographic surveys named in the
+               reach's ``nos`` (data/channels/nos/<id>.a93.gz, fetch_channels.py nos), MLW
+               surveys shifted to MLLW; same running median as the chart soundings.
+                                                                          src code 8
+  * CSB        v2: NCEI crowdsourced soundings in the channel (data/channels/csb/<reach>.csv,
+               fetch_channels.py csb: tide-reduced at the nearest CO-OPS gauge, plus a draft
+               offset); same running median.                              src code 9
   * soundings  ENC SOUNDG inside the painted channel (+ ``SOUNDING_TOL_M``), depth below
                MLLW -> NAVD88 with the local MLLW (below), running median over
                +-``TIDAL_WINDOW_M`` of >= ``TIDAL_MIN_N`` soundings (else the 3 nearest
@@ -36,6 +49,9 @@ leaks across meanders), painted flat across the channel. Sources, in precedence:
                                                                           src code 2
   * uncharted  above the last chart depth area (Stow, Oldmans, Raccoon ... are charted
                only near their mouths): ``TAIL_MLLW_M`` (1.2 m) below MLLW. src code 3
+  * stated     v2: a reach's ``stated`` (lon, lat, depth below MLLW) lowers the smoothed
+               profile to at least that depth from the point down to the mouth (a charted
+               controlling depth, or a calibrated effective depth).        src code 10
   * MLLW in NAVD88 along the reach: CO-OPS datum sheets where they carry NAVD88
     (Bivalve, Fortescue, Reedy Point, Marcus Hook, Philadelphia, Lewes) and the
     tide-prediction SUBORDINATE stations on the reach (Millville, Mauricetown, Greenwich
@@ -77,7 +93,7 @@ divergences excluded, grouped by level path (one river = one profile).
 NEVER RAISE: a pixel is written only where the burn is below bed_merged; where two
 profiles overlap, the deeper wins. bed_merged.tif is read, never written.
 
-Outputs:
+Outputs (with ``--tag T`` every data/elevation/ file below gets a _T suffix, so v1's stay):
   data/elevation/riverbed_burn.tif     float32 m NAVD88, the bed grid (EPSG:4326, lidar
                                        grid), NoData -9999 where nothing is burned
   data/elevation/riverbed_source.tif   uint8 codes 1-7 above, 0 = not burned
@@ -112,6 +128,7 @@ warnings.filterwarnings("ignore", message=".*geographic CRS.*")
 
 CH = config.CHANNELS_DIR
 ELEV = config.ELEV_DIR
+SIDE = "nj"
 EPSG = domain.EPSG
 NODATA = -9999.0
 
@@ -149,12 +166,14 @@ LAKE_MIN_KM2 = 0.01  # NHD lakes/reservoirs >= 1 ha are not painted
 SRC_NAMES = {1: "tidal: ENC soundings", 2: "tidal: ENC depth area",
              3: "tidal: uncharted, 1.2 m below MLLW",
              4: "non-tidal: surface - gauge depth", 5: "non-tidal: surface - DA law depth",
-             6: "tidal: USACE eHydro survey", 7: "non-tidal: anchored to gauge stage"}  # fmt: skip
+             6: "tidal: USACE eHydro survey", 7: "non-tidal: anchored to gauge stage",
+             8: "tidal: NOS hydrographic survey", 9: "tidal: crowdsourced (CSB) soundings",
+             10: "tidal: stated / calibrated depth"}  # fmt: skip
 #: Uncharted tidal reaches and the chart's "0-1.8 m" depth class: this depth below MLLW
 #: (user, 2026-10-05: bight's value; the 0.9 m midpoint read ~0.8 m shallow against the
 #: 2023 Maurice survey).
 TAIL_MLLW_M = 1.2
-EHYDRO_DIR = CH / "ehydro"
+EHYDRO_DIR = CH / "ehydro"  # reset with CH by set_side()
 EHYDRO_WINDOW_M = 150.0
 EHYDRO_MIN_N = 3
 EHYDRO_COVER_FRAC = 0.9
@@ -165,6 +184,18 @@ NT_SURFACE_MIN_M = 1.0
 ANCHOR_SITES = {"01475001": "Mantua Creek at Pitman", "01477120": "Raccoon Creek near Swedesboro"}
 ANCHOR_TAPER_M = 1500.0
 ANCHOR_SINCE = "2007"  # stage records (and gauge datums) from the 2007 gage-height series
+#: v2 measured points (NOS, CSB) farther than this from the centreline are not the creek's
+#: (CSB distance p90: Cohansey 32 m, Maurice 42 m, Salem 92 m; the Mantua river points 148 m)
+POINT_MAX_M = 120.0
+NOS_DIR = config.CHANNELS_DIR / "nos"  # shared by both sides
+CSB_DIR = CH / "csb"  # reset with CH by set_side()
+
+
+def set_side(side: str) -> None:
+    global CH, SIDE, EHYDRO_DIR, CSB_DIR
+    CH, SIDE = config.channels_dir(side), side
+    EHYDRO_DIR, CSB_DIR = CH / "ehydro", CH / "csb"
+
 
 
 # ── inputs ────────────────────────────────────────────────────────────────────
@@ -177,11 +208,12 @@ def load_flowlines() -> gpd.GeoDataFrame:
 
 
 class Grid:
-    """The bed grid (bed_merged.tif): transforms and windowed reads."""
+    """The bed grid (bed_merged[_de].tif): transforms and windowed reads."""
 
     def __init__(self):
-        self.bed = rasterio.open(ELEV / "bed_merged.tif")
-        self.src = rasterio.open(ELEV / "bed_source.tif")
+        sfx = domain.side(SIDE).files
+        self.bed = rasterio.open(ELEV / f"bed_merged{sfx}.tif")
+        self.src = rasterio.open(ELEV / f"bed_source{sfx}.tif")
         self.T = self.bed.transform
         self.W, self.H = self.bed.width, self.bed.height
         self.to_ll = Transformer.from_crs(EPSG, self.bed.crs, always_xy=True)
@@ -250,14 +282,16 @@ def mllw_along(line, nodes: gpd.GeoDataFrame, grid: np.ndarray) -> tuple[np.ndar
 # ── eHydro ────────────────────────────────────────────────────────────────────
 US_FT = 1200.0 / 3937.0
 _EH_META = {"Vertical Reference Datum": r"MLLW", "Tidal Epoch": r"1983-2001",
-            "Projected Coordinate Units": r"US Survey Foot", "Horizontal Zone": r"NJ"}  # fmt: skip
+            "Projected Coordinate Units": r"US Survey Foot"}  # fmt: skip
+#: State Plane zone (as the survey metadata names it) -> EPSG, US survey feet
+_EH_ZONES = {"NJ": 3424, "DE": 2235}
 _eh_cache: dict[tuple[str, bool], tuple] = {}
 
 
 def ehydro_points(sid: str, full: bool = True):
     """(x, y, depth_m) of an eHydro survey in UTM; depth m below MLLW (1983-2001).
-    The survey's metadata must say MLLW / 1983-2001 / US Survey Foot / NJ State Plane
-    (EPSG 3424), else this raises. ``full``: the multibeam ``*_FULL.XYZ`` if present."""
+    The survey's metadata must say MLLW / 1983-2001 / US Survey Foot and a State Plane zone
+    in ``_EH_ZONES`` (NJ 3424, DE 2235), else this raises. ``full``: the multibeam ``*_FULL.XYZ`` if present."""
     key = (sid, full)
     if key in _eh_cache:
         return _eh_cache[key]
@@ -268,12 +302,15 @@ def ehydro_points(sid: str, full: bool = True):
     for k, v in _EH_META.items():
         if not re.search(rf"{k}:\s*{v}", txt):
             raise ValueError(f"{sid}: metadata does not say '{k}: {v}'")
+    zone = re.search(r"Horizontal Zone:\s*(\w+)", txt)
+    if not zone or zone.group(1) not in _EH_ZONES:
+        raise ValueError(f"{sid}: horizontal zone {zone.group(1) if zone else '?'} not in {sorted(_EH_ZONES)}")
     f = files.get(f"{sid}_FULL.XYZ") if full else None
     f = f or files[f"{sid}.XYZ"]
     a = pd.read_csv(f, sep=r"\s+", header=None, usecols=[0, 1, 2]).to_numpy(dtype="float64")
     if np.median(a[:, 2]) <= 0:
         raise ValueError(f"{sid}: depths are not positive-down")
-    x, y = Transformer.from_crs(3424, EPSG, always_xy=True).transform(a[:, 0], a[:, 1])
+    x, y = Transformer.from_crs(_EH_ZONES[zone.group(1)], EPSG, always_xy=True).transform(a[:, 0], a[:, 1])
     _eh_cache[key] = (np.asarray(x), np.asarray(y), a[:, 2] * US_FT)
     return _eh_cache[key]
 
@@ -311,8 +348,13 @@ def ehydro_profile(channel: str, line, chan, grid, mllw):
 
 # ── geometry helpers ──────────────────────────────────────────────────────────
 def hot_points(flow: gpd.GeoDataFrame) -> dict[int, float]:
-    """{hydroseq: station (m) of the most upstream head-of-tide point on it}."""
-    h = gpd.read_file(config.STRUCTURES, layer="njdep_head_of_tide").to_crs(EPSG)
+    """{hydroseq: station (m) of the most upstream head-of-tide point on it}. NJ: NJDEP's
+    head-of-tide points; Delaware has no such layer, so its reaches' heads."""
+    if SIDE == "nj":
+        h = gpd.read_file(config.STRUCTURES, layer="njdep_head_of_tide").to_crs(EPSG)
+    else:
+        heads = [shapely.Point(v["head"]) for v in domain.side(SIDE).tidal_reaches.values()]
+        h = gpd.GeoDataFrame(geometry=heads, crs=4326).to_crs(EPSG)
     main = flow[flow["divergence"] != 2]
     out: dict[int, float] = {}
     for p in h.geometry:
@@ -398,7 +440,7 @@ def gauge_geometry(flow) -> pd.DataFrame:
         bad = cm[k].notna() & (cm[k] != u)
         if bad.any():
             raise ValueError(f"channel-measurements: {k} not {u} in {bad.sum()} rows")
-    ring = region.load_ring().to_crs(4326).union_all()
+    ring = region.load_ring(SIDE).to_crs(4326).union_all()
     rows = []
     for s, g in cm.groupby("site"):
         if s not in sites.index:
@@ -492,6 +534,52 @@ def paint(G: Grid, line, grid, prof, hw, code, extra=None, exclude=None, skip_sr
 
 
 # ── tidal reaches ─────────────────────────────────────────────────────────────
+def nos_points(surveys) -> gpd.GeoDataFrame:
+    """NOS survey soundings, ``depth_m`` below MLLW: [(id, MLW - MLLW in m), ...]."""
+    import gzip
+
+    rows = []
+    for sid, mlw_minus_mllw in surveys:
+        for ln in gzip.open(NOS_DIR / f"{sid}.a93.gz", "rt"):
+            r = riverbed.parse_a93(ln)
+            if r is not None:
+                rows.append((r[0], r[1], r[2] - mlw_minus_mllw, sid))
+    a = pd.DataFrame(rows, columns=["lon", "lat", "depth_m", "cell"])
+    return gpd.GeoDataFrame(a, geometry=gpd.points_from_xy(a.lon, a.lat), crs=4326).to_crs(EPSG)
+
+
+def csb_points(name: str) -> gpd.GeoDataFrame | None:
+    """Crowdsourced soundings of a reach (fetch_channels.py csb), ``depth_m`` below MLLW."""
+    f = CSB_DIR / f"{name}.csv"
+    if not f.exists():
+        return None
+    a = pd.read_csv(f)
+    a = a.rename(columns={"depth_mllw_m": "depth_m"}).assign(cell="csb")
+    return gpd.GeoDataFrame(a, geometry=gpd.points_from_xy(a.lon, a.lat), crs=4326).to_crs(EPSG)
+
+
+def point_profile(pts, chan, line, grid, mllw, G=None):
+    """Running-median bed profile (m NAVD88) from depth points (``depth_m`` below MLLW) inside
+    the channel: (profile, stations, z, the points used). With the bed grid ``G`` (the v2
+    measured sources), points on open water (bed_source 3) or more than ``POINT_MAX_M`` from
+    the centreline are dropped: NHD draws the Delaware as one polygon with its tidal creeks,
+    and boats at a mouth sound the river, not the creek (Mantua: 70 CSB points 148 m off the
+    line, ~10 m deep, in the river at Paulsboro)."""
+    near = pts[shapely.dwithin(chan, pts.geometry.values, SOUNDING_TOL_M)]
+    if G is not None and len(near):
+        near = near[shapely.dwithin(line, near.geometry.values, POINT_MAX_M)]
+    if G is not None and len(near):
+        near = near[G.sample(shapely.get_x(near.geometry.values), shapely.get_y(near.geometry.values),
+                             which="src") != 3]  # fmt: skip
+    s_all = shapely.line_locate_point(line, near.geometry.values)
+    inner = (s_all > END_TOL_M) & (s_all < line.length - END_TOL_M)  # not past either end
+    near, s_pt = near[inner], s_all[inner]
+    z = riverbed.chart_to_navd88(near["depth_m"].values, np.interp(s_pt, grid, mllw))
+    prof = riverbed.fill_interior(grid, riverbed.running_median(s_pt, z, grid, TIDAL_WINDOW_M, TIDAL_MIN_N,
+                                                                TIDAL_MAX_HALF_M))
+    return prof, s_pt, z, near
+
+
 def tidal_reach(name, spec, flow, G, nodes, enc_s, enc_a, areas, law, land):
     head = gpd.GeoSeries([shapely.Point(spec["head"])], crs=4326).to_crs(EPSG).iloc[0]
     main = flow[flow["divergence"] != 2]
@@ -527,24 +615,31 @@ def tidal_reach(name, spec, flow, G, nodes, enc_s, enc_a, areas, law, land):
     a = areas[areas.intersects(line.buffer(10.0))]
     chan_extra = shapely.union_all(a.geometry.values).intersection(line.buffer(TIDAL_MAX_HALFWIDTH_M)) if len(a) else shapely.Polygon()
     chan = line.buffer(1.0).union(chan_extra) if not chan_extra.is_empty else line.buffer(MIN_WIDTH / 2)
-    # soundings inside the channel
-    near = enc_s[shapely.dwithin(chan, enc_s.geometry.values, SOUNDING_TOL_M)]
-    s_all = shapely.line_locate_point(line, near.geometry.values)
-    inner = (s_all > END_TOL_M) & (s_all < line.length - END_TOL_M)  # not past either end
-    near, s_snd = near[inner], s_all[inner]
-    z_snd = riverbed.chart_to_navd88(near["depth_m"].values, np.interp(s_snd, grid, mllw))
-    p_snd = riverbed.fill_interior(grid, riverbed.running_median(s_snd, z_snd, grid, TIDAL_WINDOW_M, TIDAL_MIN_N,
-                                                                       TIDAL_MAX_HALF_M))
-    # USACE eHydro survey: replaces the chart where it reaches
-    p_eh, eh_sid, eh_cov = np.full(grid.shape, np.nan), "", []
+    # chart soundings inside the channel
+    p_snd, s_snd, z_snd, near = point_profile(enc_s, chan, line, grid, mllw)
+    # measured: USACE eHydro, then NOS surveys, then crowdsourced; each replaces what follows
+    nan = np.full(grid.shape, np.nan)
+    p_eh, eh_sid, eh_cov = nan, "", []
     if spec.get("ehydro"):
         p_eh, eh_sid, eh_cov = ehydro_profile(spec["ehydro"], line, chan, grid, mllw)
-    p_snd = np.where(np.isfinite(p_eh), np.nan, p_snd)
+    p_nos, n_nos = nan, 0
+    if spec.get("nos"):
+        p_nos, _, _, nn = point_profile(nos_points(spec["nos"]), chan, line, grid, mllw, G)
+        n_nos = len(nn)
+    p_csb, n_csb = nan, 0
+    cs = csb_points(name)
+    if cs is not None and len(cs):
+        p_csb, _, _, nn = point_profile(cs, chan, line, grid, mllw, G)
+        n_csb = len(nn)
+    p_nos = np.where(np.isfinite(p_eh), np.nan, p_nos)
+    p_csb = np.where(np.isfinite(p_eh) | np.isfinite(p_nos), np.nan, p_csb)
+    measured = np.isfinite(p_eh) | np.isfinite(p_nos) | np.isfinite(p_csb)
+    p_snd = np.where(measured, np.nan, p_snd)
     # chart depth areas elsewhere
     cx, cy, _, _ = normals(line, grid)
     d_area = np.full(grid.shape, np.nan)
     sidx = enc_a.sindex
-    for j in np.nonzero(~np.isfinite(p_snd) & ~np.isfinite(p_eh))[0]:
+    for j in np.nonzero(~np.isfinite(p_snd) & ~measured)[0]:
         p = shapely.Point(cx[j], cy[j])
         for rad in DEPARE_RADIUS_M:  # chart areas the centreline itself runs through
             hit = sidx.query(p.buffer(rad).intersection(line.buffer(1.0)), predicate="intersects")
@@ -554,11 +649,19 @@ def tidal_reach(name, spec, flow, G, nodes, enc_s, enc_a, areas, law, land):
                 break
     p_area = mllw - d_area
     p_tail = mllw - TAIL_MLLW_M
-    code = np.select([np.isfinite(p_eh), np.isfinite(p_snd), np.isfinite(p_area)], [6, 1, 2], 3)
-    comb = np.select([np.isfinite(p_eh), np.isfinite(p_snd), np.isfinite(p_area)], [p_eh, p_snd, p_area], p_tail)
+    have = [np.isfinite(p) for p in (p_eh, p_nos, p_csb, p_snd, p_area)]
+    code = np.select(have, [6, 8, 9, 1, 2], 3)
+    comb = np.select(have, [p_eh, p_nos, p_csb, p_snd, p_area], p_tail)
     prof = riverbed.running_median(grid, comb, grid, TIDAL_SMOOTH_M)
     prof[~np.isfinite(comb)] = np.nan
     prof = riverbed.fill_interior(grid, prof)
+    if spec.get("stated"):
+        lo, la, depth = spec["stated"]
+        pt = gpd.GeoSeries([shapely.Point(lo, la)], crs=4326).to_crs(EPSG).iloc[0]
+        s0 = float(shapely.line_locate_point(line, pt))
+        new = riverbed.stated_floor(prof, mllw, grid, s0, depth)
+        code = np.where(new < prof - 0.01, 10, code)
+        prof = new
     bed_cl = G.sample(cx, cy)
     # open water (bed_source 3: lidar NoData -> CUDEM's surveyed bed) is never painted:
     # the burn is for channels the lidar paved over. It also keeps the Delaware itself
@@ -567,7 +670,8 @@ def tidal_reach(name, spec, flow, G, nodes, enc_s, enc_a, areas, law, land):
     out = [p] if p is not None else []
     prof_df = pd.DataFrame({"reach": name, "kind": "tidal", "station_m": grid, "da_km2": da,
                             "mllw_navd88_m": mllw, "chart_depth_area_m": d_area,
-                            "soundings_bed_m": p_snd, "ehydro_bed_m": p_eh, "bed_profile_m": prof, "src": code,
+                            "soundings_bed_m": p_snd, "ehydro_bed_m": p_eh, "nos_bed_m": p_nos,
+                            "csb_bed_m": p_csb, "bed_profile_m": prof, "src": code,
                             "bed_merged_cl_m": bed_cl, "x": cx, "y": cy})  # fmt: skip
     row = {"reach": name, "kind": "tidal", "river": spec["river"], "length_km": line.length / 1e3,
            "levelpathi": int(flow.loc[k, "levelpathi"]),
@@ -575,6 +679,9 @@ def tidal_reach(name, spec, flow, G, nodes, enc_s, enc_a, areas, law, land):
            "soundings_to_km": float(s_snd.min() / 1e3) if len(near) else np.nan,
            "ehydro_survey": eh_sid, "km_ehydro": float((code == 6).sum() * TIDAL_STEP_M / 1e3),
            "km_soundings": float((code == 1).sum() * TIDAL_STEP_M / 1e3),
+           "n_nos": n_nos, "km_nos": float((code == 8).sum() * TIDAL_STEP_M / 1e3),
+           "n_csb": n_csb, "km_csb": float((code == 9).sum() * TIDAL_STEP_M / 1e3),
+           "km_stated": float((code == 10).sum() * TIDAL_STEP_M / 1e3),
            "km_chart_area": float((code == 2).sum() * TIDAL_STEP_M / 1e3),
            "km_uncharted": float((code == 3).sum() * TIDAL_STEP_M / 1e3),
            "mllw_navd88_m": f"{mllw[0]:+.2f} head .. {mllw[-1]:+.2f} mouth",
@@ -622,6 +729,8 @@ def anchor_targets(gauges: pd.DataFrame) -> pd.DataFrame:
     cm = pd.read_csv(CH / "usgs_channel_measurements.csv", dtype={"site": str}, low_memory=False)
     rows = []
     for s, name in ANCHOR_SITES.items():
+        if s not in sites.index or s not in set(gauges["site"]):
+            continue  # another side's gauge
         st = sites.loc[s]
         if st["altitude_datum"] != "NAVD88":
             raise ValueError(f"{s} {name}: gauge datum is {st['altitude_datum']}, not NAVD88")
@@ -636,7 +745,8 @@ def anchor_targets(gauges: pd.DataFrame) -> pd.DataFrame:
         rows.append({"site": s, "name": name, "datum_navd88_m": datum, "stage_p50_m": stage,
                      "n_stage": len(j), "depth_m": g["depth_m"], "bed_navd88_m": datum + stage - g["depth_m"],
                      "levelpathi": g["levelpathi"], "x": g["x"], "y": g["y"]})  # fmt: skip
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=["site", "name", "datum_navd88_m", "stage_p50_m", "n_stage", "depth_m",
+                                       "bed_navd88_m", "levelpathi", "x", "y"])  # fmt: skip
 
 
 def nontidal_path(lp, ids, flow, G, hot, law, gauges, lakes, areas, anchors):
@@ -722,7 +832,19 @@ def main() -> None:
     ap.add_argument("--da-min", type=float, default=10.0, help="non-tidal: min drainage area km2")
     ap.add_argument("--min-width", type=float, default=10.0, help="painted strip floor, m")
     ap.add_argument("--no-raster", action="store_true", help="tables/profiles only")
+    ap.add_argument("--tag", default="", help="suffix for the data/elevation outputs (v2 ...)")
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
+    ap.add_argument("--stated", action="append", default=[], metavar="REACH=DEPTH",
+                    help="calibration: override a reach's stated depth below MLLW (m)")
     a = ap.parse_args()
+    set_side(a.side)
+    reaches = {k: dict(v) for k, v in domain.side(a.side).tidal_reaches.items()}
+    for kv in a.stated:
+        k, d = kv.split("=")
+        lo, la, _ = reaches[k]["stated"]
+        reaches[k]["stated"] = (lo, la, float(d))
+        print(f"calibration: {k} stated depth {float(d):.2f} m below MLLW")
+    sfx = domain.side(a.side).files + (f"_{a.tag}" if a.tag else "")
     MIN_WIDTH = a.min_width
 
     flow = load_flowlines()
@@ -751,7 +873,7 @@ def main() -> None:
     lakes = lakes[lakes["areasqkm"] >= LAKE_MIN_KM2]
 
     rows, profs, paints, lines, tidal, snd_used, eh_cov = [], [], [], {}, set(), [], []
-    for name, spec in domain.TIDAL_REACHES.items():
+    for name, spec in reaches.items():
         line, p, prof_df, row, path, used, cov = tidal_reach(name, spec, flow, G, nodes, enc_s, enc_a, areas, law, land)
         tidal |= set(path[1:])  # the head flowline keeps its non-tidal upper part
         lines[name] = line
@@ -762,7 +884,8 @@ def main() -> None:
         paints += p
         print(f"  tidal {name:10s} {row['length_km']:5.1f} km, eHydro {row['ehydro_survey'] or '-'} "
               f"({row['km_ehydro']:.1f} km), {row['n_soundings']:4d} soundings "
-              f"({row['km_soundings']:.1f} km), chart areas {row['km_chart_area']:.1f} km, "
+              f"({row['km_soundings']:.1f} km), NOS {row['km_nos']:.1f} km, CSB {row['km_csb']:.1f} km, "
+              f"stated {row['km_stated']:.1f} km, chart areas {row['km_chart_area']:.1f} km, "
               f"uncharted {row['km_uncharted']:.1f} km, MLLW "
               f"{row['mllw_navd88_m']}, bed p50 {row['bed_p50_m']:+.2f}")  # fmt: skip
 
@@ -785,16 +908,17 @@ def main() -> None:
         profs += p
         paints += pt
 
-    pd.concat(snd_used, ignore_index=True).to_csv(ELEV / "riverbed_soundings.csv", index=False, float_format="%.3f")
+    pd.concat(snd_used, ignore_index=True).to_csv(ELEV / f"riverbed_soundings{sfx}.csv", index=False, float_format="%.3f")
     pd.DataFrame(eh_cov).to_csv(EHYDRO_DIR / "coverage.csv", index=False, float_format="%.2f")
     table = pd.DataFrame(rows)
-    table.to_csv(ELEV / "river_table.csv", index=False)
-    pd.concat(profs, ignore_index=True).to_csv(ELEV / "riverbed_profiles.csv", index=False, float_format="%.3f")
+    table.to_csv(ELEV / f"river_table{sfx}.csv", index=False)
+    pd.concat(profs, ignore_index=True).to_csv(ELEV / f"riverbed_profiles{sfx}.csv", index=False, float_format="%.3f")
     gl = gpd.GeoDataFrame(
-        [{"reach": k, "river": domain.TIDAL_REACHES[k]["river"], "kind": "tidal", "geometry": v} for k, v in lines.items()]
+        [{"reach": k, "river": reaches[k]["river"], "kind": "tidal", "geometry": v} for k, v in lines.items()]
         + [dict(d, kind="non-tidal") for d in nt_lines], crs=EPSG)  # fmt: skip
-    gl.to_file(ELEV / "riverbed_centrelines.gpkg", driver="GPKG")
-    print(f"wrote {ELEV / 'river_table.csv'} ({len(table)} rows), riverbed_profiles.csv, riverbed_centrelines.gpkg")
+    gl.to_file(ELEV / f"riverbed_centrelines{sfx}.gpkg", driver="GPKG")
+    print(f"wrote {ELEV / f'river_table{sfx}.csv'} ({len(table)} rows), riverbed_profiles{sfx}.csv, "
+          f"riverbed_centrelines{sfx}.gpkg")
     if a.no_raster:
         return
 
@@ -820,22 +944,23 @@ def main() -> None:
     prof = G.bed.profile.copy()
     prof.update(dtype="float32", nodata=NODATA, compress="deflate", predictor=3, tiled=True,
                 blockxsize=512, blockysize=512, BIGTIFF="YES")  # fmt: skip
-    with rasterio.open(ELEV / "riverbed_burn.tif", "w", **prof) as d:
+    with rasterio.open(ELEV / f"riverbed_burn{sfx}.tif", "w", **prof) as d:
         d.write(out, 1)
         d.update_tags(note="river-bed burn, m NAVD88; merge as min(bed_merged, burn); "
                            "scripts/build_riverbeds.py", **{f"src_{k}": v for k, v in SRC_NAMES.items()})  # fmt: skip
     prof.update(dtype="uint8", nodata=0, predictor=2)
-    with rasterio.open(ELEV / "riverbed_source.tif", "w", **prof) as d:
+    with rasterio.open(ELEV / f"riverbed_source{sfx}.tif", "w", **prof) as d:
         d.write(srcr, 1)
         d.update_tags(**{f"src_{k}": v for k, v in SRC_NAMES.items()})
     lower = b[keep] - burn[keep]
-    px_area = abs(G.T.a * G.T.e) * (111_320 * np.cos(np.radians(39.45))) * 110_574
+    lat0 = G.T.f + G.T.e * G.H / 2
+    px_area = abs(G.T.a * G.T.e) * (111_320 * np.cos(np.radians(lat0))) * 110_574
     for c, n in SRC_NAMES.items():
         m = code[keep] == c
         if m.any():
             print(f"  src {c} {n:36s} {m.sum() * px_area / 1e6:7.2f} km2, lowered by "
                   f"p50 {np.median(lower[m]):.2f} m (p90 {np.percentile(lower[m], 90):.2f})")
-    print(f"wrote {ELEV / 'riverbed_burn.tif'} and riverbed_source.tif")
+    print(f"wrote {ELEV / f'riverbed_burn{sfx}.tif'} and riverbed_source{sfx}.tif")
 
 
 MIN_WIDTH = 10.0

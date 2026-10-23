@@ -163,5 +163,25 @@ class TestNeverRaise(unittest.TestCase):
         self.assertEqual(out[1], 0.5)
 
 
+class TestV2Sources(unittest.TestCase):
+    def test_parse_a93(self):
+        lon, lat, d = rb.parse_a93("H10027   39798841 -75420869   1260711\r\n")
+        self.assertAlmostEqual(lat, 39.798841)
+        self.assertAlmostEqual(lon, -75.420869)
+        self.assertAlmostEqual(d, 12.6)
+        self.assertIsNone(rb.parse_a93("H10027   39798841 -75420869 999990711"))
+
+    def test_csb_depth(self):
+        # 4.0 m below a transducer 0.5 m down, sea 1.2 m above MLLW: bed 3.3 m below MLLW
+        self.assertAlmostEqual(float(rb.csb_depth_mllw(4.0, 1.2, 0.5)), 3.3)
+
+    def test_stated_floor(self):
+        grid = np.arange(0.0, 500.0, 100.0)  # head (0) to mouth (400)
+        mllw = np.full(5, -0.9)
+        prof = np.array([0.0, -1.0, -2.0, -5.0, -3.0])
+        out = rb.stated_floor(prof, mllw, grid, 200.0, 2.13)
+        np.testing.assert_allclose(out, [0.0, -1.0, -3.03, -5.0, -3.03])  # never raised
+
+
 if __name__ == "__main__":
     unittest.main()

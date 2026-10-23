@@ -14,7 +14,9 @@ which hydromt_sfincs' ``lulc/NLCD_HSG.csv`` (curve numbers) and bight's
 
 Writes data/landcover/nlcd_2021.tif (uint8, EPSG:5070, 30 m, ring bbox + 1 km).
 
-Usage:  python scripts/fetch_nlcd.py [--overwrite]
+Delaware (``--side de``): over the DE ring, data/landcover/nlcd_2021_de.tif.
+
+Usage:  python scripts/fetch_nlcd.py [--side de] [--overwrite]
 """
 
 from __future__ import annotations
@@ -36,10 +38,12 @@ OUT = config.LANDCOVER_DIR / "nlcd_2021.tif"
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
     a = ap.parse_args()
+    OUT = config.LANDCOVER_DIR / f"nlcd_2021{domain.side(a.side).files}.tif"
     if OUT.exists() and not a.overwrite:
         raise SystemExit(f"{OUT} exists; pass --overwrite")
-    ring = region.load_ring()
+    ring = region.load_ring(a.side)
     w, s, e, n = ring.to_crs(domain.EPSG).buffer(PAD_M).to_crs(5070).total_bounds
     # Snap outward to the NLCD 30 m grid (its origin is a multiple of 15 m off 0).
     w, s = np.floor(w / 30) * 30 - 15, np.floor(s / 30) * 30 - 15

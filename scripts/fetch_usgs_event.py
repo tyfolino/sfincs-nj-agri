@@ -7,7 +7,9 @@ of discharge (00060), gage height (00065) or tidal / NAVD88 elevation (72279, 62
 Writes data/gauges/usgs_events/<event>/<site>_<param>.csv (time UTC, value, approval;
 units as served: ft3/s or ft) and prints what it got. Existing files are skipped.
 
-Usage:  python scripts/fetch_usgs_event.py --event sep2023
+Delaware (``--side de``): the sites of usgs_series_de.csv, into the same folders.
+
+Usage:  python scripts/fetch_usgs_event.py --event sep2023 [--side de]
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ import argparse
 
 import pandas as pd
 
-from agri_sfincs import config, usgs_ogc
+from agri_sfincs import config, domain, usgs_ogc
 from agri_sfincs.events import EVENTS
 
 PARAMS = {"00060": "ft^3/s", "00065": "ft", "72279": "ft", "62620": "ft", "63160": "ft"}
@@ -27,13 +29,14 @@ WHAT = {"discharge": "00060", "gage height": "00065", "tidal elevation": "72279"
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--event", required=True, choices=sorted(EVENTS))
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
     a = ap.parse_args()
     ev = EVENTS[a.event]
     t0, t1 = pd.Timestamp(ev.tstart), pd.Timestamp(ev.tstop)
     out = config.GAUGE_DIR / "usgs_events" / ev.name
     out.mkdir(parents=True, exist_ok=True)
 
-    inv = pd.read_csv(config.GAUGE_DIR / "usgs_series.csv", dtype={"site": str})
+    inv = pd.read_csv(config.GAUGE_DIR / f"usgs_series{domain.side(a.side).files}.csv", dtype={"site": str})
     inv = inv[inv.computation_period_identifier == "Points"]
     inv = inv[(pd.to_datetime(inv.begin) <= t1) & (pd.to_datetime(inv.end) >= t0)]
     for r in inv.itertuples():

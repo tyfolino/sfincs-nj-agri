@@ -27,7 +27,9 @@ Writes data/soils/:
   hsg_drained.tif            uint8 codes, same grid
   ksat_um_s.tif              float32, harmonic-mean ksat, same grid (nodata -9999)
 
-Usage:  python scripts/fetch_ssurgo.py [--overwrite]
+Delaware (``--side de``): the same over the DE ring, every file with a _de suffix.
+
+Usage:  python scripts/fetch_ssurgo.py [--side de] [--overwrite]
 """
 
 from __future__ import annotations
@@ -142,13 +144,15 @@ def hsg_codes(hsg: pd.Series, drained: bool) -> pd.Series:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
     a = ap.parse_args()
-    gpkg = SOILS / "ssurgo_mapunits.gpkg"
+    sfx = domain.side(a.side).files
+    gpkg = SOILS / f"ssurgo_mapunits{sfx}.gpkg"
     if gpkg.exists() and not a.overwrite:
         raise SystemExit(f"{gpkg} exists; pass --overwrite")
     SOILS.mkdir(parents=True, exist_ok=True)
 
-    ring = region.load_ring()
+    ring = region.load_ring(a.side)
     bbox = tuple(ring.to_crs(domain.EPSG).buffer(1000).to_crs(4326).total_bounds)
     polys = fetch_polygons(bbox)
     attrs = fetch_attributes(sorted(polys.mukey.unique()))
@@ -170,13 +174,13 @@ def main() -> None:
     for col in ("hsg_undrained", "hsg_drained"):
         arr = rasterize(zip(mu_u.geometry, mu_u[col]), out_shape=shape, transform=tr,
                         fill=NO_HSG, dtype="uint8")  # fmt: skip
-        with rasterio.open(SOILS / f"{col}.tif", "w",
+        with rasterio.open(SOILS / f"{col}{sfx}.tif", "w",
                            dtype="uint8", nodata=0, **prof) as dst:  # fmt: skip
             dst.write(arr, 1)
     ks = mu_u[mu_u.ksat_hmean_um_s.notna()]
     arr = rasterize(zip(ks.geometry, ks.ksat_hmean_um_s), out_shape=shape,
                     transform=tr, fill=-9999, dtype="float32")  # fmt: skip
-    with rasterio.open(SOILS / "ksat_um_s.tif", "w", dtype="float32", nodata=-9999,
+    with rasterio.open(SOILS / f"ksat_um_s{sfx}.tif", "w", dtype="float32", nodata=-9999,
                        **prof) as dst:  # fmt: skip
         dst.write(arr, 1)
 

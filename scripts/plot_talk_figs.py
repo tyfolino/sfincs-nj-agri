@@ -3,7 +3,7 @@ with the ag-econ colleagues (FINDINGS §35, §37, §27). They redraw numbers mad
 
 1. talk_storm_footprint.png  the 12 storm tides flood one nested footprint: low crop field x
    storm, lit where the storm floods >= 10% of the field (tide only;
-   data/analysis/sandy_panel/field_event.csv, the scripts/storm_overlap.py field set).
+   data/analysis/sandy_panel/field_event.csv, the build_sandy_panel.py field set).
 2. talk_crop_response.png    pooled same-season crop response to a spring storm, flooded minus
    flood-prone fields it missed; the marsh-edge fields wet on ordinary tides are left out
    (data/analysis/storm_panel/estimates.csv, scripts/plot_storm_panel.py).

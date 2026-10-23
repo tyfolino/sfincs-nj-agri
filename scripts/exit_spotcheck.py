@@ -1,8 +1,8 @@
 """NAIP check of Landsat-detected exits from farming, LOW vs UPLAND (are low-ground exits
 just classifier noise on wet fields?).
 
-From data/landuse/field_exit_events[_<tag>].parquet (scripts/field_history.py; tag cells_v2:
-scripts/field_classes.py), draws at random (area-weighted) N exits per stratum among exits
+From data/landuse/field_exit_events[_<tag>].parquet (tag cells_v2:
+scripts/field_classes.py; the v1 tags came from field_history.py, deleted 2026-10-23), draws at random (area-weighted) N exits per stratum among exits
 in EXIT_YEARS, so NAIP brackets them:
   low     cell / unit ground below recent MHHW + 0.6 m
   upland  ground more than 3 m above recent MHHW
@@ -41,14 +41,14 @@ def bracket(y: int):
 
 
 def on_cells(tag: str) -> bool:
-    """Whether the ``tag``'s exits are keyed by 120 m cell (``cells``: field_history.py;
+    """Whether the ``tag``'s exits are keyed by 120 m cell (``cells``: the deleted field_history.py;
     ``cells_v2``: field_classes.py) rather than by field unit."""
     return tag.startswith("cells")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--tag", default="")
+    ap.add_argument("--tag", default="cells_v2")
     ap.add_argument("--n", type=int, default=18)
     a = ap.parse_args()
     sfx = f"_{a.tag}" if a.tag else ""

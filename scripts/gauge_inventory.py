@@ -17,7 +17,10 @@ Outputs (data/gauges/):
   usgs_series.csv         one row per USGS time series inside the ring
   usgs_dv_completeness.csv  site x year, % days present
 
-Usage:  python scripts/gauge_inventory.py [--years 2002-2025] [--skip-noaa] [--skip-usgs]
+Delaware (``--side de``): the USGS part over the DE ring, usgs_series_de.csv and
+usgs_dv_completeness_de.csv (the NOAA records are shared).
+
+Usage:  python scripts/gauge_inventory.py [--years 2002-2025] [--skip-noaa] [--skip-usgs] [--side de]
 """
 
 from __future__ import annotations
@@ -104,8 +107,9 @@ def noaa(years: list[int]) -> None:
 
 
 # ── USGS ──────────────────────────────────────────────────────────────────────
-def usgs(years: list[int]) -> None:
-    ring = region.load_ring().to_crs(4326)
+def usgs(years: list[int], side: str = "nj") -> None:
+    sd = domain.side(side)
+    ring = region.load_ring(side).to_crs(4326)
     w, s, e, n = ring.total_bounds
     recs = []
     for pc, what in USGS_PARAMS.items():
@@ -126,7 +130,7 @@ def usgs(years: list[int]) -> None:
     pts = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.lon, df.lat), crs=4326)
     pts = pts[pts.within(ring.geometry.iloc[0])].copy()
     pts["site"] = pts.monitoring_location_id.str.removeprefix("USGS-")
-    pts["known"] = pts.site.map(domain.USGS_SITES)
+    pts["known"] = pts.site.map(sd.usgs_sites)
     meta = usgs_ogc.locations(sorted(pts.site.unique()))
     pts = pts.join(meta[["name", "drainage_area_mi2", "site_type"]], on="site")
     pts["begin"] = pts.begin.str[:10]
@@ -134,7 +138,7 @@ def usgs(years: list[int]) -> None:
     cols = ["site", "name", "site_type", "what", "computation_period_identifier",
             "begin", "end", "drainage_area_mi2", "lon", "lat", "known"]  # fmt: skip
     pts = pts[cols].sort_values(["site", "what"])
-    pts.to_csv(config.GAUGE_DIR / "usgs_series.csv", index=False)
+    pts.to_csv(config.GAUGE_DIR / f"usgs_series{sd.files}.csv", index=False)
     print(pts.drop(columns=["lon", "lat"]).to_string(index=False))
 
     # Daily-mean discharge: download and measure completeness for the study years.
@@ -158,7 +162,7 @@ def usgs(years: list[int]) -> None:
                  "pct": round(100 * (q.index.year == y).sum() / n_exp, 1)}
             )  # fmt: skip
     t = pd.DataFrame(rows).pivot(index="site", columns="year", values="pct")
-    t.to_csv(config.GAUGE_DIR / "usgs_dv_completeness.csv")
+    t.to_csv(config.GAUGE_DIR / f"usgs_dv_completeness{sd.files}.csv")
     print(t.to_string())
 
 
@@ -167,11 +171,12 @@ def main() -> None:
     ap.add_argument("--years", default="2002-2025")
     ap.add_argument("--skip-noaa", action="store_true")
     ap.add_argument("--skip-usgs", action="store_true")
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
     a = ap.parse_args()
     years = parse_years(a.years)
     config.GAUGE_DIR.mkdir(parents=True, exist_ok=True)
     if not a.skip_usgs:
-        usgs(years)
+        usgs(years, a.side)
     if not a.skip_noaa:
         noaa(years)
 

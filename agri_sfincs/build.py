@@ -34,7 +34,7 @@ from agri_sfincs import config, domain, region
 #: lidar water surface", and CUDEM's flat ~0 m inland-water "beds" (Union Lake -0.20
 #: under a 7.56 m surface) must never reach the model (user 2026-10-02; bight FINDINGS
 #: §54a). ``bed_merged`` (scripts/build_bed.py, v0) carries the lidar water surface in
-#: rivers above head of tide; ``bed_v1`` adds the river-bed burn (FINDINGS §11).
+#: rivers above head of tide; ``bed_v1`` adds the river-bed burn (FINDINGS §11), ``bed_v2`` the v2 creek beds.
 #: Water-level boundary on edge faces with bed below this (m NAVD88) ...
 WL_ZMAX = -1.0
 #: ... AND inside OPEN WATER = where the lidar has no data and CUDEM fills the bed
@@ -67,6 +67,9 @@ class StaticConfig:
     #: keys "weirfile" / "drnfile" -> source path. Empty = none (v0).
     structures: dict = field(default_factory=dict)
     extra: dict = field(default_factory=dict)
+    #: agri_sfincs.domain.SIDES key: the outline, bed_source and land-cover / soil sources
+    #: (catalog names + the side's suffix); written to <root>/side.txt (runs.model_side)
+    side: str = "nj"
 
     @property
     def root(self) -> Path:
@@ -82,7 +85,8 @@ def build_static(cfg: StaticConfig) -> Path:
     if (root / "sfincs.inp").exists():
         raise FileExistsError(f"{root} already has a model; pick a new name")
     root.mkdir(parents=True, exist_ok=True)
-    outline = region.load_outline().to_crs(domain.EPSG)
+    outline = region.load_outline(cfg.side).to_crs(domain.EPSG)
+    sfx = domain.side(cfg.side).files
 
     sf = SfincsModel(data_libs=[str(config.CATALOG), *map(str, cfg.catalogs)], root=str(root), mode="w+",
                      write_gis=True)  # fmt: skip
@@ -103,7 +107,7 @@ def build_static(cfg: StaticConfig) -> Path:
 
     # 3. Mask: everything inside the outline; water-level BC on deep edge faces --
     sf.quadtree_mask.create_active(include_polygon=outline, all_touched=False)
-    wl_zone = open_water_zone(outline)
+    wl_zone = open_water_zone(outline, cfg.side)
     sf.quadtree_mask.create_boundary(btype="waterlevel", zmax=WL_ZMAX,
                                      include_polygon=wl_zone, reset_bounds=True)  # fmt: skip
     mask = sf.quadtree_grid.data["mask"].values
@@ -120,7 +124,7 @@ def build_static(cfg: StaticConfig) -> Path:
 
     # 4. Roughness + subgrid ---------------------------------------------------
     roughness_list = [{"manning": m} for m in cfg.manning_first]
-    roughness_list.append({"lulc": "nlcd_2021", "reclass_table": str(ROUGHNESS_TABLE)})
+    roughness_list.append({"lulc": f"nlcd_2021{sfx}", "reclass_table": str(ROUGHNESS_TABLE)})
     sf.quadtree_roughness.create(roughness_list=roughness_list, nrmax=200)
     sf.quadtree_subgrid.create(
         elevation_list=elevation_list,
@@ -133,9 +137,9 @@ def build_static(cfg: StaticConfig) -> Path:
 
     # 5. Infiltration: curve number with recovery (cnb) ------------------------
     sf.quadtree_infiltration.create_cn_with_recovery(
-        lulc="nlcd_2021",
-        hsg=cfg.hsg,
-        ksat="ksat_um_s",
+        lulc=f"nlcd_2021{sfx}",
+        hsg=f"{cfg.hsg}{sfx}",
+        ksat=f"ksat_um_s{sfx}",
         reclass_table=cn_table(Path(DATADIR) / "lulc" / "NLCD_HSG.csv"),
         effective=cfg.effective,
     )
@@ -148,6 +152,7 @@ def build_static(cfg: StaticConfig) -> Path:
     gc.collect()
     patch_infiltration_keys(root)
     stage_structures(root, cfg.structures)
+    (root / "side.txt").write_text(cfg.side + "\n")
     return root
 
 
@@ -176,21 +181,30 @@ def stage_structures(root: Path, sources: dict | None = None) -> list[str]:
     return keys
 
 
-def open_water_zone(outline):
-    """Open water (lidar NoData -> CUDEM, bed_source == 3) inside the outline, buffered
-    by WL_ZONE_M, as a GeoDataFrame in the model CRS (see WL_ZONE_M)."""
+#: bed_source codes that count as open water for the boundary zone, per side. NJ: 3 (NJ lidar
+#: NoData -> CUDEM), as built and validated. Delaware's 2023 lidar covers the river beside its
+#: shore as a hydro-flat surface, so open water there is mostly code 2 (CUDEM deeper): with 3
+#: alone the canal-latitude cut across the river (429 faces, -4.5..-18.7 m) stayed closed.
+OPEN_WATER_CODES = {"nj": (3,), "de": (2, 3)}
+
+
+def open_water_zone(outline, side: str = "nj"):
+    """Open water (bed_source in OPEN_WATER_CODES[side]) inside the outline, buffered by
+    WL_ZONE_M, as a GeoDataFrame in the model CRS (see WL_ZONE_M). ``side``: whose
+    bed_source[_de].tif."""
     import geopandas as gpd
     import rasterio
     from rasterio.enums import Resampling
     from rasterio.features import shapes
     from shapely.geometry import shape
 
-    with rasterio.open(config.ELEV_DIR / "bed_source.tif") as src:
+    with rasterio.open(config.ELEV_DIR / f"bed_source{domain.side(side).files}.tif") as src:
         h, w = src.height // WL_ZONE_DECIMATE, src.width // WL_ZONE_DECIMATE
         a = src.read(1, out_shape=(h, w), resampling=Resampling.mode)
         tr = src.transform * src.transform.scale(src.width / w, src.height / h)
         crs = src.crs
-    polys = [shape(g) for g, v in shapes((a == 3).astype("uint8"), transform=tr) if v == 1]
+    polys = [shape(g) for g, v in shapes(np.isin(a, OPEN_WATER_CODES[side]).astype("uint8"), transform=tr)
+             if v == 1]  # fmt: skip
     water = gpd.GeoSeries(polys, crs=crs).to_crs(domain.EPSG).union_all()
     zone = water.buffer(WL_ZONE_M).intersection(outline.geometry.iloc[0])
     return gpd.GeoDataFrame(geometry=[zone], crs=domain.EPSG)

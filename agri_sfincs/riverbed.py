@@ -61,6 +61,32 @@ def chart_to_navd88(depth_below_mllw, mllw_navd88):
     return np.asarray(mllw_navd88, dtype="float64") - np.asarray(depth_below_mllw, dtype="float64")
 
 
+def parse_a93(line: str) -> tuple[float, float, float] | None:
+    """(lon, lat, depth m below the survey's datum) from one NCEI HYD93 XYZ (.a93) record, or
+    None for a no-depth record (depth field > 9000). Columns as nj_bight_sfincs read them:
+    lat 9-17 and lon 17-27 in micro-degrees, depth 27-33 in decimetres."""
+    d = int(line[27:33]) / 10
+    if d > 9000:
+        return None
+    return int(line[17:27]) / 1e6, int(line[9:17]) / 1e6, d
+
+
+def csb_depth_mllw(raw_depth, water_level_mllw, draft: float):
+    """Crowdsourced (CSB) depth below MLLW: the raw depth is below the transducer, which sits
+    ``draft`` m below a sea surface ``water_level_mllw`` m above MLLW at the time."""
+    return np.asarray(raw_depth, "float64") + draft - np.asarray(water_level_mllw, "float64")
+
+
+def stated_floor(prof, mllw, grid, s_from: float, depth_below_mllw: float):
+    """Lower ``prof`` to at least ``depth_below_mllw`` below MLLW at stations >= ``s_from``
+    (stations run from the head of tide down to the mouth): a charted controlling depth or a
+    stated depth is a floor the bed may not sit above. Never raises."""
+    prof = np.asarray(prof, "float64").copy()
+    sel = np.asarray(grid) >= s_from
+    prof[sel] = np.fmin(prof[sel], np.asarray(mllw, "float64")[sel] - depth_below_mllw)
+    return prof
+
+
 def depare_depth(drval1, drval2, mid_max: float = 2.0, shallow_m: float | None = None) -> float:
     """Representative depth (m below chart datum) for one station from the S-57 depth
     areas that touch it, from the DEEPEST interval:

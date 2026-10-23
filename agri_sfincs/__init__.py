@@ -1,6 +1,7 @@
-"""agri_sfincs — a watershed-bounded SFINCS model of Salem / Cumberland / Gloucester
-counties (NJ), built to turn historical rain and tide into flood characteristics per
-county x month (x crop) for the Rutgers crop-insurance loss study.
+"""agri_sfincs — watershed-bounded SFINCS models of the Delaware Bay shore (NJ: Salem /
+Cumberland / Gloucester; DE: the C&D Canal to Lewes), for bayshore farmland under storm
+tides, dikes and sea-level rise, and the farm-exit and dike pay-off work with the Rutgers
+ag-econ colleagues (the crop-insurance line is archived).
 
 Every geographic fact lives in ``domain.py``; every path in ``config.py``.
 """

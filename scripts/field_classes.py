@@ -18,7 +18,7 @@ farmed / not-farmed classifier confuses hay with old field. NJDEP's photo-interp
    cells weighted by their parent's inverse sampling fraction. Rates by ground height above
    recent MHHW and destination, and two comparisons at the same height:
      tide-connected vs not  (DEM connectivity to tidal water at MHHW + 1 m: §21's
-                             bayshore_exposure.connected_low; "not" = behind a bank or road)
+                             exposure.connected_low; "not" = behind a bank or road)
      bayshore vs inland     (distance to tidal water <= or > NEAR_KM)
 
 Writes data/landuse/field_classes_cells.parquet (cell, year, class probabilities, cls),

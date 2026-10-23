@@ -79,18 +79,18 @@ def longest_run(wet) -> int:
     return best
 
 
-def add_county_levee(g: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """``g`` (polygons, any projected crs) cut to the study counties, plus ``county`` (by
-    representative point) and ``behind_levee`` (at least half the polygon inside an NLD leveed
-    area). Index reset."""
+def add_county_levee(g: gpd.GeoDataFrame, side: str = "nj") -> gpd.GeoDataFrame:
+    """``g`` (polygons, any projected crs) cut to the side's study counties, plus ``county``
+    (by representative point) and ``behind_levee`` (at least half the polygon inside an NLD
+    leveed area). Index reset."""
     cty = region.load_counties().to_crs(g.crs)
-    cty = cty[cty.fips.isin(domain.COUNTIES)][["name", "geometry"]].rename(columns={"name": "county"})
+    cty = cty[cty.fips.isin(domain.side(side).counties)][["name", "geometry"]].rename(columns={"name": "county"})
     pts = g[["geometry"]].copy()
     pts["geometry"] = g.representative_point()
     g = g.copy()
     g["county"] = gpd.sjoin(pts, cty, how="left", predicate="within").groupby(level=0).county.first()
     g = g[g.county.notna()].reset_index(drop=True)
-    lev = dikes.leveed_areas(g.crs)
+    lev = dikes.leveed_areas(g.crs, side)
     inter = gpd.overlay(g[["geometry"]].reset_index(names="fid"), lev[["geometry"]], how="intersection")
     share = inter.assign(a=inter.area).groupby("fid").a.sum() / g.area
     g["behind_levee"] = share.reindex(g.index).fillna(0).values >= 0.5

@@ -1,5 +1,5 @@
-"""Shared pieces of the land-use panel analyses (scripts/storm_overlap.py,
-scripts/plot_storm_panel.py, scripts/storm_ndvi.py): the low-crop-field set, height reweighting
+"""Shared pieces of the land-use panel analyses (scripts/build_storm_panel.py,
+scripts/plot_storm_panel.py): the low-crop-field set, height reweighting
 and the flooded - comparison estimate against quiet years. Pure, tested."""
 
 from __future__ import annotations

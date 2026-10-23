@@ -166,17 +166,20 @@ def precip_source(event: Event, precip: str | None = None) -> str:
     return pr.ensure_forcing(src, event.tstart, event.tstop, f"{src}_{event.name}")
 
 
-def obs_points() -> gpd.GeoDataFrame:
-    """Every USGS gauge inside the ring (inventory), the NOAA stations, and the CO-OPS tidal
-    datum stations (data/channels/tidal_datum_nodes.csv: published mean ranges up the creeks,
-    scripts/check_creek_tides.py), as SFINCS observation points named ``<agency>_<id>``
-    (``coops_<id>`` for the datum stations)."""
-    inv = pd.read_csv(config.GAUGE_DIR / "usgs_series.csv", dtype={"site": str})
+def obs_points(side: str = "nj") -> gpd.GeoDataFrame:
+    """Every USGS gauge inside the side's ring (inventory), the NOAA stations, and the CO-OPS
+    tidal datum stations (data/channels[/de]/tidal_datum_nodes.csv: published mean ranges up
+    the creeks, scripts/check_creek_tides.py), as SFINCS observation points named
+    ``<agency>_<id>`` (``coops_<id>`` for the datum stations)."""
+    sfx = domain.side(side).files
+    inv = pd.read_csv(config.GAUGE_DIR / f"usgs_series{sfx}.csv", dtype={"site": str})
     inv = inv.drop_duplicates("site")
     pts = [(f"usgs_{r.site}", r.lon, r.lat) for r in inv.itertuples()]
     pts += [(f"noaa_{s['id']}", s["lon"], s["lat"]) for s in domain.NOAA_STATIONS]
-    nodes = pd.read_csv(config.CHANNELS_DIR / "tidal_datum_nodes.csv", dtype={"id": str})
-    pts += [(f"coops_{r.id}", r.lon, r.lat) for r in nodes.itertuples()]
+    nf = config.channels_dir(side) / "tidal_datum_nodes.csv"
+    if nf.exists():  # written by build_riverbeds.py
+        nodes = pd.read_csv(nf, dtype={"id": str})
+        pts += [(f"coops_{r.id}", r.lon, r.lat) for r in nodes.itertuples()]
     return gpd.GeoDataFrame(
         {"name": [p[0] for p in pts]},
         geometry=[Point(p[1], p[2]) for p in pts], crs=4326,
@@ -218,16 +221,18 @@ def boundary_points(root: Path) -> tuple[np.ndarray, np.ndarray]:
     return x[first], y[first]
 
 
-def chain_forcing(root: Path, t0, t1, epsg: int):
+def chain_forcing(root: Path, t0, t1, epsg: int, side: str = "nj"):
     """The chain boundary (BND_STEP, ``root``'s boundary faces) as a hydromt GeoDataset like
-    forcing_gauges(): integer stations, lon/lat, a ``pair`` label per point."""
+    forcing_gauges(): integer stations, lon/lat, a ``pair`` label per point. ``side``'s chain
+    (waterlevel.CHAINS)."""
     import hydromt  # noqa: F401  (registers the .vector accessor)
     import xarray as xr
     from pyproj import Transformer
 
     from agri_sfincs import waterlevel
 
-    g = forcing_gauges(waterlevel.CHAIN)
+    chain, lags = waterlevel.CHAINS[side]
+    g = forcing_gauges(chain)
     pad = pd.Timedelta("3h")
     lv = g.waterlevel.sel(time=slice(pd.Timestamp(t0) - pad, pd.Timestamp(t1) + pad)).to_pandas()
     lv.columns = g.noaa_id.values
@@ -235,7 +240,7 @@ def chain_forcing(root: Path, t0, t1, epsg: int):
     gx, gy = to_m.transform(g.lon.values, g.lat.values)
     x, y = boundary_points(root)
     index = pd.date_range(t0, t1, freq=BND_STEP)
-    zs, pair = waterlevel.chain_boundary(lv, x, y, gx, gy, index)
+    zs, pair = waterlevel.chain_boundary(lv, x, y, gx, gy, index, chain, lags)
     if zs.isna().any().any():
         raise ValueError("chain boundary has gaps (forcing file shorter than the event?)")
     lon, lat = Transformer.from_crs(epsg, 4326, always_xy=True).transform(x, y)
@@ -288,6 +293,7 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
     from hydromt_sfincs import SfincsModel
 
     from agri_sfincs import waterlevel
+    from agri_sfincs.runs import model_side
 
     if boundary not in ("chain", "gauges"):
         raise ValueError(f"boundary must be 'chain' or 'gauges', not {boundary!r}")
@@ -324,7 +330,7 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
         }
     )
     if boundary == "chain":
-        gauges = chain_forcing(run, t0, t1, domain.EPSG)
+        gauges = chain_forcing(run, t0, t1, domain.EPSG, model_side(static_root))
     else:
         gauges = forcing_gauges(waterlevel.FORCING)
     if wl_offset:
@@ -332,7 +338,7 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
     sf.water_level.create(geodataset=gauges, buffer=WL_BUFFER_M, merge=False)
     sf.precipitation.create(precip=precip_src, cumulative_input=True,
                             time_label="right", aggregate=False)  # fmt: skip
-    sf.observation_points.create(locations=obs_points(), merge=False)
+    sf.observation_points.create(locations=obs_points(model_side(static_root)), merge=False)
     sf.write()
     # sf.write() rewrites sfincs.inp from hydromt's config; re-point infiltration.
     from agri_sfincs.build import patch_infiltration_keys, stage_structures

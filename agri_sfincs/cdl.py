@@ -96,19 +96,54 @@ def name(code: int) -> str:
 
 
 def path(year: int, fips: str = domain.STATE_FIPS) -> Path:
-    """The CDL GeoTIFF of ``year``: NJ in data/cdl/; other states (Fork 1) in
-    data/floodplain/cdl/."""
+    """The CDL GeoTIFF of ``year``: NJ in data/cdl/; other states (Delaware, and Fork 1's) in
+    data/floodplain/cdl/ (bulk, scratch; scripts/fetch_cdl.py --fips)."""
     d = config.CDL_DIR if fips == domain.STATE_FIPS else config.FLOODPLAIN_DIR / "cdl"
     return d / f"CDL_{year}_{fips}.tif"
 
 
-def read(year: int, win) -> np.ndarray:
-    """NJ CDL ``year`` on the rasterio window ``win`` (every year shares one NJ grid;
-    checked), 0 outside the raster."""
+def read(year: int, win, fips: str = domain.STATE_FIPS) -> np.ndarray:
+    """The state's CDL ``year`` on the rasterio window ``win`` (every year shares one grid per
+    state; checked for NJ and DE), 0 outside the raster."""
     import rasterio
 
-    with rasterio.open(path(year)) as c:
+    with rasterio.open(path(year, fips)) as c:
         return c.read(1, window=win, boundless=True, fill_value=0)
+
+
+CROP_SHARES = [f"share_{k}" for k in ("corn", "soybeans", "other_grains", "hay", "idle", "other_crops")]
+
+
+def field_years(g, years, fips: str = domain.STATE_FIPS) -> tuple[pd.DataFrame, pd.DataFrame, list[int]]:
+    """CDL inside each field (``g.field_id``, polygons) for ``years``, pixel centre in polygon:
+    per field (index field_id) n_cdl_px, cdl_px_fallback; per field x year the GROUPS shares,
+    cropland (= the six crop groups), dom_code, dom_name. Also the years not on disk. Moved
+    here from scripts/build_sandy_panel.py (2026-10-23) so every side builds it one way."""
+    import rasterio
+    from rasterio.windows import from_bounds
+
+    with rasterio.open(path(max(years), fips)) as c:
+        gg = g.to_crs(c.crs)
+        win = from_bounds(*gg.total_bounds, transform=c.transform).round_offsets().round_lengths()
+        tr, shape = c.window_transform(win), (int(win.height), int(win.width))
+    zone, flat, fallback = polygon_pixels(gg.geometry, shape, tr)
+    n, fid = len(g), g.field_id.values
+    rows, missing = [], []
+    for y in years:
+        if not path(y, fips).exists():
+            missing.append(y)
+            continue
+        t = zone_cover(zone, read(y, win, fips).ravel()[flat], n)
+        t.insert(0, "field_id", fid)
+        t.insert(1, "year", y)
+        t["cropland"] = t[CROP_SHARES].sum(axis=1, min_count=1)
+        t["dom_name"] = t.dom_code.map(lambda c: name(c) if c >= 0 else "")
+        rows.append(t)
+    fy = pd.concat(rows, ignore_index=True)
+    fy = fy[[c for c in fy.columns if c not in ("dom_code", "dom_name")] + ["dom_code", "dom_name"]]
+    static = pd.DataFrame({"n_cdl_px": rows[0].n_px.values, "cdl_px_fallback": False}, index=fid)
+    static.loc[fid[fallback - 1], "cdl_px_fallback"] = True
+    return static, fy.drop(columns="n_px"), missing
 
 
 def polygon_pixels(geoms, shape, transform) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

@@ -26,6 +26,14 @@ DIKES = {"intact": "dikes as built", "removed": "dikes removed", "breach_all_far
 SLR_CM = (0, 30, 60, 100)
 
 
+def model_side(model) -> str:
+    """The side a static model was built for: <model>/side.txt (scripts/build_model.py
+    --side), "nj" for models built before 2026-10-23. ``model``: a name or a path."""
+    root = model if isinstance(model, Path) else config.MODELS / model
+    f = Path(root) / "side.txt"
+    return f.read_text().strip() if f.exists() else "nj"
+
+
 def run_dir(event: str, dikes: str, slr_cm: int, suffix: str = "", model: str = MODEL) -> Path:
     """A scenario run (scripts/setup_scenarios.py): ``<event>_<dikes>_slr<cm><suffix>``."""
     return config.MODELS / model / "runs" / f"{event}_{dikes}_slr{slr_cm:03d}{suffix}"

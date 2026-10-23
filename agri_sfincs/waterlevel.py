@@ -47,7 +47,10 @@ DONORS = {
     "8551910": ["8540433", "8537121", "8545240"],
     "8537121": ["8551910", "8536110", "8557380"],
     "8536110": ["8557380", "8537121"],
+    "8557380": ["8536110", "8537121"],  # Lewes: written for the DE chain (2026-10-23)
 }
+#: Gauges gap-filled and written to the forcing file besides FORCING: Lewes ends the DE chain.
+EXTRA = ["8557380"]
 
 
 #: Virtual gauges (domain.VIRTUAL_STATIONS) -> donor of the non-tidal residual: level = own
@@ -60,6 +63,10 @@ VIRTUAL_DONOR = {"8536931": "8537121", "8536581": "8536110"}
 #: a common phase first loses ~6-8% of range midway.
 CHAIN = ["8536110", "8536581", "8536931", "8537121", "8551910", "8540433", "8545240"]
 CHAIN_LAG_H = [0.5, 0.4, 0.5, 1.2, 1.3, 1.2]
+#: Per side. Delaware's bay-mouth edge runs from Cape Henlopen, beside Lewes (mean range 1.24 m
+#: vs Cape May's 1.48), so its chain starts at Lewes; Cape May's tide leads Lewes's by 0.1 h
+#: (2023 predictions, as above). Its state-line points get the same pairs as NJ's.
+CHAINS = {"nj": (CHAIN, CHAIN_LAG_H), "de": (["8557380", *CHAIN], [-0.1, *CHAIN_LAG_H])}
 
 
 def chain_pair(x: float, y: float, gx, gy) -> tuple[int, float]:
@@ -88,19 +95,21 @@ def lag_blend(a: pd.Series, b: pd.Series, w: float, lag_h: float, index: pd.Date
     return (1 - w) * at(a, index - w * lag) + w * at(b, index + (1 - w) * lag)
 
 
-def chain_boundary(levels: pd.DataFrame, x, y, gx, gy, index: pd.DatetimeIndex) -> tuple[pd.DataFrame, list[str]]:
+def chain_boundary(levels: pd.DataFrame, x, y, gx, gy, index: pd.DatetimeIndex,
+                   chain=CHAIN, lags=CHAIN_LAG_H) -> tuple[pd.DataFrame, list[str]]:  # fmt: skip
     """Water level at each boundary point (x[k], y[k]) on ``index``: the lag-aware blend of its
-    two CHAIN neighbours. ``levels``: one column per CHAIN id (hourly is fine: it is taken to
-    6 min by cubic interpolation first); gx, gy: the CHAIN points' coordinates, same CRS as
-    x, y. Returns (levels, one label per point "<id a>-<id b>:<w>")."""
+    two ``chain`` neighbours (default CHAIN; a side's from CHAINS). ``levels``: one column per
+    chain id (hourly is fine: it is taken to 6 min by cubic interpolation first); gx, gy: the
+    chain points' coordinates, same CRS as x, y. Returns (levels, one label per point
+    "<id a>-<id b>:<w>")."""
     import numpy as np
 
-    fine = levels[CHAIN].resample("6min").interpolate("cubic")
+    fine = levels[list(chain)].resample("6min").interpolate("cubic")
     cols, names = [], []
     for xk, yk in zip(x, y):
         i, w = chain_pair(xk, yk, gx, gy)
-        cols.append(lag_blend(fine[CHAIN[i]], fine[CHAIN[i + 1]], w, CHAIN_LAG_H[i], index))
-        names.append(f"{CHAIN[i]}-{CHAIN[i + 1]}:{w:.2f}")
+        cols.append(lag_blend(fine[chain[i]], fine[chain[i + 1]], w, lags[i], index))
+        names.append(f"{chain[i]}-{chain[i + 1]}:{w:.2f}")
     return pd.DataFrame(np.array(cols).T, index=index), names
 
 
@@ -143,9 +152,10 @@ def predictions_year(station: str, year: int) -> pd.Series:
 
 
 def fill_gaps(
-    obs: dict[str, pd.Series], pred: dict[str, pd.Series], index: pd.DatetimeIndex
+    obs: dict[str, pd.Series], pred: dict[str, pd.Series], index: pd.DatetimeIndex, stations=None
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Gap-fill every FORCING station on ``index``.
+    """Gap-fill every FORCING station (or ``stations``) on ``index``. Donors lend their RAW
+    residual (obs - pred), never a filled one, so the set filled cannot change any station.
 
     obs/pred: station -> hourly series on the SAME datum per station (MLLW here).
     Returns (levels, source): levels[station] filled where possible; source[station]
@@ -153,7 +163,7 @@ def fill_gaps(
     """
     resid = {s: (obs[s] - pred[s]).reindex(index) for s in obs if s in pred}
     levels, source = {}, {}
-    for st in FORCING:
+    for st in FORCING if stations is None else stations:
         o = obs[st].reindex(index)
         src = pd.Series("", index=index, dtype=object)
         src[o.notna()] = "obs"
