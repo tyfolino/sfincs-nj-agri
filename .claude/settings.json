@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(squeue)",
+      "Bash(squeue *)",
+      "Bash(sacct *)",
+      "Bash(scontrol show *)",
+      "Bash(sinfo)",
+      "Bash(sinfo *)",
+      "Bash(ncdump *)",
+      "Bash(git check-ignore *)",
+      "mcp__claude_ai_Claude_Docs__read",
+      "mcp__claude_ai_Claude_Docs__guide"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Artifact|WebFetch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session_start.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

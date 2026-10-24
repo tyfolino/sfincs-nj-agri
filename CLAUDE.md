@@ -44,6 +44,8 @@ scripts/       one job each; the docstring says what it writes. Scripts NEVER im
                scripts: shared code goes in agri_sfincs/ (exception: the grib-env pair
                fetch_mrms / fetch_precip_hourly, which cannot import the package)
 tests/         stdlib unittest, no network:  python -m unittest discover -s tests
+.claude/       hooks/guard.py (blocks pkill -f, insurance leaving; asks on installs),
+               hooks/session_start.sh (scratch + jobs), skills/sfincs-run, agents/claims-reviewer
 archive/       FROZEN side lines (insurance track, Fork 1): scripts, their
                own modules, tests and reports. Read archive/README.md before reviving any.
 data/          bulk is gitignored; data/region/ring.geojson + data/gauges/*.csv tracked
