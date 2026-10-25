@@ -4,7 +4,9 @@ Two scores, kept apart on purpose:
   TUNING (the fixes may be adjusted to these): observed high and low tides at the three USGS
     creek gauges, Bivalve (Maurice), Greenwich (Cohansey), Hancocks Bridge (Alloway), against
     the model's highest / lowest level within +-3 h (agri_sfincs.waterlevel.match_extremes),
-    over the scoring days of the calm window.
+    over the scoring days of the calm window. A gauge whose his point is not a channel cell
+    (a refined grid can put it on the bank) is read from the hourly map at the channel cell
+    under it instead (``channel_series``; the table's "series" column says which).
   HELD OUT (never tuned to): the published mean tide range at the CO-OPS datum stations up
     the creeks (data/channels/coops_offsets.csv, type R ratios to Reedy Point 8551910,
     Philadelphia 8545240 or Lewes 8557380). Expected range = the station's long-term mean
@@ -56,6 +58,7 @@ REFS = {"8551910": "Reedy Point", "8545240": "Philadelphia", "8557380": "Lewes"}
 WEEK_GAUGES = {"8557380": 1.242, "8536110": 1.478, "8537121": 1.698, "8551910": 1.628,
                "8540433": 1.712, "8545240": 1.859}
 OFF_CHANNEL_M = -0.3  # cell bed above this: the point is not in a channel cell
+CHANNEL_SNAP_M = 60.0  # a gauge off the channel is read from a channel cell this close to its centreline point
 
 
 def mean_range(s: pd.Series) -> tuple[float, float]:
@@ -99,20 +102,53 @@ def creek_of() -> dict[str, str]:
     return out
 
 
+def channel_series(run, x: float, y: float) -> pd.Series | None:
+    """Hourly map zs at the channel cell under a gauge that the his point misses: the gauge
+    projected onto the nearest tidal centreline (riverbed_centrelines<side>_v2.gpkg), then the
+    deepest cell within CHANNEL_SNAP_M of that point. On a 25 m grid the gauge's own
+    coordinates can fall on a bank cell (Hancocks Bridge, 2026-10-24); the nearest deep cell
+    can be an isolated pocket, so the centreline is the anchor. None if no channel cell."""
+    import geopandas as gpd
+    import shapely
+
+    cl = gpd.read_file(config.ELEV_DIR / f"riverbed_centrelines{domain.side(SIDE).files}_v2.gpkg")
+    cl = cl[cl.kind == "tidal"]
+    pt = shapely.Point(x, y)
+    line = cl.geometry.iloc[int(np.argmin(cl.distance(pt).values))]
+    p = line.interpolate(line.project(pt))
+    with xr.open_dataset(run / "sfincs_map.nc") as mp:
+        if "mesh2d_face_x" in mp:  # quadtree output
+            cx, cy, zb, dim = mp["mesh2d_face_x"].values, mp["mesh2d_face_y"].values, mp["zb"].values, "nmesh2d_face"
+            zs = mp["zs"]
+        else:  # uniform grid output: flatten (n, m)
+            cx, cy, zb = mp["x"].values.ravel(), mp["y"].values.ravel(), mp["zb"].values.ravel()
+            zs, dim = mp["zs"].stack(c=("n", "m")), "c"
+        near = np.nonzero((np.hypot(cx - p.x, cy - p.y) < CHANNEL_SNAP_M) & (zb < OFF_CHANNEL_M))[0]
+        if not len(near):
+            return None
+        return zs.isel({dim: int(near[np.argmin(zb[near])])}).to_series()
+
+
 def score(run, t0, t1) -> tuple[pd.DataFrame, pd.DataFrame]:
     zs = waterlevel.his_series(run)
     with xr.open_dataset(run / "sfincs_his.nc") as h:
-        zb = dict(zip([s.strip() for s in h["station_name"].values.astype(str)], h["point_zb"].values))
+        names = [s.strip() for s in h["station_name"].values.astype(str)]
+        zb = dict(zip(names, h["point_zb"].values))
+        xy = dict(zip(names, zip(h["station_x"].values, h["station_y"].values)))
     g = []
     gauges = {k: (v, "72279") for k, v in GAUGES.items()} if SIDE == "nj" else DE_GAUGES
     for site, (name, param) in gauges.items():
         o = waterlevel.usgs_event_series(OBS_EVENT, site, param)[t0:t1]
-        m = zs[f"usgs_{site}"][t0:t1]
+        m, src = zs[f"usgs_{site}"][t0:t1], "his"
+        if zb[f"usgs_{site}"] > OFF_CHANNEL_M:
+            c = channel_series(run, *xy[f"usgs_{site}"])
+            if c is not None:
+                m, src = c[t0:t1], "map (channel cell, hourly)"
         hi, lo = waterlevel.match_extremes(o, m), waterlevel.match_extremes(o, m, lows=True)
         oh, ol = mean_range(o.resample("1h").mean())
         mh, ml = mean_range(m.resample("1h").first())
         g.append({"gauge": name, "high bias": hi.diff_m.mean(), "high rmse": float(np.sqrt((hi.diff_m**2).mean())),
-                  "low bias": lo.diff_m.mean(), "range ratio": (mh - ml) / (oh - ol), "n": len(hi)})  # fmt: skip
+                  "low bias": lo.diff_m.mean(), "range ratio": (mh - ml) / (oh - ol), "n": len(hi), "series": src})  # fmt: skip
     frac = week_fraction(t0, t1)
     off = pd.read_csv(config.channels_dir(SIDE) / "coops_offsets.csv", dtype={"id": str, "ref": str})
     off = off[off.ref.isin(list(REFS))]

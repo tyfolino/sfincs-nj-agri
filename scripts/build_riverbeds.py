@@ -834,16 +834,18 @@ def main() -> None:
     ap.add_argument("--no-raster", action="store_true", help="tables/profiles only")
     ap.add_argument("--tag", default="", help="suffix for the data/elevation outputs (v2 ...)")
     ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
-    ap.add_argument("--stated", action="append", default=[], metavar="REACH=DEPTH",
-                    help="calibration: override a reach's stated depth below MLLW (m)")
+    ap.add_argument("--stated", action="append", default=[], metavar="REACH=DEPTH[@LON,LAT]",
+                    help="calibration: override a reach's stated depth below MLLW (m); @LON,LAT "
+                         "sets the point it applies from (required for a reach with no stated)")
     a = ap.parse_args()
     set_side(a.side)
     reaches = {k: dict(v) for k, v in domain.side(a.side).tidal_reaches.items()}
     for kv in a.stated:
         k, d = kv.split("=")
-        lo, la, _ = reaches[k]["stated"]
+        d, _, at = d.partition("@")
+        lo, la = map(float, at.split(",")) if at else reaches[k]["stated"][:2]
         reaches[k]["stated"] = (lo, la, float(d))
-        print(f"calibration: {k} stated depth {float(d):.2f} m below MLLW")
+        print(f"calibration: {k} stated depth {float(d):.2f} m below MLLW from ({lo}, {la})")
     sfx = domain.side(a.side).files + (f"_{a.tag}" if a.tag else "")
     MIN_WIDTH = a.min_width
 
