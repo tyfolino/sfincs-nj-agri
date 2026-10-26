@@ -196,6 +196,14 @@ TIDAL_REACHES = {
 }
 # fmt: on
 
+#: Marsh branch networks beside a tidal reach (scripts/paint_branches.py, test 2026-10-25):
+#: ``bbox`` (lon0, lat0, lon1, lat1) holds the lidar flat-water channels joined to the reach's
+#: painted channel. Lower Alloway: Hancocks Bridge to the river, with the Abbotts Meadow
+#: branches and Hope Creek down to its mouth (~39.45 N), which reach the river by their own mouths.
+BRANCH_NETWORKS = {
+    "alloway": {"reach": "alloway", "bbox": (-75.565, 39.435, -75.455, 39.53)},
+}
+
 
 # fmt: off
 #: Map labels, lon/lat: towns (for orientation) and waters.

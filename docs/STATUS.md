@@ -3,8 +3,8 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-10-23** (cleanup and NJ v2 beds done; Delaware first pass built; DE tide
-too large: boundary next).
+Last updated: **2026-10-26** (E3 adopted; Alloway tests scored, §47; the Alloway mouth loses
+the tide; DE tide too large: boundary next).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -14,11 +14,19 @@ Canal to Lewes) as twin grids forced on the same mid-bay state line. Joint ag-ec
 result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-goblet.md`.
 
 ## Resume here (plan steps)
-- **Step 1, v2 beds (NJ): done** (§45). Cohansey effective depth 6 m adopted; `v2_100m` being
-  rebuilt with it (job `agri-v2final`, logs/v2final_*.out; = `v2c60_100m`, which scored it).
-  Next: rerun the storm and scenario sets on `v2_100m` (`setup_scenarios.py --model v2_100m
-  --boundary chain --open`); then §29's dike-dependent number. Stow / upper Oldmans still short
-  (no data; calibrate like the Cohansey if field flooding there matters).
+- **Step 1, v2 beds (NJ): done** (§45), **on the E3 grid** (25 m cells along Cohansey + Alloway,
+  §47; Cohansey 6 m). **Alloway, open:** main stem 3.0 m + marsh branches (`e3v2a30br_100m`:
+  Hancocks Bridge 0.71, highs −0.11 m, no overshoot; Claude's pick) or 4.5 m (0.79, −0.08 m,
+  Quinton 1.09, 2.7 m below the charts): **user's call.** Before it:
+  1. **Branch completeness:** lidar water + NHD vs the USGS coastal-wetland water-body layer,
+     lower Alloway (what channel is missing, where).
+  2. **The mouth:** the range falls 1.37 → 1.17 m by the first station in every run (observed
+     1.38): grid width, where the 25 m cells stop, the open-water → channel bed jump. Also open
+     the two northern branches that stop ~150 m short of the river.
+  3. **Storm high water at Hancocks Bridge** (§39's check), not only calm-tide range.
+  Then: rerun the storm and scenario sets on the chosen E3 model (`setup_scenarios.py --model
+  <it> --boundary chain --open`; ~3× v2's run time); then §29's dike-dependent number. Stow /
+  upper Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
 - **Step 3, Delaware: first pass built** (§46): `de_v2_100m` (bed_de_v2, NWI dike weirs).
   **Blocker: the DE shore gets ~15-20% too much tide** on the shared state-line forcing. Next:
   a DE-shore rail for the boundary (Lewes, Brandywine Shoal 8555889 [hourly cached], DE
@@ -29,7 +37,6 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 - **Step 5, Delaware exits:** first look done without SFINCS (§44): same pattern as NJ (low
   ground ~1.5 %/yr in both). Next, after the DE boundary fix: DE storm runs → DE storm panel
   (`build_storm_panel.py` side-aware) → one bundle with a `state` column for Seowoo.
-- E9 preview set (18 runs) is superseded by v2.
 
 ## Next, in order
 0. **Storm-history land-use test: first look done** (§35, §37, §38): no detectable crop or NDVI

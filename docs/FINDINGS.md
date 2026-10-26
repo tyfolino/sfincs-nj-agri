@@ -1395,3 +1395,55 @@ in 2008-12; exit = the storm panel's `left_cropland`; height = median above rece
   tide differs across the bay (Lewes MN 1.24 vs Cape May 1.48); the boundary needs a DE-shore
   rail (Lewes, Brandywine Shoal, DE subordinate stations as virtual gauges) blended by
   cross-bay position, as §41 did for NJ.
+
+## 47. E3 adopted; the Alloway: a deeper main stem or marsh branches, and the tide is lost at the mouth (2026-10-25; `reports/creek_tides.md`, `scripts/paint_branches.py`)
+
+- **E3 (25 m cells along the Cohansey and Alloway) is adopted** (user, 2026-10-25). On v2 beds it
+  pays, unlike E3 on v1 (§40's table): Cohansey held-out median 0.81 → 0.91, Greenwich gauge
+  0.87 → 0.95 (6 m Cohansey, `e3v2c60_100m`). Cost ~3×: mean time step 3.6 → 1.1 s; the 11-day
+  calm window takes 7.5 min on v2, 17-40 min on E3 (node to node).
+- **Scoring:** `check_creek_tides.py` reads an off-channel gauge from the nearest channel cell
+  (hourly map) when its own cell is not a channel cell (Hancocks Bridge on E3).
+- **Alloway main stem, stated depth below MLLW** (calm window 2023-05-24..31, model / observed
+  range; Cohansey at 6 m in all):
+
+  | run | Hancocks Bridge | highs bias | Hope Creek* | 2.5 n.mi.* | Quinton* | Alloway median* |
+  |---|---|---|---|---|---|---|
+  | v2, 100 m | 0.47 | −0.21 | 0.68 | 0.65 | 0.35 | 0.65 |
+  | E3, unchanged | 0.56 | −0.17 | — | — | 0.54 | 0.71 |
+  | E3 + 3.0 m (a30) | 0.66 | −0.13 | 0.66 | 0.78 | 0.85 | 0.83 |
+  | **E3 + 3.0 m + branches (a30br)** | 0.71 | −0.11 | **0.78** | 0.84 | 0.89 | 0.85 |
+  | E3 + 4.5 m (a45) | **0.79** | **−0.08** | 0.67 | 0.88 | 1.09 | 0.88 |
+
+  (* held out; Hope Creek = "0.6 n.mi. above entrance".) Most of the gauge error is in the lows
+  (+0.34 m on a30br); highs, which flood fields, are within −0.11 m.
+- **Charts vs fit:** 3.0 m sits 1.2 m and 4.5 m sits 2.7 m below the ~40 chart soundings (1983 NOS
+  at the mouth only; Coast Pilot "~3 ft to Quinton"). No CSB (no traffic), no USGS cross-sections.
+  One boater reports ≥15 ft (4.6 m) at low tide throughout: the charts may be out of date, unchecked.
+- **4.5 m overshoots Quinton** (1.09): with it the range barely falls upstream (1.11 → 1.05 m over
+  11 km; observed 1.26 → 0.96). Either the drawn strip is straighter than the real meanders (at
+  km 11.5 it passes a cell that never wets), or Quinton's published range predates PSEG's
+  1996-99 reopening of 1,601 acres of Alloway Creek marsh (station date unchecked).
+- **Branches (a30br, `paint_branches.py`, `domain.BRANCH_NETWORKS`):** the lower Alloway's marsh
+  channels (Abbotts Meadow, Hope Creek to its mouth; 2.35 km²) sit at the lidar's flat −1.07 m,
+  ~0.2 m below MLLW. A V across each, down to MLLW − 1.5 m (median drop 0.78 m), closes ~40% of
+  the gap at Hancocks Bridge between a30 and a45, and lifts Hope Creek 0.66 → 0.78, which no
+  main-stem depth moved. Unlike a45, no station overshoots. This is not §40's E6 (NHD creeks to
+  −1.0 m, i.e. the lidar plane): depth below MLLW is what counts. One guessed depth; the two
+  northern branches (39.514, 39.522 N) still meet the river across ~150 m of flat −1.07 m, so
+  the test likely understates them. Pine Island (Stow) 0.45 → 0.48; nothing else moved.
+- **The mouth is the largest single loss, and nothing yet touches it:** in every run the range
+  falls from ~1.37 m to ~1.26 m within the first km (bed already ~5 m deep) and to ~1.17 m by
+  the first station (observed 1.38). The river beside the mouth is already short (bay shore
+  0.84). Suspects: the mouth's width on the grid, where the 25 m cells stop, the jump from
+  open-water bed (−4.8 m) to the drawn channel (−3.9 m).
+- **The shoreline band and the Artificial Island rectangle are real ground, not lidar
+  artifacts:** CUDEM roughly agrees (band: lidar −1.07 flat, CUDEM median −0.83; rectangle:
+  −0.39 vs −0.04; open river 300 m out, CUDEM −2.25). a30br deepened 4.4% of the band (one
+  branch mouth at 39.49-39.50 N, 300-700 m south of the Alloway's); range at the mouth moved
+  0.01 m.
+- **Depth data, if wanted:** USGS NJ's 2022 reconnaissance survey of the Alloway from Quinton
+  (contact Jennifer Closson; the user is holding the email). CoNED topobathy adds nothing in
+  these creeks (same lidar fill); green lidar cannot see through this water. Branch completeness:
+  the USGS layer of water bodies in NJ coastal emergent wetlands is an independent check on the
+  lidar water and NHD (442 segments, 49 km in the lower Alloway).
