@@ -1432,11 +1432,27 @@ in 2008-12; exit = the storm panel's `left_cropland`; height = median above rece
   −1.0 m, i.e. the lidar plane): depth below MLLW is what counts. One guessed depth; the two
   northern branches (39.514, 39.522 N) still meet the river across ~150 m of flat −1.07 m, so
   the test likely understates them. Pine Island (Stow) 0.45 → 0.48; nothing else moved.
-- **The mouth is the largest single loss, and nothing yet touches it:** in every run the range
-  falls from ~1.37 m to ~1.26 m within the first km (bed already ~5 m deep) and to ~1.17 m by
-  the first station (observed 1.38). The river beside the mouth is already short (bay shore
-  0.84). Suspects: the mouth's width on the grid, where the 25 m cells stop, the jump from
-  open-water bed (−4.8 m) to the drawn channel (−3.9 m).
+- **The mouth reach is friction, not a grid or bed artefact** (2026-10-26, calm window, hourly
+  map, deepest cell on the centreline). The river off the mouth is right: model high / low
+  0.92 / −0.49 m NAVD88 vs observed Reedy Point 0.93 / −0.49 and Ship John 0.90 / −0.52. By
+  km 1.8 the model has 0.81 / −0.37 (range 1.41 → 1.18), the same on v2 (100 m), a30br and
+  a45, so not the 25 m cells (they start at the shore, through one 50 m ring, with no step in
+  range) nor the bed below 5 m. The painted channel fills the creek's full width (100-165 m,
+  −5.1 m from the chart: ~500-900 m² below 0 m); Manning n 0.02 (open water) all along. The
+  whole lower-Alloway prism (a30br, the three Alloway HUC12s less the Hope Creek side, from
+  subgrid volumes) is ~9.6 Mm³, peak ~780 m³/s: ~1.3 m/s through the mouth section, whose
+  head loss at n 0.02 over 1.8 km (~0.12 m) is the drop seen. That section is about what
+  O'Brien's prism rule gives (~630 m²), and 45% of the prism is the north marsh, which also
+  fills through its own outlets (they cross the river-edge flat at −1.07 m, below MLLW), so
+  ~780 m³/s is an upper bound on the mouth's own flow.
+- **Observed vs model, river → Hancocks Bridge:** observed highs fall ~0.10 m (0.92 → 0.825)
+  and lows fall slightly (→ −0.54); the model's highs fall ~0.2 m and its lows RISE ~0.3 m
+  (a30br biases −0.11 / +0.34). The mouth reach takes ~0.11 m of the highs (all of the real
+  drop to Hancocks Bridge) and ~0.12 m of the lows; the rest is spread upstream. So the real
+  lower Alloway carries the tide more easily than the model: a bigger or smoother section than
+  the chart's 5.1 m, or more of the marsh filling by other outlets. Nothing on file separates
+  these: H10112 (NOS) has 7 points in the creek; USGS's 2022 survey ran up from Quinton, not
+  down to the mouth.
 - **The shoreline band and the Artificial Island rectangle are real ground, not lidar
   artifacts:** CUDEM roughly agrees (band: lidar −1.07 flat, CUDEM median −0.83; rectangle:
   −0.39 vs −0.04; open river 300 m out, CUDEM −2.25). a30br deepened 4.4% of the band (one
@@ -1444,6 +1460,16 @@ in 2008-12; exit = the storm panel's `left_cropland`; height = median above rece
   0.01 m.
 - **Depth data, if wanted:** USGS NJ's 2022 reconnaissance survey of the Alloway from Quinton
   (contact Jennifer Closson; the user is holding the email). CoNED topobathy adds nothing in
-  these creeks (same lidar fill); green lidar cannot see through this water. Branch completeness:
-  the USGS layer of water bodies in NJ coastal emergent wetlands is an independent check on the
-  lidar water and NHD (442 segments, 49 km in the lower Alloway).
+  these creeks (same lidar fill); green lidar cannot see through this water. (The USGS layer of
+  water bodies in NJ coastal emergent wetlands covers only Forsythe / Barnegat Bay, west edge
+  −74.60: not this coast.)
+- **No branches are missing** (2026-10-26, one-off check in the `BRANCH_NETWORKS` box, against
+  NJDEP LU/LC 2020 tidal water, classes 5410-5412, mapped from 2020 aerials, independent of the
+  lidar): of 12.2 km² of mapped tidal water off the open river, the a30br bed links 72% to the
+  river at or below MLLW (−0.9..−0.64 m NAVD88 here), 91% by 0 m, 97% by +0.5 m. What links
+  only above mid-tide is storage, not conveyance: the Abbotts Meadow ponds (39.495, 39.515 N,
+  linked at −0.8..0 m), the raised flat at Artificial Island's north tip, mud flats (half of the
+  3.7 km² of mapped water the bed does not hold as water; bed median −0.34 m). Bed water the map
+  calls land: 0.17 km². NHD: 88% of 44 km lies on bed water; the rest are ditches the lidar
+  holds at +0.1..+0.5 m. The two northern branches reach the river below MLLW (at the −1.07 m
+  plane). So the network is in the bed; what is unknown is its depth.

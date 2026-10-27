@@ -18,11 +18,10 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   §47; Cohansey 6 m). **Alloway, open:** main stem 3.0 m + marsh branches (`e3v2a30br_100m`:
   Hancocks Bridge 0.71, highs −0.11 m, no overshoot; Claude's pick) or 4.5 m (0.79, −0.08 m,
   Quinton 1.09, 2.7 m below the charts): **user's call.** Before it:
-  1. **Branch completeness:** lidar water + NHD vs the USGS coastal-wetland water-body layer,
-     lower Alloway (what channel is missing, where).
-  2. **The mouth:** the range falls 1.37 → 1.17 m by the first station in every run (observed
-     1.38): grid width, where the 25 m cells stop, the open-water → channel bed jump. Also open
-     the two northern branches that stop ~150 m short of the river.
+  1. ~~Branch completeness~~ done: no branches missing (§47); the open question is their depth.
+  2. ~~The mouth~~ checked (§47): friction from the marsh's whole tide in one 5 m channel;
+     the river there is right. Separating "bigger channel" from "other outlets" needs measured
+     depth at the mouth (none on file). Option: an effective-section test (km 0-2.5 deeper).
   3. **Storm high water at Hancocks Bridge** (§39's check), not only calm-tide range.
   Then: rerun the storm and scenario sets on the chosen E3 model (`setup_scenarios.py --model
   <it> --boundary chain --open`; ~3× v2's run time); then §29's dike-dependent number. Stow /
@@ -42,9 +41,11 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 0. **Storm-history land-use test: first look done** (§35, §37, §38): no detectable crop or NDVI
    response; a weak corn → soy tilt where fields are wet on ordinary tides. The creek-bed fix may
    sharpen this ("not detectable", not "no effect"). Show the colleague and the advisor
-   (`reports/storm_panel.md`, `data/analysis/storm_panel/`). Open: model the unmodelled storm
-   tides (Irene 2011, Oct 2018, Isaias 2020, Jan 2024, Aug 2025), or use exposure as one number
-   per field (n_storms_tide).
+   (`reports/storm_panel.md`, `data/analysis/storm_panel/`). **Seowoo asks (2026-10-26): floods
+   all year, with the month** (growing vs non-growing season). So: model the unmodelled storm
+   tides ≥ 1.68 m (Irene 2011, Oct 2018, Isaias 2020, Aug 2025; Jan 2024 has scenario runs) in
+   the v2/E3 storm rerun, and give the panel a field × storm-month layout. User: storm tides
+   only (salt water is the clearer signal; no rain-only floods); growing season flag = Apr-Oct.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
 3. **Per-system breach runs** (18 systems) on tide2024oct × SLR with a scoured sill (MLLW): the
