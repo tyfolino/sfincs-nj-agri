@@ -35,7 +35,7 @@ import xarray as xr
 from rasterio.features import rasterize
 from scipy.interpolate import RegularGridInterpolator
 
-from agri_sfincs import config, dikes, domain, runs
+from agri_sfincs import config, dikes, domain, precip, runs
 from agri_sfincs.report import md_table
 
 STRUCT = config.STRUCT_DIR
@@ -120,7 +120,7 @@ def edge_rain_loss(base_f, evap_f, xc, yc) -> pd.DataFrame:
         pb = b["Precipitation"].load()
         pe = e["Precipitation"].values
         tag = e["Precipitation"].attrs.get(evap.STAMP, "?")
-    x, y = pb["x"].values, pb["y"].values
+    x, y = precip.true_centres(pb)
     pbuf = evap.precip_minus_evap(pb, buffer=1).values
     rb = engine_rain(pb.values, x, y, xc, yc)
     rows = {}

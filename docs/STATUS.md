@@ -3,8 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-10-26** (E3 adopted; Alloway tests scored, §47; the Alloway mouth loses
-the tide; DE tide too large: boundary next).
+Last updated: **2026-10-29** (HRRR wind adopted, peaks barely move, §50; rain placement fixed, §49; DE rail + yardstick, §51).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -14,24 +13,22 @@ Canal to Lewes) as twin grids forced on the same mid-bay state line. Joint ag-ec
 result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-goblet.md`.
 
 ## Resume here (plan steps)
-- **Step 1, v2 beds (NJ): done** (§45), **on the E3 grid** (25 m cells along Cohansey + Alloway,
-  §47; Cohansey 6 m). **Alloway, open:** main stem 3.0 m + marsh branches (`e3v2a30br_100m`:
-  Hancocks Bridge 0.71, highs −0.11 m, no overshoot; Claude's pick) or 4.5 m (0.79, −0.08 m,
-  Quinton 1.09, 2.7 m below the charts): **user's call.** Before it:
-  1. ~~Branch completeness~~ done: no branches missing (§47); the open question is their depth.
-  2. ~~The mouth~~ checked (§47): friction from the marsh's whole tide in one 5 m channel;
-     the river there is right. Separating "bigger channel" from "other outlets" needs measured
-     depth at the mouth (none on file). Option: an effective-section test (km 0-2.5 deeper).
-  3. **Storm high water at Hancocks Bridge** (§39's check), not only calm-tide range.
-  Then: rerun the storm and scenario sets on the chosen E3 model (`setup_scenarios.py --model
-  <it> --boundary chain --open`; ~3× v2's run time); then §29's dike-dependent number. Stow /
+- **Step 1, v2 beds (NJ): done** on the E3 grid; **Alloway adopted: `e3v2a30brm65_100m`**
+  (§45, §47). Storm check passed: peaks within ~0.1 m at the three creek gauges, Bivalve storm
+  by storm −0.25..+0.20 (§48). All 16 m65 storm runs exist (`--boundary chain --open`).
+  Before the full rerun:
+  1. **Wind: HRRR × 1.0 (§50)**, in the rerun. It barely moves the creek-gauge peaks (7
+     storms): Bivalve's ±0.2 m is not wind. Pre-2014 storms (7): test RAP against the lights,
+     else ERA5 × ~1.3 (ERA5 years in the background).
+  2. **Rain placement fixed (§49)**: every new staging is right; the rerun brings it in.
+  Then: rerun the storm and scenario sets on m65 (`setup_scenarios.py --model
+  e3v2a30brm65_100m --boundary chain --open`; ~3× v2's run time); then §29's dike-dependent number. Stow /
   upper Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
-- **Step 3, Delaware: first pass built** (§46): `de_v2_100m` (bed_de_v2, NWI dike weirs).
-  **Blocker: the DE shore gets ~15-20% too much tide** on the shared state-line forcing. Next:
-  a DE-shore rail for the boundary (Lewes, Brandywine Shoal 8555889 [hourly cached], DE
-  subordinate stations as virtual gauges as in §41), blended by cross-bay position; judge on
-  Bowers, Cedar Creek, Odessa and the held-out DE stations (`check_creek_tides.py --side de`).
-  Then the Appoquinimink (Odessa 0.26: needs depth like the Cohansey; H10200 covers 0 km of it).
+- **Step 3, Delaware: boundary fixed (§51).** DE rail (Lewes → Brandywine → Mahon → Ship
+  John) + the held-out yardstick corrected: DE held-out median 1.00, Bowers 1.08. **Adopted
+  (user, 2026-10-29)**: each grid fitted to its own shore; the line differs by ~0.11 m of range
+  at 39.0-39.2 N; say so in the bundle notes for Seowoo. Next:
+  the Appoquinimink (Odessa 0.26: needs depth like the Cohansey; H10200 covers 0 km of it).
   Rain: forcing is clipped to NJ's `RAIN_BBOX`; refetch event windows over the union first.
 - **Step 5, Delaware exits:** first look done without SFINCS (§44): same pattern as NJ (low
   ground ~1.5 %/yr in both). Next, after the DE boundary fix: DE storm runs → DE storm panel
@@ -42,10 +39,11 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
    response; a weak corn → soy tilt where fields are wet on ordinary tides. The creek-bed fix may
    sharpen this ("not detectable", not "no effect"). Show the colleague and the advisor
    (`reports/storm_panel.md`, `data/analysis/storm_panel/`). **Seowoo asks (2026-10-26): floods
-   all year, with the month** (growing vs non-growing season). So: model the unmodelled storm
-   tides ≥ 1.68 m (Irene 2011, Oct 2018, Isaias 2020, Aug 2025; Jan 2024 has scenario runs) in
-   the v2/E3 storm rerun, and give the panel a field × storm-month layout. User: storm tides
-   only (salt water is the clearer signal; no rain-only floods); growing season flag = Apr-Oct.
+   all year, with the month** (growing vs non-growing season). All 18 Ship John storm tides
+   ≥ 1.68 m (2008-25) now have events; Irene 2011, Oct 2018, Isaias 2020, Jan 2024, Aug 2025
+   are run on m65 (§48). Next: a field × storm-month layout (`build_sandy_panel.py` STORMS
+   list). User: storm tides only (salt water is the clearer signal; no rain-only floods);
+   growing season flag = Apr-Oct.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
 3. **Per-system breach runs** (18 systems) on tide2024oct × SLR with a scoured sill (MLLW): the
@@ -59,10 +57,6 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
    marsh level, roughness, Sandy with rain, Durham's lidar marsh bias.
 6. **NAIP validation of the exits**, NJ (`exit_spotcheck.py`, default tag cells_v2) and DE.
 7. **Check NLD** for levee condition / inspection fields.
-
-## Waiting on
-- **"South Jersey Levee Inventory"** (NRCS / NJDEP Dam Safety, 2010): the user's supervisor is
-  asking NJDEP (2026-10-17).
 
 ## Shared / not yet shared (all private until the user shares)
 - Claude Doc "Bayshore farmland and storm flooding: where the story is" (for Seowoo and James):

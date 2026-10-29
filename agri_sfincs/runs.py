@@ -1,15 +1,18 @@
 """Finished SFINCS runs: where they live, whether they finished, and how a 10 m subgrid
 pixel maps onto the model's map output.
 
-Every model here is a UNIFORM quadtree, so SFINCS writes its map output on the regular
-(n, m) grid, row 0 = south. A pixel belongs to the cell its centre falls in.
+The older builds (v1) are UNIFORM quadtrees whose map output is the regular (n, m) grid,
+row 0 = south. The e3 line writes only the active cells, as a UGRID mesh (``zsmax`` on
+``nmesh2d_face``), and from brm65 on is REFINED (100 m, with 50 / 25 m cells along the
+creeks). ``MapGrid`` reads both and hands back an index into whichever the file holds. A
+pixel belongs to the cell its centre falls in.
 Daily maxima: with dtmaxout = 1 day, the ``zsmax`` block ending at ``timemax`` = D 00:00
 covers day D - 1 (``block_days``).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -53,26 +56,47 @@ def finished(run: Path) -> bool:
 
 
 def subgrid_dep(model: str = MODEL) -> Path:
-    """The model's 10 m subgrid ground (m NAVD88), row 0 = north."""
+    """The model's 10 m subgrid ground (m NAVD88): rows south-up, padded half a 100 m cell
+    beyond the grid on every side (checked against z_zmin, 2026-10-29)."""
     return config.MODELS / model / "subgrid" / "dep_subgrid_lev0.tif"
 
 
 @dataclass(frozen=True)
 class MapGrid:
-    """The regular grid of a uniform quadtree's map output: SW corner, cell size, shape."""
+    """The regular grid of a map output: SW corner, cell size, shape. For mesh output it is the
+    grid of the FINEST cells, and ``lookup`` maps its flat index to the mesh face that covers
+    it (-1 = no active cell); a coarser face fills every fine slot inside it."""
 
     x0: float
     y0: float
     dx: float
     n: int
     m: int
+    lookup: np.ndarray | None = field(default=None, compare=False, repr=False)
 
     @classmethod
     def from_map(cls, mp) -> MapGrid:
-        """From an open sfincs_map.nc (xarray)."""
-        cx = mp["corner_x"].values
-        dx = float(np.diff(np.unique(cx.round(3)))[0])
-        return cls(float(cx.min()), float(mp["corner_y"].min()), dx, mp.sizes["n"], mp.sizes["m"])
+        """From an open sfincs_map.nc (xarray), regular or mesh."""
+        if "corner_x" in mp:
+            cx = mp["corner_x"].values
+            dx = float(np.diff(np.unique(cx.round(3)))[0])
+            return cls(float(cx.min()), float(mp["corner_y"].min()), dx, mp.sizes["n"], mp.sizes["m"])
+        fnv = mp["mesh2d_face_nodes"]
+        fn = fnv.values[:, :4].astype(np.int64) - int(fnv.attrs.get("start_index", 0))
+        nx, ny = mp["mesh2d_node_x"].values[fn], mp["mesh2d_node_y"].values[fn]
+        xmin, ymin, w = nx.min(1), ny.min(1), nx.max(1) - nx.min(1)
+        dx, x0, y0 = float(w.min()), float(xmin.min()), float(ymin.min())
+        i0, j0, k = (np.rint(v / dx).astype(np.int64) for v in (xmin - x0, ymin - y0, w))
+        if not (np.allclose(xmin, x0 + i0 * dx) and np.allclose(ymin, y0 + j0 * dx) and np.allclose(w, k * dx)):
+            raise ValueError("mesh cells are not squares on a common grid")
+        n, m = int((j0 + k).max()), int((i0 + k).max())
+        lookup = np.full(n * m, -1, np.int64)
+        for kk in np.unique(k):
+            ids = np.flatnonzero(k == kk)
+            for dj in range(kk):
+                for di in range(kk):
+                    lookup[(j0[ids] + dj) * m + i0[ids] + di] = ids
+        return cls(x0, y0, dx, n, m, lookup)
 
     def index(self, x, y) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Row ``nn``, column ``mm`` of the cell holding each point, and whether it is inside."""
@@ -82,9 +106,13 @@ class MapGrid:
         return nn, mm, inside
 
     def face(self, x, y) -> np.ndarray:
-        """Flat cell index (``nn * m + mm``) of each point; -1 outside the grid."""
+        """Flat cell index of each point (``nn * m + mm``, or the mesh face); -1 outside the
+        grid or, for a mesh, on no active cell."""
         nn, mm, inside = self.index(x, y)
-        return np.where(inside, nn * self.m + mm, -1)
+        flat = np.where(inside, nn * self.m + mm, -1)
+        if self.lookup is None:
+            return flat
+        return np.where(inside, self.lookup[np.where(inside, flat, 0)], -1)
 
 
 def pixel_centres(tr, rows, cols) -> tuple[np.ndarray, np.ndarray]:

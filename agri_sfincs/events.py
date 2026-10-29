@@ -144,6 +144,13 @@ EVENTS = {
                           "2024-03/2024-04"),
     "storm2024jan": Event("storm2024jan", "2023-12-25 00:00:00", "2024-01-22 00:00:00",
                           "mrms", "2024-01"),
+    # the rest of the storm tides >= 1.68 m at Ship John 2008-25 (2026-10-27, Seowoo's all-year
+    # ask): Irene 1.85 m (2011-08-28), 1.73 (2018-10-27), Isaias 1.75 (2020-08-04), 1.75
+    # (2025-08-22); with storm2024jan (1.77) every one is now an event. Peak ~2 weeks in.
+    "storm2011aug": Event("storm2011aug", "2011-08-14 00:00:00", "2011-09-05 00:00:00", "stage4", "2011-08"),
+    "storm2018oct": Event("storm2018oct", "2018-10-13 00:00:00", "2018-11-04 00:00:00", "mrms", "2018-10"),
+    "storm2020aug": Event("storm2020aug", "2020-07-21 00:00:00", "2020-08-12 00:00:00", "mrms", "2020-08"),
+    "storm2025aug": Event("storm2025aug", "2025-08-08 00:00:00", "2025-08-30 00:00:00", "mrms", "2025-08"),
     "tide2024oct": Event("tide2024oct", "2024-09-24 00:00:00", "2024-11-01 00:00:00",
                          "mrms", "2024-10"),
     # creek-tide calibration (FINDINGS §40): ordinary tides before the 2023-06-04 storm, with
@@ -280,7 +287,8 @@ def zero_precip(run: Path) -> None:
 def setup_event(static_root: Path, event: Event, run_name: str | None = None,
                 structures: dict | None = None, zsini: float = ZSINI,
                 precip: str | None = None, wl_offset: float = 0.0,
-                boundary: str = "chain") -> Path:  # fmt: skip
+                boundary: str = "chain", wind_scale: float | None = None,
+                wind_source: str = "era5") -> Path:  # fmt: skip
     """Copy ``static_root`` to config.MODELS/<static>/runs/<run_name> and add forcing.
 
     ``structures`` ({"drnfile": path} ...) REPLACES the static model's structure files in
@@ -289,7 +297,9 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
     source (a catalog source or a product, see precip_source); ``"none"`` = no rain
     (a tide-only run). ``wl_offset`` (m) is added to the boundary water levels: sea-level
     rise. ``boundary``: "chain" (default) or "gauges" (v1 before 2026-10-20, to reproduce
-    older runs); see BND_STEP."""
+    older runs); see BND_STEP. ``wind_scale``: None = no wind (every run before 2026-10-27);
+    a number = ``wind_source`` ("era5" / "hrrr") 10 m wind times that factor
+    (agri_sfincs.wind, FINDINGS §48)."""
     from hydromt_sfincs import SfincsModel
 
     from agri_sfincs import waterlevel
@@ -346,6 +356,10 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
     patch_infiltration_keys(run)
     if no_rain:
         zero_precip(run)
+    # hydromt writes rain cell centres; the engine reads corners (agri_sfincs.precip)
+    from agri_sfincs.precip import to_engine_origin
+
+    to_engine_origin(run / "sfincs_netampr.nc")
     # hydromt also RE-WRITES sfincs.weir on read/write, rounding crests to 0.1 m
     # (2026-10-05): restore the static model's own files, then any per-run override.
     from agri_sfincs.build import STRUCTURE_FILES
@@ -354,4 +368,8 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
                if (static_root / f).is_file()}  # fmt: skip
     sources.update(structures or {})
     stage_structures(run, sources)
+    if wind_scale is not None:
+        from agri_sfincs import wind
+
+        wind.write_forcing(run, t0, t1, scale=wind_scale, source=wind_source)
     return run

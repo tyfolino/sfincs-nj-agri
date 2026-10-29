@@ -24,7 +24,8 @@ LAG-AWARE blend of its two neighbours on CHAIN (agri_sfincs.events.setup_event).
 near it (scripts/validate_sandy.py, scripts/validate_storm_gauges.py); ``match_extremes``
 does highs or lows where the 6-min record is complete around them; ``usgs_event_series``
 reads a fetched gauge series (scripts/fetch_usgs_event.py) in m; ``his_series`` a run's
-observation points.
+observation points; ``gauge_series`` one point, read from the channel cell under it
+(``channel_series``) where the point itself sits on a bank cell.
 """
 
 from __future__ import annotations
@@ -48,14 +49,16 @@ DONORS = {
     "8537121": ["8551910", "8536110", "8557380"],
     "8536110": ["8557380", "8537121"],
     "8557380": ["8536110", "8537121"],  # Lewes: written for the DE chain (2026-10-23)
+    "8555889": ["8557380", "8536110"],  # Brandywine Shoal: the DE rail (2026-10-29)
 }
-#: Gauges gap-filled and written to the forcing file besides FORCING: Lewes ends the DE chain.
-EXTRA = ["8557380"]
+#: Gauges gap-filled and written to the forcing file besides FORCING: Lewes ends the DE chain,
+#: Brandywine Shoal is its lower-bay point (2013 has no record: filled from Lewes).
+EXTRA = ["8557380", "8555889"]
 
 
 #: Virtual gauges (domain.VIRTUAL_STATIONS) -> donor of the non-tidal residual: level = own
 #: predicted tide + the donor's (filled level - predicted tide).
-VIRTUAL_DONOR = {"8536931": "8537121", "8536581": "8536110"}
+VIRTUAL_DONOR = {"8536931": "8537121", "8536581": "8536110", "8554399": "8537121"}
 
 #: The water-level boundary chain, bay mouth to Philadelphia (FINDINGS §41), and the tide's
 #: travel time from each point to the next (h; lag of peak correlation between 2023 hourly
@@ -63,10 +66,14 @@ VIRTUAL_DONOR = {"8536931": "8537121", "8536581": "8536110"}
 #: a common phase first loses ~6-8% of range midway.
 CHAIN = ["8536110", "8536581", "8536931", "8537121", "8551910", "8540433", "8545240"]
 CHAIN_LAG_H = [0.5, 0.4, 0.5, 1.2, 1.3, 1.2]
-#: Per side. Delaware's bay-mouth edge runs from Cape Henlopen, beside Lewes (mean range 1.24 m
-#: vs Cape May's 1.48), so its chain starts at Lewes; Cape May's tide leads Lewes's by 0.1 h
-#: (2023 predictions, as above). Its state-line points get the same pairs as NJ's.
-CHAINS = {"nj": (CHAIN, CHAIN_LAG_H), "de": (["8557380", *CHAIN], [-0.1, *CHAIN_LAG_H])}
+#: Per side. NJ's chain runs along the NJ shore (Bidwell 1.73, Fortescue 1.78 m mean range),
+#: whose tide is bigger than mid-bay's; the first DE pass reused it on the state line and the
+#: DE shore got ~15-20% too much tide (FINDINGS §46). The DE rail (2026-10-29) runs Lewes (1.24)
+#: -> Brandywine Shoal (mid lower bay, 1.49) -> Mahon River entrance (DE shore, 1.62, virtual)
+#: -> Ship John Shoal (mid-bay, 1.70) and then NJ's chain up-river. Lags as above (2023
+#: predictions): 0.2, 0.9, 0.3 h.
+CHAINS = {"nj": (CHAIN, CHAIN_LAG_H),
+          "de": (["8557380", "8555889", "8554399", *CHAIN[3:]], [0.2, 0.9, 0.3, *CHAIN_LAG_H[3:]])}
 
 
 def chain_pair(x: float, y: float, gx, gy) -> tuple[int, float]:
@@ -247,3 +254,57 @@ def his_series(run) -> dict[str, pd.Series]:
     with xr.open_dataset(run / "sfincs_his.nc") as h:
         names = [s.strip() for s in h["station_name"].values.astype(str)]
         return {n: h["point_zs"].isel(stations=i).to_series() for i, n in enumerate(names)}
+
+
+OFF_CHANNEL_M = -0.3  # cell bed above this: the point is not in a channel cell
+CHANNEL_SNAP_M = 60.0  # a gauge off the channel is read from a channel cell this close to its centreline point
+
+
+def channel_series(run, x: float, y: float, side: str = "nj") -> pd.Series | None:
+    """Hourly map zs at the channel cell under a gauge that the his point misses: the gauge
+    projected onto the nearest tidal centreline (riverbed_centrelines<side>_v2.gpkg), then the
+    deepest cell within CHANNEL_SNAP_M of that point. On a 25 m grid the gauge's own
+    coordinates can fall on a bank cell (Hancocks Bridge, 2026-10-24); the nearest deep cell
+    can be an isolated pocket, so the centreline is the anchor. None if no channel cell.
+    (Moved from scripts/check_creek_tides.py, 2026-10-27.)"""
+    import geopandas as gpd
+    import numpy as np
+    import shapely
+    import xarray as xr
+
+    from agri_sfincs import config, domain
+
+    cl = gpd.read_file(config.ELEV_DIR / f"riverbed_centrelines{domain.side(side).files}_v2.gpkg")
+    cl = cl[cl.kind == "tidal"]
+    pt = shapely.Point(x, y)
+    line = cl.geometry.iloc[int(np.argmin(cl.distance(pt).values))]
+    p = line.interpolate(line.project(pt))
+    with xr.open_dataset(run / "sfincs_map.nc") as mp:
+        if "mesh2d_face_x" in mp:  # quadtree output
+            cx, cy, zb, dim = mp["mesh2d_face_x"].values, mp["mesh2d_face_y"].values, mp["zb"].values, "nmesh2d_face"
+            zs = mp["zs"]
+        else:  # uniform grid output: flatten (n, m)
+            cx, cy, zb = mp["x"].values.ravel(), mp["y"].values.ravel(), mp["zb"].values.ravel()
+            zs, dim = mp["zs"].stack(c=("n", "m")), "c"
+        near = np.nonzero((np.hypot(cx - p.x, cy - p.y) < CHANNEL_SNAP_M) & (zb < OFF_CHANNEL_M))[0]
+        if not len(near):
+            return None
+        return zs.isel({dim: int(near[np.argmin(zb[near])])}).to_series()
+
+
+def gauge_series(run, name: str, side: str = "nj") -> tuple[pd.Series, str]:
+    """(water level, source) at observation point ``name``: the his series, or, where the
+    point's cell bed is above OFF_CHANNEL_M, ``channel_series`` (hourly, so a peak between
+    map outputs is read low)."""
+    import xarray as xr
+
+    with xr.open_dataset(run / "sfincs_his.nc") as h:
+        names = [s.strip() for s in h["station_name"].values.astype(str)]
+        i = names.index(name)
+        zb, x, y = float(h["point_zb"][i]), float(h["station_x"][i]), float(h["station_y"][i])
+        zs = h["point_zs"].isel(stations=i).to_series()
+    if zb > OFF_CHANNEL_M:
+        c = channel_series(run, x, y, side)
+        if c is not None:
+            return c, "map (channel cell, hourly)"
+    return zs, "his"

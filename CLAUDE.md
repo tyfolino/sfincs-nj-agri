@@ -31,7 +31,10 @@ cleanup, v2 creek beds, a Delaware twin model, the Delaware exit check; it super
 
 - **Delaware state joins as a TWIN grid**, C&D Canal south to Lewes (Appoquinimink …
   Broadkill; no Christina / Brandywine, no PA). Its bay edge is the same mid-bay state line
-  NJ is forced on, with the same gauge chain; one region, one analysis, two SFINCS grids.
+  NJ is forced on; one region, one analysis, two SFINCS grids. **Amended 2026-10-29:** each
+  grid's line is forced to fit its OWN shore (NJ: the NJ-shore chain; DE: the DE rail Lewes →
+  Brandywine → Mahon → Ship John, `waterlevel.CHAINS`), so the two differ by ~0.11 m of range
+  at 39.0-39.2 N (FINDINGS §51). Nothing may treat the line as one water level.
 - **Defunct scripts are deleted** (git keeps them), not archived.
 
 ## Layout

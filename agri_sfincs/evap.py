@@ -165,8 +165,10 @@ def evap_on_grid(precip: xr.DataArray, pet: xr.DataArray | None = None,
     missing = days.difference(pd.DatetimeIndex(pet["time"].values))
     if len(missing):
         raise ValueError(f"PET has no data for gridMET days {list(missing[:5])} ...")
+    from agri_sfincs.precip import true_centres
+
     crs = _crs_of(precip)
-    xx, yy = np.meshgrid(precip["x"].values, precip["y"].values)
+    xx, yy = np.meshgrid(*true_centres(precip))
     lon, lat = Transformer.from_crs(crs, 4326, always_xy=True).transform(xx, yy)
     lon_da = xr.DataArray(lon, dims=("y", "x"))
     lat_da = xr.DataArray(lat, dims=("y", "x"))

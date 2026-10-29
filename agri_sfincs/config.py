@@ -27,6 +27,7 @@ PRECIP_DIR = DATA / "precip"  # Stage IV / MRMS hourly clips + county rain metri
 ELEV_DIR = DATA / "elevation"  # the pre-merged bed and the river-bed burn
 CHANNELS_DIR = DATA / "channels"  # ENC soundings, NHDPlus HR, USGS sections, tidal datums (bulk)
 EVAP_DIR = DATA / "evap"  # gridMET daily reference ET (pet) clipped to the BBOX (bulk)
+WIND_DIR = DATA / "wind"  # ERA5 hourly 10 m wind, one file per year (bulk; symlink to /scratch)
 LANDUSE_DIR = DATA / "landuse"  # NJDEP Land Use/Land Cover editions + farm-to-wetland transitions
 LANDSAT_DIR = DATA / "landsat"  # Landsat C2 L2 per-field per-scene stats (bulk; symlink to /scratch)
 STRUCT_DIR = DATA / "structures"  # NID, NLD levees, head of tide, lakes; dike weirs and gates

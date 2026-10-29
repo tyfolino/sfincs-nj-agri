@@ -1,10 +1,10 @@
-"""Hourly NAVD88 water levels at the five forcing gauges, the two virtual NJ-shore gauges and
-Lewes (waterlevel.EXTRA: the DE chain's mouth end, 2026-10-23), 2002-2025, gaps filled.
+"""Hourly NAVD88 water levels at the five forcing gauges, the virtual gauges, Lewes and
+Brandywine Shoal (waterlevel.EXTRA: the DE rail, 2026-10-23 / 10-29), 2002-2025, gaps filled.
 
 Inputs: the observed hourly MLLW files from scripts/gauge_inventory.py
 (data/gauges/noaa/<id>_hourly_mllw.csv.gz). Downloads and caches NOAA hourly tide
 predictions per station-year (data/gauges/noaa/<id>_pred_mllw.csv.gz). The virtual gauges
-(domain.VIRTUAL_STATIONS: Fortescue, Bidwell Creek entrance) are predicted tide + a donor's
+(domain.VIRTUAL_STATIONS: Fortescue, Bidwell Creek entrance, Mahon River entrance) are predicted tide + a donor's
 non-tidal residual at every hour (waterlevel.fill_virtual, FINDINGS §41).
 
 Writes data/gauges/waterlevel_forcing_navd88.nc:
@@ -64,7 +64,7 @@ def main() -> None:
     years = parse_years(a.years)
     index = pd.date_range(f"{years[0]}-01-01", f"{years[-1]}-12-31 23:00", freq="h")
 
-    involved = sorted(set(waterlevel.FORCING) | {d for v in waterlevel.DONORS.values() for d in v})
+    involved = sorted(set(waterlevel.FORCING + waterlevel.EXTRA) | {d for v in waterlevel.DONORS.values() for d in v})
     obs = {s: observed(s) for s in involved}
     pred = {s: predicted(s, years) for s in involved + sorted(VIRTUAL)}
     levels, source = waterlevel.fill_gaps(obs, pred, index, waterlevel.FORCING + waterlevel.EXTRA)
@@ -92,7 +92,7 @@ def main() -> None:
             "name": ("stations", [STATIONS[s]["name"] for s in ids]),
         },
         attrs={
-            "title": "Hourly water level at the Delaware forcing gauges (+ virtual NJ-shore gauges), gap-filled",
+            "title": "Hourly water level at the Delaware forcing gauges (+ virtual gauges), gap-filled",
             "units": "m NAVD88",
             "fill_method": "predicted tide + donor non-tidal residual "
             "(agri_sfincs.waterlevel.DONORS)",

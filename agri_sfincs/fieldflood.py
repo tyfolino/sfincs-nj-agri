@@ -20,6 +20,7 @@ as-built level decides and the class is overtopped / exposed.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
@@ -97,23 +98,32 @@ def add_county_levee(g: gpd.GeoDataFrame, side: str = "nj") -> gpd.GeoDataFrame:
     return g
 
 
-def field_pixels(g, model: str = runs.MODEL):
+def field_pixels(g, model: str = runs.MODEL, grid_run: Path | None = None):
     """Every 10 m subgrid pixel of every field (``g.field_id``, 1..N): (flat model-cell index,
-    ground elevation, field_id), for pixels inside the model grid with a finite ground."""
+    ground elevation, field_id), for pixels inside the model grid with a finite ground. The
+    cell grid is read from ``grid_run``'s map (default: the model's tide2024oct run)."""
     with rasterio.open(runs.subgrid_dep(model)) as d:
         dep = d.read(1, masked=True).filled(np.nan)
         tr, shape = d.transform, d.shape
     ids = rasterize(zip(g.geometry, g.field_id), out_shape=shape, transform=tr, fill=0, dtype="uint32")
-    with xr.open_dataset(runs.run_dir("tide2024oct", "intact", 0, model=model) / "sfincs_map.nc") as mp:
+    grid_run = grid_run or runs.run_dir("tide2024oct", "intact", 0, model=model)
+    with xr.open_dataset(Path(grid_run) / "sfincs_map.nc") as mp:
         grid = runs.MapGrid.from_map(mp)
     return runs.pixel_cells(ids, tr, dep, grid)
 
 
-def run_stats(run, f_sel, d_sel, fid, nfield, event: str) -> pd.DataFrame:
+def run_stats(run, f_sel, d_sel, fid, nfield, event: str, window=None) -> pd.DataFrame:
     """Per field: share of pixels flooded (> 5 cm month max), mean wet days, mean max depth
-    over flooded pixels, over ``event``'s focus period."""
+    over flooded pixels, over ``event``'s focus period, or the days in ``window`` = [start,
+    stop) instead (e.g. panel.peak_window: one storm tide of a run that holds two)."""
     with xr.open_dataset(run / "sfincs_map.nc") as mp:
-        focus = EVENTS[event].in_focus(runs.block_days(mp))
+        days = runs.block_days(mp)
+        if window is None:
+            focus = EVENTS[event].in_focus(days)
+        else:
+            focus = np.asarray((days >= pd.Timestamp(window[0])) & (days < pd.Timestamp(window[1])))
+            if not focus.any():
+                raise ValueError(f"{run.name}: no daily zsmax block in {window}")
         maxd = np.zeros(f_sel.size, "float32")
         wet = np.zeros(f_sel.size, "uint16")
         for k in np.flatnonzero(focus):

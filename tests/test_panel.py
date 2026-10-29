@@ -32,6 +32,34 @@ class TestHeightWeights(unittest.TestCase):
         self.assertEqual(share(c), share(t))  # same area share per bin: 0.5 / 0.5
 
 
+class TestStormTides(unittest.TestCase):
+    def test_seasons(self):
+        f = panel.storm_season
+        self.assertEqual(f(pd.Timestamp("2024-03-10")), (2024, "nongrow"))
+        self.assertEqual(f(pd.Timestamp("2024-04-12")), (2024, "grow"))
+        self.assertEqual(f(pd.Timestamp("2025-08-22")), (2025, "grow"))
+        self.assertEqual(f(pd.Timestamp("2018-10-27")), (2018, "grow"))
+        self.assertEqual(f(pd.Timestamp("2012-12-21")), (2013, "nongrow"))
+        self.assertEqual(f(pd.Timestamp("2012-11-01")), (2013, "nongrow"))
+        self.assertEqual(f(pd.Timestamp("2016-01-23")), (2016, "nongrow"))
+
+    def test_peaks_merge_within_three_days_and_split_beyond(self):
+        t = pd.date_range("2024-03-01", "2024-04-30 23:00", freq="h")
+        sj = pd.Series(0.5, index=t)
+        sj["2024-03-09 12:00"], sj["2024-03-10 13:00"] = 1.70, 1.73  # one storm, two days
+        sj["2024-04-12 01:00"] = 1.744  # a month later: a second storm
+        e = panel.storm_tides(sj)
+        self.assertEqual(e.day.dt.strftime("%m-%d").tolist(), ["03-10", "04-12"])
+        self.assertEqual(e.m.tolist(), [1.73, 1.744])
+        self.assertEqual(e.season.tolist(), ["nongrow", "grow"])
+        self.assertEqual(e.season_year.tolist(), [2024, 2024])
+        self.assertEqual(e.spring.tolist(), [True, True])
+
+    def test_peak_window_is_day_before_to_day_after(self):
+        a, b = panel.peak_window(pd.Timestamp("2025-08-22 14:00"))
+        self.assertEqual((a, b), (pd.Timestamp("2025-08-21"), pd.Timestamp("2025-08-24")))
+
+
 if __name__ == "__main__":
     unittest.main()
 

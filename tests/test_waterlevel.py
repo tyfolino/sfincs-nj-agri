@@ -34,7 +34,8 @@ def tide(index, lag_h=0.0, amp=1.0):
 class TestChainBoundary(unittest.TestCase):
     def test_chain_is_the_gauges_plus_virtual(self):
         virtual = {s["id"] for s in domain.VIRTUAL_STATIONS}
-        self.assertEqual(set(waterlevel.CHAIN), set(waterlevel.FORCING) | virtual)
+        nj_virtual = {s["id"] for s in domain.VIRTUAL_STATIONS if s["name"].endswith(", NJ")}
+        self.assertEqual(set(waterlevel.CHAIN), set(waterlevel.FORCING) | nj_virtual)
         self.assertEqual(set(waterlevel.VIRTUAL_DONOR), virtual)
         self.assertEqual(len(waterlevel.CHAIN_LAG_H), len(waterlevel.CHAIN) - 1)
 
@@ -81,18 +82,23 @@ class TestFillVirtual(unittest.TestCase):
 
 
 class TestSideChains(unittest.TestCase):
-    def test_de_chain_is_lewes_then_nj(self):
+    def test_de_rail_then_nj_chain_from_ship_john(self):
         nj, nj_lag = waterlevel.CHAINS["nj"]
         de, de_lag = waterlevel.CHAINS["de"]
-        self.assertEqual(de[0], "8557380")
-        self.assertEqual(de[1:], nj)
-        self.assertEqual(de_lag[1:], nj_lag)
+        self.assertEqual(de[:4], ["8557380", "8555889", "8554399", "8537121"])
+        k = nj.index("8537121")
+        self.assertEqual(de[3:], nj[k:])
+        self.assertEqual(de_lag[3:], nj_lag[k:])
         for ids, lags in waterlevel.CHAINS.values():
             self.assertEqual(len(lags), len(ids) - 1)
 
-    def test_lewes_is_filled_and_written(self):
-        self.assertIn("8557380", waterlevel.DONORS)
-        self.assertIn("8557380", waterlevel.EXTRA)
+    def test_de_rail_gauges_are_written(self):
+        """Every chain id is in the forcing file: FORCING, EXTRA (filled) or virtual."""
+        written = set(waterlevel.FORCING) | set(waterlevel.EXTRA) | set(waterlevel.VIRTUAL_DONOR)
+        for ids, _ in waterlevel.CHAINS.values():
+            self.assertLessEqual(set(ids), written)
+        for st in waterlevel.EXTRA:
+            self.assertIn(st, waterlevel.DONORS)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,13 @@ centre, same hour); Stage IV hours from its 6-h totals (``fill_from_6h``:
 the 6-h remainder spread evenly over the missing hours); anything left is 0. The counts
 go in the file's attributes and are printed: 2023 MRMS has 6 empty hours (2023-07-09
 15-16Z among them) and 2022 has 19.
+
+🔴 Placement (2026-10-29): hydromt writes the staged run's ``sfincs_netampr.nc`` with
+cell CENTRES on x / y; the engine reads the first value as a cell CORNER (the convention
+in agri_sfincs.wind's module doc). Every run staged before 2026-10-29 has its rain half a
+rain cell west and north of where it fell (~2 km on Stage IV, ~0.5 km on MRMS).
+``to_engine_origin`` rewrites the staged file's x / y as ``centre - step/2``;
+``true_centres`` gives a reader the real centres back.
 """
 
 from __future__ import annotations
@@ -30,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 from agri_sfincs import config
+from agri_sfincs.wind import ORIGIN_ATTR, ORIGIN_VALUE
 
 PRODUCTS = ("mrms", "stage4")
 FORCING_DIR = config.PRECIP_DIR / "forcing"
@@ -215,6 +223,48 @@ def build_forcing(product: str, t0, t1, out: Path) -> dict:
     tmp.replace(out)
     print(f"[precip] {product} {hours[0]} .. {hours[-1]} -> {out.name}: {info}")
     return info
+
+
+def to_engine_origin(path: Path) -> bool:
+    """Rewrite a staged meteo file's ``x`` / ``y`` from cell centres (as hydromt writes
+    them) to the engine's corner convention: ``centre - step/2`` with each axis's SIGNED
+    step, so hydromt's descending ``y`` moves north by half a cell. Only the coordinate
+    values change; the file is stamped ``ORIGIN_ATTR`` and a stamped file is left alone
+    (returns False). Copy + rename, so a hard link is broken, not written through."""
+    import os
+    import shutil
+
+    import netCDF4
+
+    path = Path(path)
+    with netCDF4.Dataset(path) as nc:
+        if ORIGIN_ATTR in nc.ncattrs():
+            return False
+    tmp = path.with_suffix(".nc.tmp")
+    shutil.copyfile(path, tmp)
+    with netCDF4.Dataset(tmp, "r+") as nc:
+        for ax in ("x", "y"):
+            c = np.asarray(nc[ax][:], dtype=np.float64)
+            d = np.diff(c)
+            if len(c) < 2 or np.abs(d - d[0]).max() > 1e-6 * abs(d[0]):
+                raise ValueError(f"{path.name}: {ax} is not a regular axis")
+            nc[ax][:] = c - d[0] / 2
+            nc[ax].setncatts({ORIGIN_ATTR: ORIGIN_VALUE, "first_cell_centre": float(c[0])})
+        nc.setncattr(ORIGIN_ATTR, ORIGIN_VALUE)
+    os.replace(tmp, path)
+    return True
+
+
+def true_centres(da) -> tuple[np.ndarray, np.ndarray]:
+    """(x, y) cell centres of a meteo Dataset / DataArray: its coordinates as they are,
+    or shifted back by half a step if ``to_engine_origin`` (or agri_sfincs.wind) wrote
+    them as corners."""
+    x, y = da["x"].values.astype(np.float64), da["y"].values.astype(np.float64)
+    if ORIGIN_ATTR in da["x"].attrs:
+        x = x + (x[1] - x[0]) / 2
+    if ORIGIN_ATTR in da["y"].attrs:
+        y = y + (y[1] - y[0]) / 2
+    return x, y
 
 
 def catalog_entry(key: str, uri: str, product: str, crs: str, t0, t1) -> str:

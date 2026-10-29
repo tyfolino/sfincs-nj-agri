@@ -30,7 +30,9 @@ from agri_sfincs import config, panel
 
 SANDY, STORM = config.ANALYSIS_DIR / "sandy_panel", config.ANALYSIS_DIR / "storm_panel"
 ROUND = 4  # decimals kept for shares and metres
-FLOOD_COLS = ["spring_peak_m", "spring_storm", "spring_tide", "spring_rain", "spring_tide_maxd_m",
+SEASON_COLS = [f"{s}_{c}" for s in ("grow", "nongrow")
+               for c in ("peak_m", "tide", "rain", "n_tide", "months_tide", "unmodelled_m")]  # fmt: skip
+FLOOD_COLS = [*SEASON_COLS, "spring_peak_m", "spring_storm", "spring_tide", "spring_rain", "spring_tide_maxd_m",
               "off_tide", "off_rain", "off_unmodelled_m", "floods_before_tide"]  # fmt: skip
 
 
@@ -79,7 +81,7 @@ grown on it (USDA Cropland Data Layer, CDL). Public data plus our model runs.
 |---|---|
 | `data/field_year.csv` | field x year ({len(fy):,} rows): flooding + crops. **Start here.** |
 | `data/fields.csv` | field ({len(f):,}): county, size, height, soils, sample flags. `fields.gpkg` = polygons |
-| `data/field_storm.csv` | field x storm: flooded share and depth, for finer exposure measures |
+| `data/field_storm.csv` | field x storm tide: flooded share and depth, the peak's date, month and season |
 | `results/` | what we found so far (descriptive, no regression yet) |
 
 Join on `field_id` (and `year`).
@@ -94,8 +96,20 @@ Fields higher up never flood in any modelled storm.
 
 ## Key columns (`field_year.csv`)
 
-- `spring_tide`: 1 if that year's spring (Mar-Jun) storm tide flooded the field. Flooded = at
-  least 10% of the field under more than 5 cm. Spring storms: {", ".join(map(str, spring.values))}.
+Flooded = at least 10% of the field under more than 5 cm. Every storm tide of at least
+1.68 m at Ship John Shoal in 2008-2025 is modelled ({fe.groupby(["event", "peak"]).ngroups} in this build), all year round.
+
+By growing season (April-October; November-March before it is the non-growing season, so a
+December storm counts toward the next year):
+- `grow_tide`, `nongrow_tide`: 1 if a storm tide in that season flooded the field.
+- `grow_n_tide`, `nongrow_n_tide`: how many; `grow_months_tide`, `nongrow_months_tide`: which
+  months (e.g. `8`, or `3;4` for two storms).
+- `grow_rain`, `nongrow_rain`: the same, counting the storm's rain too.
+- `grow_peak_m`, `nongrow_peak_m`: the season's highest water at Ship John (m), for weaker storms.
+
+By planting (the first cut, used in `results/`):
+- `spring_tide`: 1 if that year's spring (Mar-Jun) storm tide flooded the field. Spring storms:
+  {", ".join(map(str, spring.values))}.
 - `off_tide`: 1 if a storm the previous Jul-Feb flooded it (before this year's planting).
 - `spring_rain`, `off_rain`: the same, counting the storm's rain too.
 - `share_corn`, `share_soybeans`, ..., `cropland`: share of the field in each crop that year.

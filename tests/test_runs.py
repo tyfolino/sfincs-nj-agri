@@ -52,6 +52,27 @@ class TestMapGrid(unittest.TestCase):
         f = g.face(np.array([1250.0, 1000.0, 999.9, 1300.0]), np.array([2150.0, 2000.0, 2050.0, 2050.0]))
         np.testing.assert_array_equal(f, [1 * 3 + 2, 0, -1, -1])
 
+    def test_mesh_map_refined(self):
+        """A UGRID map, active faces only and in any order: two 100 m cells and a third
+        split into four 50 m cells; the fourth 100 m cell is inactive."""
+        sq = [(0, 0, 100), (0, 100, 100)] + [(100 + i, j, 50) for i in (0, 50) for j in (0, 50)]
+        order = [3, 0, 5, 1, 2, 4]  # face k = sq[order[k]]
+        nx, ny, fn = [], [], []
+        for x, y, w in (sq[k] for k in order):
+            fn.append(np.arange(4) + len(nx) + 1)  # 1-based, counterclockwise
+            nx += [1000 + x, 1000 + x + w, 1000 + x + w, 1000 + x]
+            ny += [2000 + y, 2000 + y, 2000 + y + w, 2000 + y + w]
+        fnv = xr.DataArray(np.array(fn, float), dims=("nmesh2d_face", "max_nmesh2d_face_nodes"), attrs={"start_index": 1})
+        mesh = xr.Dataset({"mesh2d_face_nodes": fnv, "mesh2d_node_x": ("nmesh2d_node", np.array(nx, float)),
+                           "mesh2d_node_y": ("nmesh2d_node", np.array(ny, float))})  # fmt: skip
+        g = runs.MapGrid.from_map(mesh)
+        self.assertEqual((g.x0, g.y0, g.dx, g.n, g.m), (1000.0, 2000.0, 50.0, 4, 4))
+        face_of = {sq_i: k for k, sq_i in enumerate(order)}
+        x = np.array([1010.0, 1090.0, 1050.0, 1125.0, 1175.0, 1175.0, 1150.0, 1150.0, 999.0])
+        y = np.array([2010.0, 2090.0, 2150.0, 2025.0, 2025.0, 2075.0, 2150.0, 2050.0, 2010.0])
+        want = [face_of[0], face_of[0], face_of[1], face_of[2], face_of[4], face_of[5], -1, face_of[5], -1]
+        np.testing.assert_array_equal(g.face(x, y), want)
+
     def test_pixel_cells(self):
         """10 m pixels, north-up, over the 3 x 3 grid of 100 m cells (row 0 = south)."""
         g = runs.MapGrid.from_map(_map())

@@ -6,11 +6,13 @@ Two scores, kept apart on purpose:
     the model's highest / lowest level within +-3 h (agri_sfincs.waterlevel.match_extremes),
     over the scoring days of the calm window. A gauge whose his point is not a channel cell
     (a refined grid can put it on the bank) is read from the hourly map at the channel cell
-    under it instead (``channel_series``; the table's "series" column says which).
+    under it instead (``waterlevel.channel_series``; the table's "series" column says which).
   HELD OUT (never tuned to): the published mean tide range at the CO-OPS datum stations up
     the creeks (data/channels/coops_offsets.csv, type R ratios to Reedy Point 8551910,
     Philadelphia 8545240 or Lewes 8557380). Expected range = the station's long-term mean
-    range (ratio x the reference's published MN, 1983-2001) x the scoring week's fraction of
+    range (h_high x the reference's MHW - h_low x its MLW, both above MLLW, 1983-2001: CO-OPS
+    applies type R ratios to the heights; until 2026-10-29 this was the mean ratio x MN, which
+    is 7-16% low where h_high != h_low: Murderkill, Leipsic, Mispillion) x the scoring week's fraction of
     MN, interpolated (inverse distance) between the two nearest observed gauges in WEEK_GAUGES
     (FINDINGS §41: the fraction runs from ~0.74 at Lewes to ~0.95 at Philadelphia in
     2023-05-24..31, so the reference's own week overstated lower-bay targets by 5-8%). Week
@@ -57,8 +59,10 @@ REFS = {"8551910": "Reedy Point", "8545240": "Philadelphia", "8557380": "Lewes"}
 #: of the observed gauges whose scoring-week fraction of MN is interpolated to each station.
 WEEK_GAUGES = {"8557380": 1.242, "8536110": 1.478, "8537121": 1.698, "8551910": 1.628,
                "8540433": 1.712, "8545240": 1.859}
-OFF_CHANNEL_M = -0.3  # cell bed above this: the point is not in a channel cell
-CHANNEL_SNAP_M = 60.0  # a gauge off the channel is read from a channel cell this close to its centreline point
+#: The references' (MHW - MLLW, MLW - MLLW), m (CO-OPS datums, 1983-2001, fetched 2026-10-29):
+#: a type R station's mean range is h_high x the first - h_low x the second.
+REF_HW_LW = {"8551910": (1.683, 0.055), "8545240": (1.917, 0.058), "8557380": (1.290, 0.048)}
+OFF_CHANNEL_M = waterlevel.OFF_CHANNEL_M  # cell bed above this: the point is not in a channel cell
 
 
 def mean_range(s: pd.Series) -> tuple[float, float]:
@@ -102,48 +106,17 @@ def creek_of() -> dict[str, str]:
     return out
 
 
-def channel_series(run, x: float, y: float) -> pd.Series | None:
-    """Hourly map zs at the channel cell under a gauge that the his point misses: the gauge
-    projected onto the nearest tidal centreline (riverbed_centrelines<side>_v2.gpkg), then the
-    deepest cell within CHANNEL_SNAP_M of that point. On a 25 m grid the gauge's own
-    coordinates can fall on a bank cell (Hancocks Bridge, 2026-10-24); the nearest deep cell
-    can be an isolated pocket, so the centreline is the anchor. None if no channel cell."""
-    import geopandas as gpd
-    import shapely
-
-    cl = gpd.read_file(config.ELEV_DIR / f"riverbed_centrelines{domain.side(SIDE).files}_v2.gpkg")
-    cl = cl[cl.kind == "tidal"]
-    pt = shapely.Point(x, y)
-    line = cl.geometry.iloc[int(np.argmin(cl.distance(pt).values))]
-    p = line.interpolate(line.project(pt))
-    with xr.open_dataset(run / "sfincs_map.nc") as mp:
-        if "mesh2d_face_x" in mp:  # quadtree output
-            cx, cy, zb, dim = mp["mesh2d_face_x"].values, mp["mesh2d_face_y"].values, mp["zb"].values, "nmesh2d_face"
-            zs = mp["zs"]
-        else:  # uniform grid output: flatten (n, m)
-            cx, cy, zb = mp["x"].values.ravel(), mp["y"].values.ravel(), mp["zb"].values.ravel()
-            zs, dim = mp["zs"].stack(c=("n", "m")), "c"
-        near = np.nonzero((np.hypot(cx - p.x, cy - p.y) < CHANNEL_SNAP_M) & (zb < OFF_CHANNEL_M))[0]
-        if not len(near):
-            return None
-        return zs.isel({dim: int(near[np.argmin(zb[near])])}).to_series()
-
-
 def score(run, t0, t1) -> tuple[pd.DataFrame, pd.DataFrame]:
     zs = waterlevel.his_series(run)
     with xr.open_dataset(run / "sfincs_his.nc") as h:
         names = [s.strip() for s in h["station_name"].values.astype(str)]
         zb = dict(zip(names, h["point_zb"].values))
-        xy = dict(zip(names, zip(h["station_x"].values, h["station_y"].values)))
     g = []
     gauges = {k: (v, "72279") for k, v in GAUGES.items()} if SIDE == "nj" else DE_GAUGES
     for site, (name, param) in gauges.items():
         o = waterlevel.usgs_event_series(OBS_EVENT, site, param)[t0:t1]
-        m, src = zs[f"usgs_{site}"][t0:t1], "his"
-        if zb[f"usgs_{site}"] > OFF_CHANNEL_M:
-            c = channel_series(run, *xy[f"usgs_{site}"])
-            if c is not None:
-                m, src = c[t0:t1], "map (channel cell, hourly)"
+        m, src = waterlevel.gauge_series(run, f"usgs_{site}", SIDE)
+        m = m[t0:t1]
         hi, lo = waterlevel.match_extremes(o, m), waterlevel.match_extremes(o, m, lows=True)
         oh, ol = mean_range(o.resample("1h").mean())
         mh, ml = mean_range(m.resample("1h").first())
@@ -162,7 +135,8 @@ def score(run, t0, t1) -> tuple[pd.DataFrame, pd.DataFrame]:
         if s.notna().sum() < 24:
             continue
         hi, lo = mean_range(s)
-        exp = (r.h_high + r.h_low) / 2 * WEEK_GAUGES[r.ref] * local_fraction(r.lon, r.lat, frac)
+        hw, lw = REF_HW_LW[r.ref]
+        exp = (r.h_high * hw - r.h_low * lw) * local_fraction(r.lon, r.lat, frac)
         rows.append({"station": r.name[:40], "id": r.id, "creek": creek.get(r.id, ""), "expected_m": exp,
                      "model_m": hi - lo, "ratio": (hi - lo) / exp, "off_channel": bool(zb[name] > OFF_CHANNEL_M)})  # fmt: skip
     cols = ["station", "id", "creek", "expected_m", "model_m", "ratio", "off_channel"]

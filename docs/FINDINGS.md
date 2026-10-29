@@ -1473,3 +1473,161 @@ in 2008-12; exit = the storm panel's `left_cropland`; height = median above rece
   calls land: 0.17 km². NHD: 88% of 44 km lies on bed water; the rest are ditches the lidar
   holds at +0.1..+0.5 m. The two northern branches reach the river below MLLW (at the −1.07 m
   plane). So the network is in the bed; what is unknown is its depth.
+- **Mouth section test → Alloway bed adopted: `e3v2a30brm65_100m`** (user, 2026-10-27).
+  a30br with its main stem (not branches) floored at −6.5 m NAVD88 over the lowest 2.5 km
+  (`data_bulk/experiments/v2_alloway/mouth_section.py`). Calm window, model / observed range:
+
+  | run | Hancocks Bridge | highs / lows bias | 0.8 n.mi.* | 2.5 n.mi.* | Hope Creek* | Quinton* | Alloway median* |
+  |---|---|---|---|---|---|---|---|
+  | a30br | 0.71 | −0.11 / +0.34 | 0.85 | 0.84 | 0.78 | 0.89 | 0.85 |
+  | **+ mouth −6.5 m (m65)** | 0.78 | −0.07 / +0.28 | 0.91 | 0.93 | 0.80 | 0.98 | 0.93 |
+  | + mouth −8.0 m (m80) | 0.80 | −0.06 / +0.26 | 0.93 | 0.96 | 0.81 | 1.00 | 0.96 |
+  | + mouth n 0.015 (n15) | 0.73 | −0.10 / +0.32 | 0.87 | 0.87 | 0.79 | 0.92 | 0.87 |
+
+  −6.5 m is ~5.6 m below MLLW, against the 1983 chart's ~4.2 m and one boater's "≥15 ft
+  throughout". Deeper adds ~0.01 m of high water, so past −6.5 m the mouth no longer holds the
+  tide back; the remaining error is upstream. A 25% smoother bed barely moves it. Nothing
+  overshoots (Quinton 0.98). A fitted section, like the Cohansey's 6 m (§45): it cannot tell a
+  bigger channel from the marsh draining by its own outlets.
+- **No newer survey reaches the creek** (2026-10-27, NCEI hydro-survey index, box
+  −75.575..−75.50, 39.47..39.53): besides H10112 (1983), two digital surveys, H11023 (2001,
+  R/V Ocean Explorer) and H10199 (1986), and no BAG surveys. The nearest soundings lie 1.2 km and 1.0 km
+  from the creek's mouth station, out in the river (CUDEM has those already). The shipping lane
+  (the federal channel) is surveyed; the creek has no commercial traffic and no federal project,
+  so no one charts it. Not searched: PSEG's own surveys (Salem / Hope Creek intake and barge
+  slip, the 1990s Alloway Creek marsh reopening, the NRC Early Site Permit environmental report).
+
+## 48. Storm peaks on m65: the creeks now carry the storm tide; the lower-bay boundary is the error left (2026-10-27; `reports/storm_gauges_e3v2a30brm65_100m.md`, `scripts/validate_storm_gauges.py`)
+
+§39's gauge check on `e3v2a30brm65_100m` (`--boundary chain --open`), 8 storm tides: the spring
+three with a Hancocks Bridge record (Apr 2022, Jun 2023, spring 2024) and the five added
+2026-10-27 so that every Ship John storm tide ≥ 1.68 m in 2008-25 has an event (Irene 2011-08,
+2018-10, Isaias 2020-08, 2024-01, 2025-08; `events.py`, `setup_scenarios.py OTHER_STORMS`).
+Hancocks Bridge's record starts 2018-10, not 2022 (§39 used only the old storm set).
+- **Station fix first.** On the 25 m grid the Hancocks Bridge point sits on a bank cell (bed
+  +0.79 m) that never wets; the storm check read it as a flat 0.79 m. Both checks now read such a
+  point from the deepest channel cell under it (`waterlevel.gauge_series`, hourly map; costs
+  1-2 cm at a peak, measured at Greenwich).
+- **Model − observed, m** (7 storms per gauge; Irene: every gauge out at the peak):
+
+  | Gauge | High tides, all | Storm peak, mean (range) | Low tides | v1, spring three: highs / peak / lows |
+  |---|---|---|---|---|
+  | Bivalve (Maurice) | +0.05 | +0.06 (−0.25..+0.20) | +0.06 | −0.06 / −0.07 / +0.18 |
+  | Greenwich (Cohansey) | +0.02 | +0.09 (+0.05..+0.14) | +0.09 | −0.15 / −0.08 / +0.63 |
+  | Hancocks Bridge (Alloway) | −0.12 | −0.09 (−0.15..+0.02) | +0.28 | −0.19 / −0.15 / +0.45 |
+
+  On the same spring three, m65 beats v1 at Hancocks Bridge on every score (peak −0.10 vs −0.15)
+  and the damped-creek pattern of §39 (lows far too high) is mostly gone. Rain adds ≤ 0.05 m.
+- **What is left at Bivalve follows the wind, not the borrowed surge** (one-off check,
+  2026-10-27). The chain boundary (§41) off the Maurice mouth is 0.12-0.15 m higher than v1's on
+  ordinary highs and 0.17-0.25 m at the storm peak (spring three), because the Fortescue virtual
+  gauge borrows Ship John's residual. At the 17 storm peaks Ship John's high-water surge
+  (observed − predicted high water) is 0.17 m above Cape May's on average (Reedy Point: about
+  Cape May's; ordinary tides: +0.04). But that gap does not make Bivalve high: over the 7 scored
+  storms, Bivalve's peak error falls as the gap grows (r = −0.82). The wind in the 6 h before
+  each peak (CO-OPS: Ship John, Lewes, Cape May) sorts them:
+
+  | Wind before the peak | Storms | Ship John − Cape May surge | Bivalve peak |
+  |---|---|---|---|
+  | NE-E (blows from NJ toward DE) | 2018-10, 2022-04, 2023-06, 2025-08 | −0.02..+0.05 | +0.06..+0.20 |
+  | SE-S (blows up-bay) | 2020-08 Isaias, 2024-01, 2024 spring | +0.26..+0.57 | −0.25..+0.10 |
+
+  The storm runs have NO wind. Up-bay wind piles water toward Ship John (the boundary carries
+  that), and onshore wind piles water against the Cumberland shore, which the NJ half of the
+  bay inside the grid cannot do without wind; offshore (NE) wind does the reverse. Consistent
+  with the errors on 7 storms, not proven. So the borrowed surge stays; the missing piece is
+  wind over the model's half of the bay. m65 vs v1 also mixes the bed change with the boundary
+  change; v2 storm runs would separate them.
+- **For the maps:** v1 understated storm water in the Cohansey and Alloway by 0.1-0.2 m; m65 is
+  within ~0.1 m at all three gauges, high near the Maurice and Cohansey, low in the Alloway.
+
+## 49. Rain sat half a rain cell off in every run staged before 2026-10-29 (fixed; `agri_sfincs/precip.py` `to_engine_origin`)
+
+The engine reads the first x / y of a gridded forcing file as a cell CORNER; hydromt writes
+cell CENTRES (the same trap as wind, `agri_sfincs/wind.py`; engine source
+sfincs_ncinput.F90 / sfincs_meteo.f90). With hydromt's descending y, each run's rain landed
+half a rain cell WEST and NORTH of where it fell: ~2.1 km each way on Stage IV (pre-2015-05
+events: 2010-14 storms, Sandy, the y2003-y2015 windows), ~0.5 km on MRMS. `setup_event` now
+rewrites the staged file as `centre - step/2` (stamped, applied once); checked on real
+Stage IV and MRMS files, where the engine's read-back at the wettest cell equals the file value.
+- **Untouched:** tide-only runs (zeroed rain) and everything outside SFINCS (§12, §13, §20, §26).
+- **Shifted, not rerun:** Sep 2023 / May 2025 event runs (§15, §17, §19: MRMS, ~0.5 km); their
+  results are differences between variants on the same rain. The storm `_rain` twins (rain adds
+  ≤ 0.05 m at the creek gauges, §48) are replaced by the m65 rerun.
+- New runs differ from older ones by beds, boundary, wind AND rain placement at once.
+
+## 50. Wind for the storm runs: HRRR, unscaled; ERA5 reads ~30% low over the bay (2026-10-29; `reports/hrrr_wind.md`, `reports/era5_wind.md`, `scripts/check_wind.py`)
+
+Gridded 10 m wind against the two bay lights (Ship John Shoal, Brandywine Shoal; CO-OPS hourly,
+brought to 10 m with a neutral log profile), storm-wind hours (≥ 8 m/s). The scale
+(observed / model) is given as a bracket: hours picked on the observed speed favour the
+observed side, hours picked on the model's favour the model.
+- **ERA5** (0.25°, 5 storms 2011-20): ×1.21-1.43 pooled; ×1.33-1.62 at Ship John, where its
+  ~28 km cells are mostly land on a 15-25 km wide bay.
+- **HRRR** (3 km analysis, AWS from 2014-07-30; `scripts/fetch_hrrr_wind.py`, rotated from
+  grid- to earth-relative, ~14° at the bay), 10 storms 2016-25: **×1.00-1.12 pooled, ×0.97-1.10
+  at Ship John**; median direction −4° (Ship John +4°, Brandywine −12°; ERA5 is also −14° at
+  Brandywine, so that light's vane is the likelier offset). On the same two storms (Oct 2018,
+  Isaias 2020) HRRR's hourly RMSE is 1.9-2.0 m/s against ERA5's 2.4-2.9. Per storm the 2018
+  storms read lowest (×1.12-1.26); 2021-25 ×0.95-1.10.
+- **Adopted for the storm runs: HRRR × 1.0** (inside the bracket; no fitted factor). 6 of
+  ~5,700 storm hours had no analysis and no 1 h forecast (Jan 2016: 4, Sep 2018: 2); the loader
+  fills gaps ≤ 3 h linearly (`wind.load_hrrr`).
+- **Before 2014-07** (7 storms: 2010-03, 2011-04, 2011-08, 2012-06, Sandy, 2012-12, 2014-04)
+  there is no HRRR: RAP (2012-05 on) / RUC, or ERA5 × ~1.3. Open (user).
+- **What wind does to the creek-gauge peaks (m65, 7 storms 2018-25, tide only,
+  `*_intact_slr000_hrrr` vs §48's windless runs; `reports/storm_gauges_e3v2a30brm65_100m_hrrr.md`):
+  almost nothing.** Model − observed storm high moves ≤ 0.03 m in 19 of 21 storm × gauge cases.
+  The two that move are both at Bivalve: Isaias Aug 2020 −0.25 → −0.09 (closer), Jan 2024
+  +0.03 → +0.18 (further off). Bivalve's mean |error| is 0.13 m with or without wind (mean
+  +0.06 → +0.11); Greenwich (+0.09) and Hancocks Bridge (−0.09) are unchanged. Wind does act
+  (Apr 2022: up to 0.47 m at some hours at a creek station, mostly near low water), but not at
+  the peaks. **So wind does not explain Bivalve's ±0.2 m.** HRRR stays in the rerun
+  (physically right, harmless at the peaks).
+- **Where the Bivalve error sits (one-off checks, 2026-10-29; Bivalve 01412150 2008-25, approved
+  to mid-2024, provisional after):**
+  - Not where we read: the model reads the gauge's own spot (a 100 m channel cell, bed −7.9 m).
+    Not staging: every m65 storm run's stored boundary equals today's forcing (0.000 m).
+  - The boundary does not drift against the gauge: observed Bivalve − boundary high water off the
+    Maurice (bay line 14 km out; Fortescue-Ship John and Bidwell-Fortescue blends), yearly medians
+    of ordinary highs, stays within ~3 cm over 2008-25 (−0.06..−0.10 and −0.01..−0.05 at the two
+    points), with no step in any year. Bivalve − Ship John likewise (−0.06..−0.11).
+  - The model holds a steady gap to the boundary in every storm window (highs −0.04..−0.06);
+    the OBSERVED gap varies by window (−0.07..−0.13), lowest in Jan 2024 and spring 2024. So
+    the model's ordinary-tide error at Bivalve is a steady ~+0.05 m, plus 3-5 cm in the two 2024
+    windows that comes from the gauge side (real or gauge; wind runs do not reproduce it).
+  - Same at highs and lows, and range within 4 cm: a level offset, not too much tide.
+  - None of this reaches ±0.2 m: the storm-peak scatter (−0.25..+0.20) is peak-specific and
+    still unexplained (candidates: peak matching, gauge behaviour at high water, surge shape).
+
+## 51. Delaware boundary: a DE rail, and a yardstick fix; the DE shore's tide is now right (2026-10-29; `reports/creek_tides_de.md`, `de_v2_100m/runs/tidecal2023may_derail`)
+
+§46's open problem, in two parts.
+- **The held-out yardstick was low where a station's high and low ratios differ.**
+  `check_creek_tides.py` took (h_high + h_low)/2 × the reference's MN; CO-OPS applies type R
+  ratios to the HEIGHTS, so the mean range is h_high × (MHW − MLLW)_ref − h_low × (MLW −
+  MLLW)_ref. Same answer when h_high = h_low (most stations); Murderkill entrance (1.25 / 0.94
+  on Lewes) +15%, Leipsic +16%, Mispillion +7%, St. Georges −10%, Edgemoor −7%. Fixed. NJ:
+  median correction 1.000; only Big Timber (0.97 → 0.99), Billingsport (1.02 → 1.03) and
+  Woodbury (off-channel) move, every NJ creek median holds (Alloway 0.93, Cohansey 0.91).
+- **The DE rail** (`waterlevel.CHAINS["de"]`): Lewes (MN 1.24) → Brandywine Shoal (1.49; now in
+  the forcing file, gaps from Lewes, 2013 has no record) → Mahon River entrance (DE shore,
+  1.62; virtual, own predictions + Ship John's residual, NAVD88 by Ship John's transfer) →
+  Ship John → NJ's chain up-river. Lags 0.2 / 0.9 / 0.3 h (2023 predictions). NJ's chain kept
+  the lower-bay state line on NJ-shore tide (Bidwell 1.73, Fortescue 1.78). The rail lowers
+  the DE boundary's range ~9% at 39.0-39.2 N, ~1% elsewhere. The other eight forcing series
+  are unchanged bit for bit.
+- **Calm window (tidecal2023may, tide only), old chain → DE rail, corrected yardstick:**
+  held-out median 1.11 → **1.00** (Woodland Beach 1.19 → 1.00, Murderkill entrance 1.05 → 1.00,
+  Mispillion 1.11 → 1.06); Bowers (its own record) range 1.15 → 1.08, highs +0.13 → +0.04 m;
+  Slaughter Beach 0.82 → 0.80; Odessa unchanged (0.26: needs the Appoquinimink's depth), St.
+  Georges 1.21 (canal). Mid-bay points inside the grid: Ship John range 0.83 → 0.95 (lows
+  +0.39 → +0.06 m), Brandywine 0.91 → 0.87 (lows +0.12 m).
+- **The two grids now meet on different water levels.** NJ's state line carries NJ-shore
+  tide, DE's the rail's; at 39.0-39.2 N they differ by ~9% of range. Each is an effective
+  boundary fitted to its own shore, not the one real mid-bay level; fine for per-shore
+  farmland, not for anything that crosses the line. Measured on the 119 shared boundary
+  points (calm week): range 0.11 m apart at 39.0-39.2 N, 0.01-0.02 m at 39.2-39.4, 0 above;
+  level rms 3-7 cm, instantaneous up to 0.22 m (mostly timing: Mahon lags Fortescue).
+  **Adopted (user, 2026-10-29)** over one shared level (DE's rail for both would drop NJ's
+  lower-bay boundary ~9%, under a bay shore already at 0.84).
