@@ -22,7 +22,7 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   restore) are submitted (40 jobs). Next: check each log (`finish: ... True`), then the panel
   and scenario compares. The `_open` twin of every scenario weir file was cut on v1's grid like
   `dikes_open.weir` (m65's own). **Waiting on the user:** wind for the 47 pre-2014 runs (Sandy
-  set, breaches, 2010-14 storms): ERA5 × ~1.3 (suggested; ERA5 2010/12/14 downloading) or test
+  set, breaches, 2010-14 storms): ERA5 × ~1.3 (suggested; ERA5 2010-11 on disk, 2012/14 in job 63248098, log `logs/py_63248098.out`) or test
   RAP first. Bivalve's storm-peak scatter: not wind, boundary or gauge drift (§50); open.
   Then §29's number. Stow /
   upper Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
