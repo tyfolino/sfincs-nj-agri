@@ -228,7 +228,7 @@ def readme(f: pd.DataFrame, fy: pd.DataFrame, missing: list[int], fe: pd.DataFra
     grains = ", ".join(str(c) for c in sorted(cdl.GROUPS["other_grains"]))
     rain = "sandy_rain_share" in f
     yrs = f"{fy.year.min()}-{fy.year.max()}" + (f" (missing: {missing})" if missing else "")
-    evs = ", ".join(f"{e} ({p[:10]})" for e, p in fe.groupby(["event", "peak"]).size().index.sort_values(key=lambda i: i.get_level_values(1))) if len(fe) else "none yet"
+    evs = ", ".join(f"{e} ({str(p)[:10]})" for e, p in sorted(set(zip(fe.event, fe.peak)), key=lambda t: str(t[1]))) if len(fe) else "none yet"
     gone = [e for e in STORMS if e not in set(fe.get("event", []))]
     return f"""# Sandy panel: per-field Sandy flooding, height and CDL land use 2008-2025
 

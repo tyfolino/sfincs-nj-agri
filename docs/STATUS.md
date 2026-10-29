@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-10-29** (HRRR wind adopted, peaks barely move, §50; rain placement fixed, §49; DE rail + yardstick, §51).
+Last updated: **2026-10-29** (m65 rerun under way with HRRR wind; storm panel by month tested; §49-§51).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -16,13 +16,15 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 - **Step 1, v2 beds (NJ): done** on the E3 grid; **Alloway adopted: `e3v2a30brm65_100m`**
   (§45, §47). Storm check passed: peaks within ~0.1 m at the three creek gauges, Bivalve storm
   by storm −0.25..+0.20 (§48). All 16 m65 storm runs exist (`--boundary chain --open`).
-  Before the full rerun:
-  1. **Wind: HRRR × 1.0 (§50)**, in the rerun. It barely moves the creek-gauge peaks (7
-     storms): Bivalve's ±0.2 m is not wind. Pre-2014 storms (7): test RAP against the lights,
-     else ERA5 × ~1.3 (ERA5 years in the background).
-  2. **Rain placement fixed (§49)**: every new staging is right; the rerun brings it in.
-  Then: rerun the storm and scenario sets on m65 (`setup_scenarios.py --model
-  e3v2a30brm65_100m --boundary chain --open`; ~3× v2's run time); then §29's dike-dependent number. Stow /
+  **Full m65 rerun under way (2026-10-29)**, `setup_scenarios.py --model e3v2a30brm65_100m
+  --boundary chain --open --wind 1 --wind-source hrrr` (names `*_hrrr`; HRRR × 1.0, §50; rain
+  placement fixed, §49): the 22 storm runs 2016-25 and the 25-run tide2024oct set (base +
+  restore) are submitted (40 jobs). Next: check each log (`finish: ... True`), then the panel
+  and scenario compares. The `_open` twin of every scenario weir file was cut on v1's grid like
+  `dikes_open.weir` (m65's own). **Waiting on the user:** wind for the 47 pre-2014 runs (Sandy
+  set, breaches, 2010-14 storms): ERA5 × ~1.3 (suggested; ERA5 2010/12/14 downloading) or test
+  RAP first. Bivalve's storm-peak scatter: not wind, boundary or gauge drift (§50); open.
+  Then §29's number. Stow /
   upper Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
 - **Step 3, Delaware: boundary fixed (§51).** DE rail (Lewes → Brandywine → Mahon → Ship
   John) + the held-out yardstick corrected: DE held-out median 1.00, Bowers 1.08. **Adopted
@@ -41,9 +43,10 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
    (`reports/storm_panel.md`, `data/analysis/storm_panel/`). **Seowoo asks (2026-10-26): floods
    all year, with the month** (growing vs non-growing season). All 18 Ship John storm tides
    ≥ 1.68 m (2008-25) now have events; Irene 2011, Oct 2018, Isaias 2020, Jan 2024, Aug 2025
-   are run on m65 (§48). Next: a field × storm-month layout (`build_sandy_panel.py` STORMS
-   list). User: storm tides only (salt water is the clearer signal; no rain-only floods);
-   growing season flag = Apr-Oct.
+   are run on m65 (§48). Field × storm-month layout built and tested on m65
+   (`data/analysis/storm_panel_m65test`: one row per storm tide, grow_/nongrow_ columns); the
+   bundle for Seowoo is rebuilt after the rerun (`plot_storm_panel.py` hardcodes 12 storm tides:
+   update then). User: storm tides only; growing season = Apr-Oct.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
 3. **Per-system breach runs** (18 systems) on tide2024oct × SLR with a scoured sill (MLLW): the
