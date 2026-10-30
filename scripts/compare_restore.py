@@ -15,11 +15,17 @@ Each scenario run is compared with its as-built twin (same event, same SLR, dike
 The noise floor is the identical repeat tide2024oct_intact_slr000_rep vs tide2024oct_intact_slr000:
 a difference smaller than it is not a result.
 
-Writes reports/restore_phase1.md and reports/figs/restore_dlevel_<site>.png.
-Usage:  python scripts/compare_restore.py
+Runs are read from ``--model`` (default runs.MODEL, v1_100m), names ending in ``--suffix``
+(e.g. ``_hrrr``).
+
+Writes reports/restore_phase1.md and reports/figs/restore_dlevel_<site>.png; with --model or
+--suffix, restore_phase1_<model><suffix>.md and restore_dlevel_<site>_<model><suffix>.png.
+Usage:  python scripts/compare_restore.py [--model e3v2a30brm65_100m] [--suffix _hrrr]
 """
 
 from __future__ import annotations
+
+import argparse
 
 import matplotlib
 
@@ -43,12 +49,13 @@ RING_KM = 3.0
 THRESH = runs.THRESH
 
 
-def cell_levels(run, event: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Per model cell over the focus days: mean daily max zs, max zs, and zb."""
+def cell_levels(run, event: str, grid: runs.MapGrid) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per model cell (2-D, ``grid.as_grid``) over the focus days: mean daily max zs, max zs, and zb."""
     with xr.open_dataset(run / "sfincs_map.nc") as mp:
         k = np.flatnonzero(EVENTS[event].in_focus(runs.block_days(mp)))
         z = mp["zsmax"].isel(timemax=k).values
-        return np.nanmean(z, axis=0), np.nanmax(z, axis=0), mp["zb"].values
+        return (grid.as_grid(np.nanmean(z, axis=0)), grid.as_grid(np.nanmax(z, axis=0)),
+                grid.as_grid(mp["zb"].values))  # fmt: skip
 
 
 class Pixels:
@@ -80,13 +87,19 @@ class Pixels:
 
 
 def main() -> None:
-    with rasterio.open(runs.subgrid_dep()) as d:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--model", default=runs.MODEL)
+    ap.add_argument("--suffix", default="", help="run-name ending, e.g. _hrrr")
+    a_ = ap.parse_args()
+    model, suffix = a_.model, a_.suffix
+    out_tag = "" if model == runs.MODEL and not suffix else f"_{model}{suffix}"
+    with rasterio.open(runs.subgrid_dep(model)) as d:
         dep = d.read(1, masked=True).filled(np.nan)
         tr, crs, shape = d.transform, d.crs, d.shape
-    base = runs.run_dir("tide2024oct", "intact", 0)
+    base = runs.run_dir("tide2024oct", "intact", 0, suffix, model=model)
     with xr.open_dataset(base / "sfincs_map.nc") as mp:
         grid = runs.MapGrid.from_map(mp)
-        msk = mp["msk"].values
+        msk = grid.as_grid(mp["msk"].values)
     x0, y0, dx = grid.x0, grid.y0, grid.dx
     cx = x0 + (np.arange(grid.m) + 0.5) * dx
     cy = y0 + (np.arange(grid.n) + 0.5) * dx
@@ -96,10 +109,10 @@ def main() -> None:
 
     # noise floor
     lines, noise = [], {}
-    rep = runs.run_dir("tide2024oct", "intact", 0, "_rep")
+    rep = runs.run_dir("tide2024oct", "intact", 0, f"_rep{suffix}", model=model)
     if runs.finished(rep):
-        a, am, zb = cell_levels(base, "tide2024oct")
-        b, bm, _ = cell_levels(rep, "tide2024oct")
+        a, am, zb = cell_levels(base, "tide2024oct", grid)
+        b, bm, _ = cell_levels(rep, "tide2024oct", grid)
         wet = (msk > 0) & ((am - zb > THRESH) | (bm - zb > THRESH))
         noise = {"mean daily high water": np.nanmax(np.abs(b - a)[wet]), "month max": np.nanmax(np.abs(bm - am)[wet])}
         lines += ["## Noise floor (identical repeat of tide2024oct_intact_slr000)", "",
@@ -125,7 +138,7 @@ def main() -> None:
                                 ("tide2024oct", 0, "restore_setback"), ("tide2024oct", 60, "restore_setback"),
                                 ("sandy2012", 0, "restore_setback")]:  # fmt: skip
             dk = f"breach_{slug}" if arm == "breach" else f"restore_{slug}_{arm.split('_')[1]}"
-            run, twin = runs.run_dir(event, dk, slr), runs.run_dir(event, "intact", slr)
+            run, twin = runs.run_dir(event, dk, slr, suffix, model=model), runs.run_dir(event, "intact", slr, suffix, model=model)
             if not runs.finished(run):
                 continue
             s0, s1 = px.stats(twin, event), px.stats(run, event)
@@ -145,8 +158,8 @@ def main() -> None:
                          "neighbour fields": len(nb), "nbr flooded fields": f"{int(fl0.sum())} -> {int(fl1.sum())}",
                          "nbr flooded ha": f"{f0.flooded_ha.sum():.1f} -> {f1.flooded_ha.sum():.1f}",
                          "nbr wet ha-days": f"{f0.wet_ha_days.sum():.0f} -> {f1.wet_ha_days.sum():.0f}"})  # fmt: skip
-            a, am, zb = cell_levels(twin, event)
-            b, bm, _ = cell_levels(run, event)
+            a, am, zb = cell_levels(twin, event, grid)
+            b, bm, _ = cell_levels(run, event, grid)
             wet = (msk > 0) & ((am - zb > THRESH) | (bm - zb > THRESH)) & ~inside
             d_mhw, d_max = b - a, bm - am
             far = wet & ~near
@@ -183,17 +196,18 @@ def main() -> None:
                              fontsize=10, loc="left")  # fmt: skip
                 fig.tight_layout()
                 tag = "_setback" if arm == "restore_setback" else ""
-                fig.savefig(config.REPORTS / "figs" / f"restore_dlevel_{slug}{tag}.png", dpi=130)
+                fig.savefig(config.REPORTS / "figs" / f"restore_dlevel_{slug}{tag}{out_tag}.png", dpi=130)
                 plt.close(fig)
 
     text = "\n".join(["# Farm -> wetland phase 1: re-opening one dike system to the tide (2026-10-06)", "",
                       "Generated by `scripts/compare_restore.py` (method in its docstring). Maps of the change "
-                      "in daily high water: `figs/restore_dlevel_<site>[_setback].png`.", "", *lines,
+                      f"in daily high water: `figs/restore_dlevel_<site>[_setback]{out_tag}.png`. "
+                      f"Runs: `{model}`, names ending `{suffix or '(none)'}`.", "", *lines,
                       "## Inside the site and on neighbouring farm fields (as built -> scenario)", "",
                       md_table(pd.DataFrame(rows).set_index(["site", "event", "slr_m", "arm"]), floatfmt="{:,.0f}") if rows else "(no runs finished)", "",
                       "## Water levels outside the site (cells wet in either run)", "",
                       md_table(pd.DataFrame(lvl).set_index(["site", "event", "slr_m", "arm"]), floatfmt="{:.1f}") if lvl else "", ""])  # fmt: skip
-    (config.REPORTS / "restore_phase1.md").write_text(text + "\n")
+    (config.REPORTS / f"restore_phase1{out_tag}.md").write_text(text + "\n")
     print(text)
 
 

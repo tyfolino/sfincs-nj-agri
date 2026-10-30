@@ -114,6 +114,13 @@ class MapGrid:
             return flat
         return np.where(inside, self.lookup[np.where(inside, flat, 0)], -1)
 
+    def as_grid(self, values: np.ndarray) -> np.ndarray:
+        """A per-cell map field as a 2-D (n, m) array: unchanged on regular output; on a mesh,
+        each fine slot takes its face's value, NaN where no cell is active."""
+        if self.lookup is None:
+            return values
+        return np.where(self.lookup >= 0, values[self.lookup], np.nan).reshape(self.n, self.m)
+
 
 def pixel_centres(tr, rows, cols) -> tuple[np.ndarray, np.ndarray]:
     """x, y of the centres of pixels (``rows``, ``cols``) of a raster with transform ``tr``."""

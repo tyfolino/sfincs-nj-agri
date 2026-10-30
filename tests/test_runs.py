@@ -72,6 +72,11 @@ class TestMapGrid(unittest.TestCase):
         y = np.array([2010.0, 2090.0, 2150.0, 2025.0, 2025.0, 2075.0, 2150.0, 2050.0, 2010.0])
         want = [face_of[0], face_of[0], face_of[1], face_of[2], face_of[4], face_of[5], -1, face_of[5], -1]
         np.testing.assert_array_equal(g.face(x, y), want)
+        grid = g.as_grid(np.arange(6.0))
+        self.assertEqual(grid.shape, (4, 4))
+        self.assertEqual(grid[0, 0], face_of[0])  # (row, col) of the 50 m slots
+        self.assertEqual(grid[1, 3], face_of[5])
+        self.assertTrue(np.isnan(grid[3, 3]))  # the inactive 100 m cell
 
     def test_pixel_cells(self):
         """10 m pixels, north-up, over the 3 x 3 grid of 100 m cells (row 0 = south)."""
