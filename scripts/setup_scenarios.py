@@ -95,7 +95,7 @@ def matrix(breaches: bool, restore: bool = False, storms: bool = False, wind: st
                 runs.append({"event": ev, "dikes": d, "weir": DIKES[d], "slr": s, "precip": "none"})
     runs.append({"event": "sandy2012", "dikes": "intact", "weir": None, "slr": 0.0, "precip": None})
     if breaches:
-        for f in sorted((SC / "breach").glob("*.weir")):
+        for f in sorted(p for p in (SC / "breach").glob("*.weir") if not p.stem.endswith("_open")):  # --open picks the twin
             runs.append({"event": "sandy2012", "dikes": f"breach_{f.stem}", "weir": f, "slr": 0.0,
                          "precip": "none"})  # fmt: skip
     if restore:
