@@ -169,16 +169,17 @@ def wind_suffix(event: str) -> str:
     return "_hrrr" if pd.Timestamp(EVENTS[event].tstart) >= HRRR_START else "_era5"
 
 
-def precip_source(event: Event, precip: str | None = None) -> str:
+def precip_source(event: Event, precip: str | None = None, side: str = "nj") -> str:
     """The catalog source for ``event``'s precipitation (``precip`` overrides the
     event's choice). A product name builds the window's forcing file and catalog entry
-    ``<product>_<event>`` (agri_sfincs.precip.ensure_forcing)."""
+    ``<product>_<event>``, with ``_<side>`` off NJ (agri_sfincs.precip.ensure_forcing)."""
     from agri_sfincs import precip as pr
 
     src = precip or event.precip
     if src not in pr.PRODUCTS:
         return src
-    return pr.ensure_forcing(src, event.tstart, event.tstop, f"{src}_{event.name}")
+    key = f"{src}_{event.name}" + ("" if side == "nj" else f"_{side}")
+    return pr.ensure_forcing(src, event.tstart, event.tstop, key, side=side, event=event.name)
 
 
 def obs_points(side: str = "nj") -> gpd.GeoDataFrame:
@@ -325,7 +326,7 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
     no_rain = precip == "none"
     # tide-only still WRITES the event's rain file, then zeroes it: the native build
     # segfaults at start-up with cnb infiltration and no precipitation file (2026-10-05)
-    precip_src = precip_source(event, None if no_rain else precip)  # may add a catalog entry
+    precip_src = precip_source(event, None if no_rain else precip, model_side(static_root))  # may add a catalog entry
     shutil.copytree(static_root, run, ignore=shutil.ignore_patterns("runs", "gis"))
 
     sf = SfincsModel(data_libs=[str(config.CATALOG)], root=str(run), mode="r+")

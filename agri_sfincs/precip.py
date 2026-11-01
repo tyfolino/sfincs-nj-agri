@@ -57,10 +57,15 @@ def file_years(hours) -> list[int]:
     return sorted({(t - pd.Timedelta("1h")).year for t in pd.DatetimeIndex(hours)})
 
 
-def year_files(product: str, hours: pd.DatetimeIndex, required: bool = True) -> list[Path]:
+def year_files(product: str, hours: pd.DatetimeIndex, required: bool = True, side: str = "nj",
+               event: str | None = None) -> list[Path]:  # fmt: skip
     """Year files holding ``hours`` (a year file holds the hours ending
-    <year>-01-01T01 .. <year+1>-01-01T00). ``product`` may be ``stage4_6h``."""
-    files = [config.PRECIP_DIR / product / f"{product}_{y}.nc" for y in file_years(hours)]
+    <year>-01-01T01 .. <year+1>-01-01T00). ``product`` may be ``stage4_6h``. Another side has one
+    file per ``event`` window instead (scripts/fetch_precip_hourly.py --side de)."""
+    if side == "nj":
+        files = [config.PRECIP_DIR / product / f"{product}_{y}.nc" for y in file_years(hours)]
+    else:
+        files = [config.PRECIP_DIR / f"{product}_{side}" / f"{product}_{event}.nc"]
     missing = [f for f in files if not f.is_file()]
     if missing and required:
         raise FileNotFoundError(f"no hourly {product} file(s): {missing}")
@@ -157,12 +162,12 @@ def nearest_index(centres: np.ndarray, v: np.ndarray) -> np.ndarray:
     return np.where((i >= 0) & (i < len(centres)), i, -1)
 
 
-def fill_stage4_gaps(p: np.ndarray, hours: pd.DatetimeIndex) -> int:
+def fill_stage4_gaps(p: np.ndarray, hours: pd.DatetimeIndex, side: str = "nj", event: str | None = None) -> int:
     """Fill NaN Stage IV hours in place from the 6-h totals; returns cells filled."""
     if not np.isnan(p).any():
         return 0
     t6 = pd.date_range(hours[0].ceil("6h"), hours[-1].ceil("6h"), freq="6h")
-    p6, _ = load_window(year_files("stage4_6h", t6, required=False), t6)
+    p6, _ = load_window(year_files("stage4_6h", t6, required=False, side=side, event=event), t6)
     if p6 is None:
         return 0
     flat = p.reshape(len(p), -1)
@@ -171,7 +176,7 @@ def fill_stage4_gaps(p: np.ndarray, hours: pd.DatetimeIndex) -> int:
     return int(mask.sum())
 
 
-def build_forcing(product: str, t0, t1, out: Path) -> dict:
+def build_forcing(product: str, t0, t1, out: Path, side: str = "nj", event: str | None = None) -> dict:
     """Write the run window's precipitation to ``out`` (see module docstring); returns
     the gap counts."""
     import xarray as xr
@@ -179,13 +184,13 @@ def build_forcing(product: str, t0, t1, out: Path) -> dict:
     if product not in PRODUCTS:
         raise ValueError(f"precip product {product!r}; known: {PRODUCTS}")
     hours = window_hours(t0, t1)
-    p, ref = load_window(year_files(product, hours), hours)
+    p, ref = load_window(year_files(product, hours, side=side, event=event), hours)
     info = {"nan_hours": int(np.isnan(p).all(axis=(1, 2)).sum()),
             "nan_cell_hours": int(np.isnan(p).sum())}  # fmt: skip
     if product == "mrms":
         if info["nan_cell_hours"]:
-            s4, ref4 = load_window(year_files("stage4", hours), hours)
-            info["stage4_filled_from_6h"] = fill_stage4_gaps(s4, hours)
+            s4, ref4 = load_window(year_files("stage4", hours, side=side, event=event), hours)
+            info["stage4_filled_from_6h"] = fill_stage4_gaps(s4, hours, side, event)
             xs, ys, proj = stage4_axes(ref4)
             from pyproj import Transformer
 
@@ -201,7 +206,7 @@ def build_forcing(product: str, t0, t1, out: Path) -> dict:
         coords = {"time": hours, "lat": ref.lat.values, "lon": ref.lon.values}
         dims, crs = ("time", "lat", "lon"), "EPSG:4326"
     else:
-        info["filled_from_6h"] = fill_stage4_gaps(p, hours)
+        info["filled_from_6h"] = fill_stage4_gaps(p, hours, side, event)
         xs, ys, proj = stage4_axes(ref)
         coords = {"time": hours, "y": ys, "x": xs}
         dims, crs = ("time", "y", "x"), proj
@@ -282,7 +287,8 @@ def catalog_has(text: str, key: str) -> bool:
     return any(line.rstrip() == f"{key}:" for line in text.splitlines())
 
 
-def ensure_forcing(product: str, t0, t1, key: str, catalog: Path = config.CATALOG) -> str:
+def ensure_forcing(product: str, t0, t1, key: str, catalog: Path = config.CATALOG, side: str = "nj",
+                   event: str | None = None) -> str:  # fmt: skip
     """Build ``data/precip/forcing/<key>.nc`` (if absent) and add catalog entry ``key``
     (if absent); returns ``key``. A file is reused only if its time axis is the window."""
     import xarray as xr
@@ -295,7 +301,7 @@ def ensure_forcing(product: str, t0, t1, key: str, catalog: Path = config.CATALO
         if not same:
             raise FileExistsError(f"{out} exists for a different window; delete it or rename")
     else:
-        build_forcing(product, t0, t1, out)
+        build_forcing(product, t0, t1, out, side, event)
     text = catalog.read_text()
     if not catalog_has(text, key):
         with xr.open_dataset(out) as ds:

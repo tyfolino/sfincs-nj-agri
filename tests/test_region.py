@@ -140,6 +140,7 @@ class TestCountiesInsideBBox(unittest.TestCase):
         from agri_sfincs import domain
 
         self.assertEqual(fetch_mrms.BBOX, domain.RAIN_BBOX)
+        self.assertEqual(fetch_mrms.DE_BBOX, domain.DE_RAIN_BBOX)
 
 
 if __name__ == "__main__":

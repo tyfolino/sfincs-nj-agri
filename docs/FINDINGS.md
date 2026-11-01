@@ -1720,7 +1720,7 @@ Main sample 943 → 891 low crop fields, 435 of them flood-prone.
   For the yes/no outcomes, 2022 and 2023 have 3 and 2 baseline years inside the ±5 window.
 
 
-## 54. Appoquinimink: surveyed depth more than doubles Odessa's tide; not yet right (2026-11-01; `reports/creek_tides_de.md`, `de_v2ap30_100m`, `de_v2ap45_100m`)
+## 54. Appoquinimink: surveyed depth more than doubles Odessa's tide; 4.5 m adopted, not yet right (2026-11-01; `reports/creek_tides_de.md`, `de_v2ap45_100m`)
 
 DNREC surveyed the river by ADCP on 2000-05-09 (Appoquinimink TMDL technical report, 2003, Table
 3-1, https://documents.dnrec.delaware.gov/swc/wa/Documents/Xia/Appo_NutrientsTMDL_TechReport_2003.pdf).
@@ -1740,4 +1740,6 @@ below MLLW), model − observed at Odessa:
 
 Other DE gauges and stations do not move. Odessa is both the tuned gauge and the only one on this
 river, so this is calibration, not validation. Lows stay too high: width or the reach above Odessa
-may be next. `domain.DE_TIDAL_REACHES` is unchanged until a depth is adopted.
+may be next. **Adopted (user, 2026-11-01): 4.5 m, as an effective depth** (`domain.DE_TIDAL_REACHES`):
+deeper than the 3.0 m measured at Odessa, within the reach's readings, and probably also standing
+in for width. The DE model is now `de_v2ap45_100m`.

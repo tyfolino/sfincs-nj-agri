@@ -56,6 +56,12 @@ Resumable: finished months are kept as data/precip/<product>/parts/YYYY-MM.npz; 
 month with transient failures (status 2) is retried on the next run, only those hours.
 A year file is assembled once its 12 months are free of status 2; then its parts are
 deleted. Existing year files are skipped.
+
+Delaware (``--side de --windows CSV``): the event windows only, over fetch_mrms.DE_BBOX, same
+variables and resume, one file per window: data/precip/<product>_de/<product>_<name>.nc. The CSV
+(name, start, end) comes from scripts/rain_windows.py, which runs in the main env:
+    python scripts/rain_windows.py > data/precip/windows_de.csv
+    $G scripts/fetch_precip_hourly.py --product stage4 --side de --windows data/precip/windows_de.csv
 """
 
 from __future__ import annotations
@@ -329,8 +335,13 @@ def do_month(product, key, times, shape, ex, part_dir: Path) -> np.ndarray:
     return status
 
 
-def assemble(product, year, coords, part_dir: Path, dest: Path) -> None:
-    times = year_hours(year, STEP_H[product])
+def read_windows(path) -> list[tuple[str, pd.DatetimeIndex]]:
+    """(name, hour-ending times start..end) per row of a windows CSV."""
+    w = pd.read_csv(path, parse_dates=["start", "end"])
+    return [(r.name, pd.date_range(r.start, r.end, freq="h")) for r in w.itertuples(index=False)]
+
+
+def assemble(product, times, coords, part_dir: Path, dest: Path) -> None:
     parts = [np.load(part_dir / f"{k}.npz") for k in month_groups(times)]
     arr = np.concatenate([p["precip"] for p in parts])
     status = np.concatenate([p["status"] for p in parts])
@@ -366,7 +377,7 @@ def assemble(product, year, coords, part_dir: Path, dest: Path) -> None:
     for k in month_groups(times):
         (part_dir / f"{k}.npz").unlink()
     c = np.bincount(status, minlength=5)
-    print(f"{product} {year}: wrote {dest.name}; hours ok {c[OK]} absent {c[ABSENT]} "
+    print(f"{product}: wrote {dest.name}; hours ok {c[OK]} absent {c[ABSENT]} "
           f"bad {c[BAD]} before {c[BEFORE]}; NaN cell-hours in ok hours "
           f"{int(n_nan[status == OK].sum())}", flush=True)  # fmt: skip
 
@@ -382,14 +393,26 @@ def parse_years(s: str) -> list[int]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--product", choices=list(STEP_H), required=True)
-    ap.add_argument("--years", required=True, help="e.g. 2002-2025 or 2023,2021")
+    ap.add_argument("--years", help="e.g. 2002-2025 or 2023,2021")
+    ap.add_argument("--side", default="nj", choices=("nj", "de"))
+    ap.add_argument("--windows", help="with --side de: CSV of name, start, end (docstring)")
     ap.add_argument("--workers", type=int, default=10)
     ap.add_argument("--start", help="testing: only hours ending from this time ...")
     ap.add_argument("--end", help="... to this one (parts_test/ only, no year file)")
     a = ap.parse_args()
-    out_dir = OUT / a.product
+    global BBOX
+    if a.side == "de":
+        if not a.windows:
+            ap.error("--side de fetches event windows: give --windows")
+        BBOX = fetch_mrms.DE_BBOX
+    elif not a.years:
+        ap.error("give --years")
+    out_dir = OUT / (a.product if a.side == "nj" else f"{a.product}_{a.side}")
     part_dir = out_dir / ("parts_test" if a.start else "parts")
-    part_dir.mkdir(parents=True, exist_ok=True)
+    if a.side == "nj":
+        part_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        out_dir.mkdir(parents=True, exist_ok=True)
 
     if a.product == "mrms":
         rs, cs, lat, lon = mrms_window()
@@ -404,6 +427,27 @@ def main() -> None:
           f"= {shape}", flush=True)  # fmt: skip
 
     with ProcessPoolExecutor(a.workers, initializer=_init, initargs=(a.product, (rs, cs))) as ex:
+        if a.side == "de":
+            step = STEP_H[a.product]
+            for name, hours in read_windows(a.windows):
+                dest = out_dir / f"{a.product}_{name}.nc"
+                if dest.exists():
+                    print(f"{a.product} {name}: have {dest.name}", flush=True)
+                    continue
+                times = hours[hours.hour % step == 0]
+                if times[-1] < FIRST[a.product]:
+                    continue  # before the product exists
+                win_parts = out_dir / f"parts_{name}"
+                win_parts.mkdir(parents=True, exist_ok=True)
+                ok = True
+                for key, ts in month_groups(times).items():
+                    ok &= not (do_month(a.product, key, ts, shape, ex, win_parts) == FAILED).any()
+                if ok:
+                    assemble(a.product, times, coords, win_parts, dest)
+                    win_parts.rmdir()
+                else:
+                    print(f"{a.product} {name}: transient failures left, rerun to retry them", flush=True)
+            return
         for year in parse_years(a.years):
             dest = out_dir / f"{a.product}_{year}.nc"
             if dest.exists() and not a.start:
@@ -421,7 +465,7 @@ def main() -> None:
             if a.start:
                 continue
             if ok:
-                assemble(a.product, year, coords, part_dir, dest)
+                assemble(a.product, year_hours(year, STEP_H[a.product]), coords, part_dir, dest)
             else:
                 print(f"{a.product} {year}: transient failures left — rerun to retry them",
                       flush=True)  # fmt: skip

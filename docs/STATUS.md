@@ -27,8 +27,7 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   John) + the held-out yardstick corrected: DE held-out median 1.00, Bowers 1.08. **Adopted
   (user, 2026-10-29)**: each grid fitted to its own shore; the line differs by ~0.11 m of range
   at 39.0-39.2 N; say so in the bundle notes for Seowoo. Next:
-  the Appoquinimink: DNREC's 2000 survey takes Odessa 0.26 → 0.56 (3.0 m) / 0.75 (4.5 m); depth
-  not yet adopted, lows still high (§54).
+  the Appoquinimink is at 4.5 m, adopted: `de_v2ap45_100m`, Odessa 0.26 → 0.75, lows still high (§54).
   Rain: forcing is clipped to NJ's `RAIN_BBOX`; refetch event windows over the union first.
 - **Step 5, Delaware exits:** first look done without SFINCS (§44): same pattern as NJ (low
   ground ~1.5 %/yr in both). Next, after the DE boundary fix: DE storm runs → DE storm panel

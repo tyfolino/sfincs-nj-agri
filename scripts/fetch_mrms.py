@@ -43,6 +43,7 @@ import xarray as xr
 # w, s, e, n. = agri_sfincs.domain.RAIN_BBOX: this script runs in the grib env, which cannot
 # import the package (no pyproj); tests/test_rain_metrics.py checks the two agree.
 BBOX = (-75.64, 38.98, -74.80, 39.94)
+DE_BBOX = (-75.82, 38.62, -74.90, 39.64)  # = agri_sfincs.domain.DE_RAIN_BBOX
 PASS2_START = pd.Timestamp("2020-10-14T00")
 AWS = (
     "https://noaa-mrms-pds.s3.amazonaws.com/CONUS/MultiSensor_QPE_01H_Pass2_00.00/"

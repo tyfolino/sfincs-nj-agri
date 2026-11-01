@@ -92,6 +92,8 @@ FORK1_STATES = {"NJ": "34", "DE": "10", "MD": "24", "VA": "51", "NC": "37"}
 #: a literal copy (it runs in the grib env, which cannot import this package);
 #: tests/test_region.py checks the two agree.
 RAIN_BBOX = (-75.64, 38.98, -74.80, 39.94)
+#: The same clip for the Delaware grid (its outline + ~5 km; fetch_mrms.py keeps a copy too).
+DE_RAIN_BBOX = (-75.82, 38.62, -74.90, 39.64)
 
 #: NOAA CO-OPS water-level stations along the Delaware River/Bay, upstream to mouth.
 #: Coordinates and MLLW-only datum handling as nj_bight_sfincs
@@ -288,7 +290,12 @@ DE_COUNTIES = {"10003": "New Castle", "10001": "Kent", "10005": "Sussex"}
 #: MLW - MLLW = 0.05 m (Lewes 0.048, Reedy Point 0.055, CO-OPS 1983-2001).
 DE_TIDAL_REACHES = {
     "appoquinimink": {"river": "Appoquinimink River", "head": (-75.6831, 39.4344),
-                      "note": "head = Noxontown Pond dam", "nos": [("H10200", 0.0)]},
+                      "note": "head = Noxontown Pond dam", "nos": [("H10200", 0.0)],
+                      # From the Odessa gauge down: an EFFECTIVE depth, calibrated 2026-11-01 on
+                      # the calm-window tide (FINDINGS §54): 3.0 / 4.5 m took Odessa's range 0.56 /
+                      # 0.75. DNREC's May 2000 ADCP survey has 2.72-4.8 m on this reach (no datum
+                      # stated) and 3.0 m at Odessa; likely also stands in for channel width
+                      "stated": (-75.6553, 39.4525, 4.5)},
     "blackbird":     {"river": "Blackbird Creek",     "head": (-75.6510, 39.3765),
                       "note": "head = bight's head of tide (no dam)", "nos": [("H10200", 0.0)]},
     "smyrna":        {"river": "Smyrna River",        "head": (-75.6004, 39.2968),
