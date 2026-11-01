@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-10-29** (m65 rerun under way with HRRR wind; storm panel by month tested; §49-§51).
+Last updated: **2026-10-30** (m65 rerun finished, wind settled, storm panel rebuild next; §50, §52).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -15,17 +15,14 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 ## Resume here (plan steps)
 - **Step 1, v2 beds (NJ): done** on the E3 grid; **Alloway adopted: `e3v2a30brm65_100m`**
   (§45, §47). Storm check passed: peaks within ~0.1 m at the three creek gauges, Bivalve storm
-  by storm −0.25..+0.20 (§48). All 16 m65 storm runs exist (`--boundary chain --open`).
-  **Full m65 rerun under way (2026-10-29)**, `setup_scenarios.py --model e3v2a30brm65_100m
-  --boundary chain --open --wind 1 --wind-source hrrr` (names `*_hrrr`; HRRR × 1.0, §50; rain
-  placement fixed, §49): the 22 storm runs 2016-25 and the 25-run tide2024oct set (base +
-  restore) are submitted (40 jobs). Next: check each log (`finish: ... True`), then the panel
-  and scenario compares. The `_open` twin of every scenario weir file was cut on v1's grid like
-  `dikes_open.weir` (m65's own). **Waiting on the user:** wind for the 47 pre-2014 runs (Sandy
-  set, breaches, 2010-14 storms): ERA5 × ~1.3 (suggested; ERA5 2010-11 on disk, 2012/14 in job 63248098, log `logs/py_63248098.out`) or test
-  RAP first. Bivalve's storm-peak scatter: not wind, boundary or gauge drift (§50); open.
-  Then §29's number. Stow /
-  upper Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
+  by storm −0.25..+0.20 (§48).
+  **Full m65 rerun done (2026-10-30, all logs clean)**: `*_hrrr` (HRRR × 1.0) from 2016, `*_era5`
+  (ERA5 × 1.3, user's call; RAP / RUC tested, not adopted, §50) before. Compares in §52.
+  Storm panel + Seowoo's bundle rebuilt on it (§53; `--tag m65`); the bundle is uncommitted in
+  its own repo until the user pushes. **Then §29's number:** first explain the rise to
+  1,526 ha and the ~960 ha shift at +1 m (§52); a windless m65 tide pair would separate wind.
+  Bivalve's storm-peak scatter: not wind, boundary or gauge drift (§50); open. Stow / upper
+  Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
 - **Step 3, Delaware: boundary fixed (§51).** DE rail (Lewes → Brandywine → Mahon → Ship
   John) + the held-out yardstick corrected: DE held-out median 1.00, Bowers 1.08. **Adopted
   (user, 2026-10-29)**: each grid fitted to its own shore; the line differs by ~0.11 m of range
@@ -37,16 +34,10 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   (`build_storm_panel.py` side-aware) → one bundle with a `state` column for Seowoo.
 
 ## Next, in order
-0. **Storm-history land-use test: first look done** (§35, §37, §38): no detectable crop or NDVI
-   response; a weak corn → soy tilt where fields are wet on ordinary tides. The creek-bed fix may
-   sharpen this ("not detectable", not "no effect"). Show the colleague and the advisor
-   (`reports/storm_panel.md`, `data/analysis/storm_panel/`). **Seowoo asks (2026-10-26): floods
-   all year, with the month** (growing vs non-growing season). All 18 Ship John storm tides
-   ≥ 1.68 m (2008-25) now have events; Irene 2011, Oct 2018, Isaias 2020, Jan 2024, Aug 2025
-   are run on m65 (§48). Field × storm-month layout built and tested on m65
-   (`data/analysis/storm_panel_m65test`: one row per storm tide, grow_/nongrow_ columns); the
-   bundle for Seowoo is rebuilt after the rerun (`plot_storm_panel.py` hardcodes 12 storm tides:
-   update then). User: storm tides only; growing season = Apr-Oct.
+0. **Storm-history land-use test:** no clear crop response to the 7 spring storms, m65 (§53, §35,
+   §37). "Not detectable", not "no effect". Show the colleague and the advisor
+   (`reports/storm_panel_m65.md`, `data/analysis/storm_panel_m65/`). User: storm tides only;
+   growing season = Apr-Oct. `sandy_panel` / `storm_panel` untagged are still v1.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
 3. **Per-system breach runs** (18 systems) on tide2024oct × SLR with a scoured sill (MLLW): the

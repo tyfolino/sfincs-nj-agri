@@ -115,6 +115,8 @@ def year_event(year: int) -> Event:
                  dtmapout=DAY_S)  # fmt: skip
 
 
+#: First hour of HRRR on AWS (scripts/fetch_hrrr_wind.py).
+HRRR_START = pd.Timestamp("2014-07-30")
 EVENTS = {
     "sep2023": Event("sep2023", "2023-08-15 00:00:00", "2023-10-01 00:00:00",
                      "mrms_2023_09", "2023-09"),
@@ -159,6 +161,12 @@ EVENTS = {
                             "mrms", "2023-05"),
 }  # fmt: skip
 EVENTS |= {f"y{y}": year_event(y) for y in range(2003, 2026)}
+
+
+def wind_suffix(event: str) -> str:
+    """The run-name suffix of ``event``'s wind run: ``_hrrr`` from HRRR's start, ``_era5`` before
+    (ERA5 x 1.3 for the storms before 2014-07, FINDINGS §50)."""
+    return "_hrrr" if pd.Timestamp(EVENTS[event].tstart) >= HRRR_START else "_era5"
 
 
 def precip_source(event: Event, precip: str | None = None) -> str:

@@ -1574,7 +1574,26 @@ observed side, hours picked on the model's favour the model.
   ~5,700 storm hours had no analysis and no 1 h forecast (Jan 2016: 4, Sep 2018: 2); the loader
   fills gaps ≤ 3 h linearly (`wind.load_hrrr`).
 - **Before 2014-07** (7 storms: 2010-03, 2011-04, 2011-08, 2012-06, Sandy, 2012-12, 2014-04)
-  there is no HRRR: RAP (2012-05 on) / RUC, or ERA5 × ~1.3. Open (user).
+  there is no HRRR. **Adopted (user, 2026-10-30): ERA5 × 1.3** for the 47 pre-2014 runs, inside
+  ERA5's pooled pre-2014 bracket (×1.26-1.46), until HRRR-class wind exists for those years.
+  RAP / RUC (~13 km, NCEI analyses) were tested and not adopted: they do not beat ERA5 where
+  it counts. Matched hours at the two lights, scale (model-picked..obs-picked) and vector error
+  after scaling (m/s):
+
+  | period | storms | HRRR | RAP / RUC | ERA5 |
+  |---|---|---|---|---|
+  | overlap | Jan 2016, Sep + Oct 2018 | 1.07-1.18, 3.44 | RAP 1.17-1.33, 3.59 | 1.21-1.37, 3.61 |
+  | RAP era | Jun 2012, Sandy, Dec 2012, Apr 2014 | | RAP 1.38-1.57, 4.26 | 1.34-1.52, 4.03 |
+  | RUC era | Mar 2010, Apr 2011, Irene | | RUC 1.14-1.44, 5.99 | 1.21-1.42, 4.85 |
+
+  Peaks, observed / RAP-RUC / ERA5 (m/s): Sandy 24.4 / 17.5 / 16.2, Irene 23.2 / 17.9 / 16.0,
+  Apr 2011 17.1 / 17.1 / 14.4, Dec 2012 19.2 / 12.1 / 12.9. So every source still reads low at
+  the top of the storm, ERA5 × 1.3 included. Limits: Brandywine has no wind for Dec 2012 and
+  Apr 2014 and is partial for Sandy; RUC misses 6 hours before Irene's peak, so its report
+  leaves Irene out (the table's RUC row and the peaks are from a one-off script on the matched
+  hours). `reports/{era5,hrrr,rap}_wind_overlap.md`, `reports/era5_wind_pre2014.md`,
+  `reports/rap_wind_pre2014_noIrene.md`. The RAP reader was never committed, so
+  `check_wind --source rap` does not run.
 - **What wind does to the creek-gauge peaks (m65, 7 storms 2018-25, tide only,
   `*_intact_slr000_hrrr` vs §48's windless runs; `reports/storm_gauges_e3v2a30brm65_100m_hrrr.md`):
   almost nothing.** Model − observed storm high moves ≤ 0.03 m in 19 of 21 storm × gauge cases.
@@ -1631,3 +1650,57 @@ observed side, hours picked on the model's favour the model.
   level rms 3-7 cm, instantaneous up to 0.22 m (mostly timing: Mahon lags Fortescue).
   **Adopted (user, 2026-10-29)** over one shared level (DE's rail for both would drop NJ's
   lower-bay boundary ~9%, under a bay shore already at 0.84).
+
+## 52. Scenario compares on m65 with wind: more dike-dependent land than §29, cause not yet separated (2026-10-30; `reports/restore_phase1_e3v2a30brm65_100m_hrrr.md`, `reports/field_flood_classes_e3v2a30brm65_100m_hrrr.md`)
+
+The full rerun on `e3v2a30brm65_100m` (`--boundary chain --open`; HRRR × 1.0 from 2016, ERA5 × 1.3
+before, §50) is on disk: the 47 pre-2014 runs ended clean (every log `finish: True`, none
+resumed, no NaN or instability lines), as did the 2016-25 storms and the tide2024oct set.
+`--breaches` now skips `_open` weir files when listing systems (they gave 18 bogus runs).
+
+Tide2024oct set, m65 against v1, the same new field list:
+- **Dike-dependent today: 1,124 → 1,526 ha** (Salem 693 → 1,023). Floods at some level to +1 m:
+  2,606 → 3,348 ha. Flooded today: 441 → 584 ha. Safe to +1 m: 69,625 → 68,665 ha. §29's old
+  report had 1,117 ha, so the new field list is not the cause.
+- **Why is not separated.** Creek beds, boundary and wind all changed, and there is no windless
+  m65 tide run to take wind out. About 960 ha moved from safe to flooding at +1 m, 499 of them as
+  dike-dependent (Cumberland dike-dependent at +1 m 14 → 497 against the old report): not
+  explained yet. Of the land newly dike-dependent today, 268 ha were dike-dependent at +0.3 m
+  and 150 ha exposed at +0.3 m. §29's number stays until this is understood.
+
+Restoration, m65 (v1 in brackets), tide2024oct:
+- **Middle Neck today:** fields flooded inside 9 → 50 (6 → 47), flooded farmland 12 → 142 ha
+  (8 → 137). Neighbours 49.1 → 51.4 ha. Set-back: 9 → 3 fields. At +0.6 m, 96 of 98 fields
+  already flood. No Durham inside field floods today.
+- Largest change beyond the ring: 2.1 cm, against a noise floor of 0.0000 m (the `_rep` run).
+  The report's `slr_m` column displays `1` for +0.6 (a rounding quirk in the display).
+
+## 53. Storm panel on the m65 rerun: still no clear crop response; more fields flood (2026-10-30; `reports/storm_panel_m65.md`, `data/analysis/{sandy,storm}_panel_m65/`)
+
+All 18 storm tides ≥ 1.68 m (2008-25), `build_sandy_panel.py --wind`. v1's panel (12 storm tides)
+stays in the untagged folders. Every storm tide floods more fields than on v1 (≥ 10% of the
+field, tide only): Sandy 876 → 1,179, Apr 2011 785 → 1,020, Apr 2022 298 → 459. Flooded by at
+least one storm tide 1,026 → 1,231 (six more storm tides are part of that). Wet on ordinary
+tides (`chronic`) 248 → 359 of all fields: 112 new, 1 lost; 100 → 152 of the low crop fields.
+Main sample 943 → 891 low crop fields, 435 of them flood-prone.
+
+- **Crop mix: no clear response.** Pooled flooded − prone-dry, same season: corn +2.8 [−1.7,
+  +6.7], soybeans −1.0 [−5.3, +4.3], cropland +0.9 [−2.2, +4.3]; next season within ±0.7. Spring
+  storms only (7 storms, 8 peaks); the other storm tides set the groups, not the test. Without
+  outcome years from 2024 on, next season: corn +1.2, soybeans −2.1, cropland −1.1 (all spanning
+  zero). The "all" interval holds the storms fixed, so it leaves out year-to-year differences.
+  Against never-flooded fields, cropland the next season is −3.0 [−6.3, −0.3], −1.8 [−5.0, +1.0]
+  without 2024 on: mostly CDL's product change. Comparison fields are not dry: 90% of 2022's and
+  46% of 2024's flooded in the months before. Not checked: Landsat extent on this build; gauge
+  peaks on this build only for 2018-25 so far.
+- **§37's weak corn → soybean tilt on the chronic fields weakens.** Putting them back moves corn
+  +2.8 → −0.3 and soybeans −1.0 → +1.8 (v1: −2.2 and +3.1, whose soybean interval excluded zero;
+  now both span it).
+- **"Main crop changed" rose, +4.7 → +17.8 [−1.9, +33.9], but is not settled.** It moves with the
+  baseline: see the report's like-for-like storms (even vs odd quiet years) and no baseline +9.5.
+  Rain rows exclude zero. Rotation is a guess: the yearly rate also shifts between eras (62-72%
+  in 2009-15, 42-52% in 2016-23, main sample). Not a finding.
+- **Quiet years shrink** to 2008, 2009, 2015, 2017, 2018, 2020, 2025: no spring storm and no flood
+  from the July before through February. 2018, 2020 and 2025 do hold late-summer or autumn storms.
+  For the yes/no outcomes, 2022 and 2023 have 3 and 2 baseline years inside the ±5 window.
+

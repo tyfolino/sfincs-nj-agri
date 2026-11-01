@@ -46,10 +46,11 @@ before to the day after), so a run holding two storm tides (spring 2024: Mar 10,
 two rows. Rows only for fields wet in either run (share > 0); a missing pair means dry.
 
 Runs are read from ``--model`` (default runs.MODEL, v1_100m; the m65 rerun replaces it), its
-cell grid from ``--grid-run`` (default the model's tide2024oct run).
+cell grid from ``--grid-run`` (default the model's tide2024oct run). ``--wind``: each storm's wind
+run (events.wind_suffix: _era5 before 2014-07, _hrrr after), as the m65 rerun names them.
 Writes data/analysis/sandy_panel/{fields.csv, fields.gpkg, field_year.csv, field_event.csv, README.md}
 (or ``--out``).
-Usage:  python scripts/build_sandy_panel.py [--model e3v2a30brm65_100m] [--out DIR] [--grid-run RUN]
+Usage:  python scripts/build_sandy_panel.py [--model e3v2a30brm65_100m] [--out DIR] [--grid-run RUN] [--wind]
 """
 
 from __future__ import annotations
@@ -66,7 +67,7 @@ from rasterio.features import rasterize
 from rasterio.windows import from_bounds
 
 from agri_sfincs import cdl, config, domain, exposure, fieldflood, fields, landuse, panel, runs
-from agri_sfincs.events import EVENTS
+from agri_sfincs.events import EVENTS, wind_suffix
 
 OUT = config.ANALYSIS_DIR / "sandy_panel"
 YEARS = range(2008, 2026)
@@ -84,6 +85,12 @@ STORMS = ["sandy2012", "storm2012dec", "storm2016jan", "storm2021oct", "storm201
           "storm2012jun", "storm2014apr", "storm2018sep", "storm2022apr", "storm2023jun", "storm2024spr",
           "storm2011aug", "storm2018oct", "storm2020aug", "storm2024jan", "storm2025aug"]
 MODEL = runs.MODEL  # --model
+WIND = False  # --wind
+
+
+def run_suffix(event: str, suffix: str = "") -> str:
+    """``suffix``, plus ``event``'s wind suffix under --wind."""
+    return suffix + (wind_suffix(event) if WIND else "")
 
 
 def load_fields() -> gpd.GeoDataFrame:
@@ -98,7 +105,7 @@ def sandy_columns(g: gpd.GeoDataFrame, px) -> pd.DataFrame:
     f_sel, d_sel, fid = px
     out = {}
     for pre, (dk, suffix) in RUNS.items():
-        run = runs.run_dir(EVENT, dk, 0, suffix, model=MODEL)
+        run = runs.run_dir(EVENT, dk, 0, run_suffix(EVENT, suffix), model=MODEL)
         if not runs.finished(run):
             print(f"  {pre}: {run.name} not finished on {MODEL}, columns blank", flush=True)
             nan = pd.Series(np.nan, index=pd.RangeIndex(1, len(g) + 1))
@@ -137,8 +144,8 @@ def event_table(g: gpd.GeoDataFrame, px) -> pd.DataFrame:
     f_sel, d_sel, fid = px
     rows = []
     for pk in storm_peaks().itertuples(index=False):
-        tide = runs.run_dir(pk.event, "intact", 0, model=MODEL)
-        rain = runs.run_dir(pk.event, "intact", 0, "_rain", model=MODEL)
+        tide = runs.run_dir(pk.event, "intact", 0, run_suffix(pk.event), model=MODEL)
+        rain = runs.run_dir(pk.event, "intact", 0, run_suffix(pk.event, "_rain"), model=MODEL)
         if not (runs.finished(tide) and runs.finished(rain)):
             print(f"  {pk.event} ({pk.peak:%Y-%m-%d}): runs not finished on {MODEL}, left out", flush=True)
             continue
@@ -264,12 +271,12 @@ not). Fields first farmed after 2012 are not in the table.
 | lulc2020 | LU/LC 2020 code with the largest overlap; blank when the piece was not farm in 2015 (the 2015-2020 layer holds only 2015 farm) |
 | m_above_mhhw | median ground height of the field above recent high tide (MHHW of 2021-25 observed bay gauges, spread between gauges), metres; 30 m cells of the lidar bed |
 | leveed_share | share of the field's 30 m cells inside an NLD leveed area |
-| sandy_share | share of the field's 10 m pixels deeper than 5 cm at Sandy's peak (modelled, SFINCS run `sandy2012_intact_slr000`: dikes as built, today's sea level, tide and surge only, no rain) |
+| sandy_share | share of the field's 10 m pixels deeper than 5 cm at Sandy's peak (modelled, SFINCS run `sandy2012_intact_slr000{run_suffix(EVENT)}`: dikes as built, today's sea level, tide and surge only, no rain) |
 | sandy_maxd_m | mean peak depth over those flooded pixels, metres (blank when none flooded) |
 | | sandy_* are blank for the {int(f.sandy_share.isna().sum())} fields with no pixel in the model grid (outside the model domain) |
 | sandy_flooded | sandy_share > 0 (any pixel > 5 cm; blank when sandy_share is). The repo's usual rule elsewhere is share >= 0.10 |
-| sandy_nodikes_share, _maxd_m, _flooded | the same with every dike removed (`sandy2012_removed_slr000`): what the banks kept off |
-{"| sandy_rain_share, sandy_rain_maxd_m, sandy_rain_flooded | the same for the run with Sandy's rain added (Stage IV radar, `sandy2012_intact_slr000_rain`) |" if rain else ""}
+| sandy_nodikes_share, _maxd_m, _flooded | the same with every dike removed (`sandy2012_removed_slr000{run_suffix(EVENT)}`): what the banks kept off |
+{f"| sandy_rain_share, sandy_rain_maxd_m, sandy_rain_flooded | the same for the run with Sandy's rain added (Stage IV radar, `sandy2012_intact_slr000{run_suffix(EVENT, '_rain')}`) |" if rain else ""}
 | motf_share | share of the field inside FEMA's Modeling Task Force Sandy surge extent (15 m; of the pixels in MOTF's NJ-valid area; blank if none). MOTF lays the bay's peak (~1.9-2.0 m NAVD88) flat over lidar with no dikes: a bathtub rival to the model, wetter on flat fields (FINDINGS §33) |
 | hsg_dominant | SSURGO hydrologic soil group covering most of the field (dominant soil component of each map unit); `none` = no group (water, urban, pits) |
 | hsg_wet_share | share of the field in soil group D or a dual group (A/D, B/D, C/D); dual groups mark a seasonal high water table when undrained |
@@ -355,13 +362,14 @@ over the peak's days only (the day before to the day after), so one run holding 
 
 
 def main() -> None:
-    global MODEL, OUT
+    global MODEL, OUT, WIND
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--model", default=runs.MODEL)
     ap.add_argument("--out", default=None, help=f"output folder (default {OUT})")
     ap.add_argument("--grid-run", default=None, help="a run of --model whose map gives the cell grid")
+    ap.add_argument("--wind", action="store_true", help="read each storm's _era5 / _hrrr wind run")
     a = ap.parse_args()
-    MODEL, OUT = a.model, (config.ROOT / a.out if a.out else OUT)
+    MODEL, OUT, WIND = a.model, (config.ROOT / a.out if a.out else OUT), a.wind
     t0 = time.time()
     g = load_fields()
     print(f"{len(g):,} fields ({time.time() - t0:.0f} s); model {MODEL}; Sandy runs and MOTF ...", flush=True)

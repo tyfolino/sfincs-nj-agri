@@ -18,6 +18,12 @@ class TestFocus(unittest.TestCase):
         self.assertEqual(E.focus_period("2023"), (T("2023-01-01"), T("2024-01-01")))
         self.assertEqual(E.focus_period("2023-11/2024-02"), (T("2023-11-01"), T("2024-03-01")))
 
+    def test_wind_suffix(self):
+        self.assertEqual(E.wind_suffix("sandy2012"), "_era5")
+        self.assertEqual(E.wind_suffix("storm2014apr"), "_era5")
+        self.assertEqual(E.wind_suffix("storm2016jan"), "_hrrr")
+        self.assertEqual(E.wind_suffix("tide2024oct"), "_hrrr")
+
     def test_legacy_events_unchanged(self):
         ev = E.EVENTS["sep2023"]
         self.assertEqual((ev.tstart, ev.tstop, ev.precip), ("2023-08-15 00:00:00",

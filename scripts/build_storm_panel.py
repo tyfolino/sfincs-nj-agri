@@ -39,9 +39,10 @@ fields_storm.csv (one row per field):
   chronic_share      that run's flooded share
 
 Runs are read from config.MODELS (the Piscataway /scratch: run on a hal* node), on ``--model``
-(default runs.MODEL); ``--panel`` is build_sandy_panel.py's folder for the same model.
+(default runs.MODEL); ``--panel`` is build_sandy_panel.py's folder for the same model;
+``--wind`` reads the chronic run's wind twin (build_sandy_panel.py --wind).
 Writes data/analysis/storm_panel/{field_season.csv, fields_storm.csv, README.md} (or ``--out``).
-Usage:  python scripts/build_storm_panel.py [--model M --panel DIR --out DIR]
+Usage:  python scripts/build_storm_panel.py [--model M --panel DIR --out DIR --wind]
 """
 
 from __future__ import annotations
@@ -55,6 +56,7 @@ import rasterio
 import xarray as xr
 
 from agri_sfincs import config, domain, fieldflood, panel, runs
+from agri_sfincs.events import wind_suffix
 
 PANEL = config.ANALYSIS_DIR / "sandy_panel"
 OUT = config.ANALYSIS_DIR / "storm_panel"
@@ -149,6 +151,7 @@ def main() -> None:
     ap.add_argument("--model", default=runs.MODEL)
     ap.add_argument("--panel", default=None, help=f"build_sandy_panel.py output (default {PANEL})")
     ap.add_argument("--out", default=None, help=f"output folder (default {OUT})")
+    ap.add_argument("--wind", action="store_true", help="the chronic run's _era5 / _hrrr wind twin")
     a = ap.parse_args()
     src = config.ROOT / a.panel if a.panel else PANEL
     out = config.ROOT / a.out if a.out else OUT
@@ -165,10 +168,10 @@ def main() -> None:
     fl = pd.DataFrame({"field_id": f.field_id.values})
     for k in ("tide", "rain"):
         fl[f"n_storms_{k}"] = fl.field_id.map(n[k]).fillna(0).astype(int)
-    run = runs.run_dir(*CHRONIC_RUN, model=a.model)
+    run = runs.run_dir(*CHRONIC_RUN, wind_suffix(CHRONIC_RUN[0]) if a.wind else "", model=a.model)
     if runs.finished(run):
         print(f"{len(f):,} fields; chronic run ...", flush=True)
-        px = fieldflood.field_pixels(f.to_crs(rasterio.open(runs.subgrid_dep(a.model)).crs), a.model)
+        px = fieldflood.field_pixels(f.to_crs(rasterio.open(runs.subgrid_dep(a.model)).crs), a.model, run)
         ch = fieldflood.run_stats(run, *px, len(f), CHRONIC_RUN[0])
         fl["chronic_share"] = ch.share.reindex(fl.field_id).fillna(0).round(3).values
         fl["chronic"] = (fl.chronic_share >= fieldflood.SHARE).astype(int)
