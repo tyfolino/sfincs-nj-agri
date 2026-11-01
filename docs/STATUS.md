@@ -20,7 +20,11 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   (ERA5 × 1.3, user's call; RAP / RUC tested, not adopted, §50) before. Compares in §52.
   Storm panel + Seowoo's bundle rebuilt on it (§53; `--tag m65`). **Then §29's number:** explain
   the rise to 1,526 ha and the ~960 ha shift at +1 m. Not wind (windless m65 1,524 ha, §52). Next:
-  separate creek beds from boundary (m65 tide runs on v1's `--boundary gauges`).
+  separate creek beds from boundary. **Running (jobs 63388896-899, nothing has read them yet):**
+  `e3v2a30brm65_100m/runs/tide2024oct_{intact,removed}_slr{000,100}_gaugesbnd` (no wind, v1's gauge
+  boundary). When done: check logs, `link_run_inputs.py`, then compare dike-dependent today and
+  flooded at +1 m with the windless chain runs of the same names (`fieldflood.run_stats`;
+  `field_flood_classes.py` needs all four levels). Any change is the boundary's.
   Bivalve's storm-peak scatter: not wind, boundary or gauge drift (§50); open. Stow / upper
   Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
 - **Step 3, Delaware: boundary fixed (§51).** DE rail (Lewes → Brandywine → Mahon → Ship
@@ -28,7 +32,9 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   (user, 2026-10-29)**: each grid fitted to its own shore; the line differs by ~0.11 m of range
   at 39.0-39.2 N; say so in the bundle notes for Seowoo. Next:
   the Appoquinimink is at 4.5 m, adopted: `de_v2ap45_100m`, Odessa 0.26 → 0.75, lows still high (§54).
-  Rain: forcing is clipped to NJ's `RAIN_BBOX`; refetch event windows over the union first.
+  Rain: fetched for 19 event windows over `DE_RAIN_BBOX` (`data/precip/*_de/`); wind already
+  covers DE. Next: DE storm runs on `de_v2ap45_100m`; size the set against the quota first (about
+  70 G before linking for the full set), after the boundary result.
 - **Step 5, Delaware exits:** first look done without SFINCS (§44): same pattern as NJ (low
   ground ~1.5 %/yr in both). Next, after the DE boundary fix: DE storm runs → DE storm panel
   (`build_storm_panel.py` side-aware) → one bundle with a `state` column for Seowoo.
