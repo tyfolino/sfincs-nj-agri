@@ -85,6 +85,12 @@ class TestQuietEstimate(unittest.TestCase):
         # quiet 2008, 2009, 2020; window 2 around 2010 keeps 2008 / 2009 (mean 1.5)
         self.assertEqual(panel.deviations(v, 2010, [2008, 2009, 2020], 0, window=2).tolist(), [3.5])
         self.assertEqual(panel.deviations(v, 2010, [2008, 2009, 2020], 1, window=2).tolist(), [1.5])
+        # 2011 is quiet and in reach, but at k = 1 it is the outcome year: not its own baseline
+        self.assertEqual(panel.deviations(v, 2010, [2008, 2009, 2011], 1, window=2).tolist(), [1.5])
+
+    def test_effective_n(self):
+        self.assertAlmostEqual(panel.effective_n(pd.Series([2.0, 2.0, 0.0])), 2.0)
+        self.assertAlmostEqual(panel.effective_n(pd.Series([3.0, 1.0])), 1.6)
 
     def test_estimate(self):
         d = pd.Series([2.0, 4.0, 1.0, np.nan])

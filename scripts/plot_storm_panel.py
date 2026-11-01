@@ -12,8 +12,8 @@ Per spring storm (CDL year Y):
   never       flooded by none of the modelled storm tides                 (second comparison)
 Both comparisons are reweighted to the flooded group's area per height bin
 (agri_sfincs.panel.height_weights). Outcome per field: its share in Y minus its own mean over
-the QUIET years within +-QUIET_WINDOW of Y (no modelled storm of either season: QUIET), so the
-2010-12 run of floods does not sit in the baseline. Estimate = flooded - comparison, area
+the QUIET years within +-QUIET_WINDOW of Y (no modelled storm of either season: QUIET), leaving
+out the outcome year itself, so the 2010-12 run of floods does not sit in the baseline. Estimate = flooded - comparison, area
 weighted, in percentage points; 95% interval from Poisson-weight resampling of fields (N_BOOT).
 "All" = the plain mean of the storms (each storm counts once). k = +1 repeats it for Y + 1.
 
@@ -21,10 +21,13 @@ Two yes/no outcomes per field, same comparison (agri_sfincs.panel.switched / lef
   main crop changed   the field's largest class (CLASSES) differs from the year before
   left cropland       >= 50% cropland the year before, < 50% that year and the next
 Outcome years from CDL_CHANGE on are left out of these two: CDL's 2024 product change shows as
-a drop in cropland on every low field (FINDINGS §37).
+a drop in cropland on every low field (FINDINGS §37). Left cropland also drops CDL_CHANGE - 1, whose
+flag reads the next year's map.
 
 Writes reports/storm_panel.md, reports/figs/storm_panel.png and data/analysis/storm_panel/estimates.csv
-(every estimate in the report, one row each). ``--tag T`` reads sandy_panel_T/ and storm_panel_T/
+(every estimate in the report, one row each) and sensitivity.csv (the checks the report and bundle
+README quote: before CDL_CHANGE, every field counted once, never-flooded cropland without one storm).
+``--tag T`` reads sandy_panel_T/ and storm_panel_T/
 and writes storm_panel_T.md / .png beside them, leaving the untagged build alone.
 Usage:  python scripts/plot_storm_panel.py [--tag m65]
 """
@@ -78,6 +81,7 @@ def load(keep_chronic: bool = False):
     y["left cropland"] = panel.left_cropland(y["cropland"])
     for e in EVENTS:
         y[e][late] = np.nan
+    y["left cropland"][CDL_CHANGE - 1] = np.nan  # its flag reads the next year's map
     yr = fs.groupby("year").agg(storm=("spring_storm", "first"), off=("off_tide", "max"))
     quiet = [t for t in years if not isinstance(yr.storm[t], str) and yr.off[t] == 0]
     spring = {t: s for t, s in yr.storm.items() if isinstance(s, str)}
@@ -108,6 +112,7 @@ def compare(f, y, sp, spring, quiet, kinds=("tide", "rain"), comps=("prone-dry",
                         draws[(kind, comp, k, name, storm)] = e
                         rows.append({"flooded by": kind, "comparison": comp, "k": k, "outcome": name, "storm": storm,
                                      "year": year, "n_flooded": int(t.sum()), "n_comparison": int(c.sum()),
+                                     "eff_flooded": panel.effective_n(w_t), "eff_comparison": panel.effective_n(w_c),
                                      "pp": e[0], "lo": np.percentile(e[1:], 2.5), "hi": np.percentile(e[1:], 97.5)})  # fmt: skip
             for k in (0, 1):
                 for name in y:
@@ -140,17 +145,37 @@ def pooled(f, y, sp, spring, base, outcome: str, comp: str, k: int, last: int | 
     return np.nanmean(ds, axis=0) if ds else None
 
 
-def pre_change_table(f, y, sp, spring, quiet) -> pd.DataFrame:
-    """Crop shares pooled over outcome years before CDL_CHANGE, as text, per comparison and k."""
+def sensitivity(f, y, sp, spring, quiet) -> pd.DataFrame:
+    """Tide-only pooled checks (docstring), one row each: check, comparison, k, outcome, storms, pp, lo, hi."""
     rows = []
+
+    def add(check, comp, k, o, e, n):
+        rows.append({"check": check, "comparison": comp, "k": k, "outcome": o, "storms": n, "pp": e[0],
+                     "lo": np.percentile(e[1:], 2.5), "hi": np.percentile(e[1:], 97.5)})  # fmt: skip
+
+    before = [t for t in quiet if t < CDL_CHANGE]
     for comp in ("prone-dry", "never"):
         for k in (0, 1):
-            row = {"comparison": comp, "k": k}
-            for o in ("corn", "soybeans", "cropland"):
-                e = pooled(f, y, sp, spring, quiet, o, comp, k, CDL_CHANGE)
-                row[o] = f"{e[0]:+.1f} [{np.percentile(e[1:], 2.5):+.1f}, {np.percentile(e[1:], 97.5):+.1f}]"
-            rows.append(row)
-    return pd.DataFrame(rows).set_index(["comparison", "k"])
+            for o in OUTCOMES:
+                add("before change", comp, k, o, pooled(f, y, sp, spring, before, o, comp, k, CDL_CHANGE),
+                    sum(1 for t in spring if t + k < CDL_CHANGE))  # fmt: skip
+    equal = f.assign(ha=1.0)
+    for comp in ("prone-dry", "never"):
+        for k in (0, 1):
+            for o in y:
+                add("every field once", comp, k, o, pooled(equal, y, sp, spring, quiet, o, comp, k), np.nan)
+    o = "cropland"
+    add("before change, every field once", "never", 1, o, pooled(equal, y, sp, spring, before, o, "never", 1, CDL_CHANGE),
+        sum(1 for t in spring if t + 1 < CDL_CHANGE))  # fmt: skip
+    kept = [t for t in spring if t + 1 < CDL_CHANGE]
+    for drop in kept:
+        rest = {t: n for t, n in spring.items() if t != drop}
+        add(f"before change, without {drop}", "never", 1, o, pooled(f, y, sp, rest, before, o, "never", 1, CDL_CHANGE), len(kept) - 1)
+    return pd.DataFrame(rows)
+
+
+def text_ci(d: pd.DataFrame) -> pd.Series:
+    return d.apply(lambda x: f"{x.pp:+.1f} [{x.lo:+.1f}, {x.hi:+.1f}]", axis=1)
 
 
 def baseline_check(f, y, sp, spring, quiet) -> dict:
@@ -171,14 +196,16 @@ def history(f, sp, spring) -> dict:
     the comparison's share (%) already flooded in the months before (off_tide)."""
     off = pd.read_csv(STORM / "field_season.csv", usecols=["field_id", "year", "off_tide"])
     off = off.pivot(index="field_id", columns="year", values="off_tide").reindex(f.index)
-    prone, fl, cp, before = f.n_storms_tide > 0, [], [], {}
+    prone, fl, cp, before, before_t = f.n_storms_tide > 0, [], [], {}, {}
     for year in spring:
         t = sp["tide"][year] == 1
         c = prone & ~t
         fl.append(f.n_storms_tide[t].mean())
         cp.append(f.n_storms_tide[c].mean())
         before[year] = 100 * off[year][c].mean()
-    return {"flooded": (min(fl), max(fl)), "comparison": (min(cp), max(cp)), "before": before}
+        before_t[year] = 100 * off[year][t].mean()
+    return {"flooded": (min(fl), max(fl)), "comparison": (min(cp), max(cp)), "before": before,
+            "before_flooded": before_t}  # fmt: skip
 
 
 def quiet_rates(f: pd.DataFrame, y: dict, quiet: list[int]) -> dict:
@@ -220,15 +247,16 @@ def main() -> None:
     rc = rc[rc.storm == "all"].assign(comparison=lambda d: d.comparison + ", incl. chronic")
     figure(r[(r["flooded by"] == "tide") & (r.comparison == "prone-dry") & (r.k == 0)], spring)
     pd.concat([r, rc]).round(3).to_csv(STORM / "estimates.csv", index=False)
+    sens = sensitivity(f, y, sp, spring, quiet)
+    sens.round(3).to_csv(STORM / "sensitivity.csv", index=False)
     report(pd.concat([r, rc]), f, f.n_storms_tide > 0, spring, quiet, fc, chronic_gap(fc, yc["cropland"]),
-           quiet_rates(f, y, quiet), pre_change_table(f, y, sp, spring, quiet),
-           baseline_check(f, y, sp, spring, quiet), history(f, sp, spring))  # fmt: skip
+           quiet_rates(f, y, quiet), sens, baseline_check(f, y, sp, spring, quiet), history(f, sp, spring))  # fmt: skip
 
 
 def figure(r: pd.DataFrame, spring: dict) -> None:
     labels = [f"{s.replace('storm', '')[:4]} {s.replace('storm', '')[4:]}" for s in spring.values()] + [f"all {len(spring)}"]
     order = list(spring.values()) + ["all"]
-    fig, axes = plt.subplots(1, len(OUTCOMES), figsize=(12, 4.2), sharey=True)
+    fig, axes = plt.subplots(1, len(OUTCOMES), figsize=(12, 4.2), sharey=True, sharex=True)
     for ax, name in zip(axes, OUTCOMES):
         d = r[r.outcome == name].set_index("storm").loc[order]
         yy = np.arange(len(order))[::-1]
@@ -255,33 +283,63 @@ def figure(r: pd.DataFrame, spring: dict) -> None:
 
 
 def report(r: pd.DataFrame, f: pd.DataFrame, prone: pd.Series, spring: dict, quiet: list[int],
-           fc: pd.DataFrame, gap: pd.DataFrame, rates: dict, pre: pd.DataFrame, bc: dict, hist: dict) -> None:  # fmt: skip
+           fc: pd.DataFrame, gap: pd.DataFrame, rates: dict, sens: pd.DataFrame, bc: dict, hist: dict) -> None:  # fmt: skip
     def ci(d):
         return d.apply(lambda x: f"{x.pp:+.1f} [{x.lo:+.1f}, {x.hi:+.1f}]", axis=1)
 
     main_ = r[(r["flooded by"] == "tide") & (r.comparison == "prone-dry") & (r.k == 0)]
     order = list(spring.values()) + ["all"]
     t1 = main_.assign(v=ci(main_)).pivot(index="storm", columns="outcome", values="v").loc[order, list(OUTCOMES)]
-    nn = main_.drop_duplicates("storm").set_index("storm")[["n_flooded", "n_comparison"]].reindex(t1.index)
-    t1 = nn.astype("Int64").astype(str).replace("<NA>", "").join(t1)
+    cells = main_[(main_.storm != "all") & main_.outcome.isin(OUTCOMES)]
+    n_excl, n_cells = int(((cells.lo > 0) | (cells.hi < 0)).sum()), len(cells)
+    nn = main_.drop_duplicates("storm").set_index("storm")[["n_flooded", "eff_flooded", "n_comparison", "eff_comparison"]]
+    nn = nn.reindex(t1.index).map(lambda x: "" if pd.isna(x) else f"{x:.0f}")
+    t1 = nn.join(t1)
     alt = r[r.storm == "all"].assign(v=ci(r[r.storm == "all"]))
     t2 = alt.pivot_table(index=["flooded by", "comparison", "k"], columns="outcome", values="v", aggfunc="first")[list(OUTCOMES)]
     t3 = alt.pivot_table(index=["flooded by", "comparison", "k"], columns="outcome", values="v", aggfunc="first")[EVENTS]
-    n_storms = {k: sum(1 for t in spring if t + k < CDL_CHANGE) for k in (0, 1)}
+    in_pool = r[(r.storm != "all") & (r["flooded by"] == "tide") & (r.comparison == "prone-dry")]
+    n_storms = {(e, k): in_pool[(in_pool.outcome == e) & (in_pool.k == k)].storm.nunique() for e in EVENTS for k in (0, 1)}
+    sens = sens.assign(v=text_ci(sens))
+    p = sens[sens.check == "before change"].pivot(index=["comparison", "k"], columns="outcome", values="v")
+    pre = p.loc[["prone-dry", "never"], list(OUTCOMES)]
+    e_ = sens[(sens.check == "every field once") & (sens.comparison == "prone-dry")]
+    eq = e_.assign(col=e_.k.map(lambda k: f"k = {k}")).pivot(index="outcome", columns="col", values="v").loc[list(r[r.storm == "all"].outcome.drop_duplicates())]
+    nc = sens[(sens.comparison == "never") & (sens.k == 1) & (sens.outcome == "cropland")].set_index("check").v
+    drops = [c for c in nc.index if "without" in c]
+    wo = "; ".join(f"without {c.rsplit(' ', 1)[1]}, {nc[c]}" for c in drops)
+    n_before = int(sens[sens.check == "before change, every field once"].storms.iloc[0])
+    eff = in_pool[(in_pool.k == 0) & (in_pool.outcome == "corn")]
+    eff_nv = r[(r.storm != "all") & (r["flooded by"] == "tide") & (r.comparison == "never") & (r.k == 0) & (r.outcome == "corn")]
     n_tides = pd.read_csv(SANDY / "field_event.csv").groupby(["event", "peak"]).ngroups
     all_tides = fc.chronic & (fc.n_storms_tide == n_tides)
     gap_early = gap.loc["flood-prone", [2008, 2009, 2010]].mean()
     gap_late = gap.loc["flood-prone", list(range(2015, CDL_CHANGE))].mean()
     all_rows = r[(r.storm == "all") & (r["flooded by"] == "tide") & (r.k == 0)].set_index(["comparison", "outcome"]).pp
     tilt = {o: (all_rows[("prone-dry", o)], all_rows[("prone-dry, incl. chronic", o)]) for o in ("corn", "soybeans")}
-    top = sorted(hist["before"].items(), key=lambda kv: -kv[1])[:2]
-    before = " and ".join(f"{p:.0f}% in {t}" for t, p in top)
+    before = ", ".join(f"{t}: {p:.0f}%" for t, p in hist["before"].items())
+    before_t = ", ".join(f"{t}: {p:.0f}%" for t, p in hist["before_flooded"].items())
+    never_rain = int(((~prone) & (f.n_storms_rain > 0)).sum())
+    mc = r[(r["flooded by"] == "tide") & (r.comparison == "prone-dry") & (r.k == 0) & (r.outcome == "main crop changed")]
+    mc_all, mc_storms = mc[mc.storm == "all"].iloc[0], mc[mc.storm != "all"]
+    all_never = r[(r.storm == "all") & (r["flooded by"] == "tide") & (r.comparison == "never") & (r.k == 1)
+                  & (r.outcome == "cropland")].iloc[0]  # fmt: skip
+    left = r[(r.storm == "all") & (r["flooded by"] == "tide") & (r.comparison == "prone-dry") & (r.outcome == "left cropland")]
+    left = {int(x.k): f"{x.pp:+.1f} [{x.lo:+.1f}, {x.hi:+.1f}]" for x in left.itertuples()}
     next_storm = sum(1 for t in spring if t + 1 in spring)
     base = ", ".join(f"{e} {r:.0f}%" for e, r in rates.items())
     md = f"""# Storm panel: crop mix in the season a spring storm tide floods a field
 
-Generated by `plot_storm_panel.py` (in `code/`, for reference: it needs our private package).
-Descriptive; no regression.
+Generated by `plot_storm_panel.py` (for reference only: it needs our private package). Descriptive;
+no regression.
+
+**Flooded** means at least 10% of the field under more than 5 cm in the flood model. Runs use rebuilt
+creek channels, NOAA gauge water levels, and wind: a 3 km analysis from 2016, and before that a coarser
+reanalysis scaled up 30% that still reads low at storm peaks. So the 2010-14 and 2022-24 storms are not
+forced alike. Peak water was compared with creek gauges only for 2018-25, so the 2010-14 storms are
+unchecked on this version. Where checked, peaks are mostly within 0.2 m (usually high near Bivalve, low
+in the Alloway), which matters on flat fields. More fields flood than on the earlier version, and we
+have not yet explained why.
 
 **Fields:** {len(f):,} low crop fields (farmed in NJDEP's 2012 land-use map, < {panel.MAX_H} m above average
 higher high tide, at least half cropland 2008-12), not flooded by ordinary spring tides in the model.
@@ -292,89 +350,119 @@ weighted by area, so a few large fields count for much.
 **Comparison:** in each spring-storm year, the fields that storm floods (storm tide alone) against
 "prone-dry" fields, which flood in other modelled storm tides but not this one, weighted to the
 same mix of field heights. Each field's share is measured against its own mean in nearby quiet
-years ({', '.join(map(str, quiet))}; within {QUIET_WINDOW} years). A quiet year has no modelled spring storm and no
+years ({', '.join(map(str, quiet))}; within {QUIET_WINDOW} years, never the outcome year itself). A quiet year has no modelled spring storm and no
 flood from the July before through February: autumn or late-summer storms after that year's
 planting do not count against it. Numbers are percentage points of field area, flooded minus
-comparison, with 95% intervals from resampling fields. Signs flip between storms, and a few cells
-excluding zero is about what chance gives.
+comparison, with 95% intervals from resampling fields. Crop-share signs flip between storms. In the
+per-storm table, {n_excl} of {n_cells} storm-and-crop results exclude zero, against about {0.05 * n_cells:.1f} expected by chance
+(results are not independent; no formal test).
 
 ![storm panel](figs/storm_panel{TAG}.png)
 
 ## Same season, per storm (tide only, vs prone-dry)
+
+`eff_` columns are the effective number of fields once area weights are counted (Kish): a few large
+fields carry each group, so the groups behave as far fewer fields than their counts.
 
 {md_table(t1)}
 
 ## All {len(spring)} storms, the variants
 
 k = 0: the season of the storm; k = 1: the next season. "never" = fields no modelled storm tide
-floods on its own (weighted to the same heights; some of them flood when rain is counted).
+floods on its own (weighted to the same heights; {never_rain} of these {int((~prone).sum())} flood when rain is counted).
 "rain" = flooded counting the storm's rain. "incl. chronic" = the
 {int(fc.chronic.sum())} fields wet on ordinary spring tides put back ({int(all_tides.sum())} of them flood in all {n_tides} storm tides, so
 they are almost always in the flooded group).
 
 {md_table(t2)}
 
-Next-season cropland against never-flooded fields excludes zero, but much of that is USDA's 2024
-change in how it makes the crop map. Leaving out outcome years from {CDL_CHANGE} on (tide only):
+Next-season cropland against never-flooded fields is {all_never.pp:+.1f} [{all_never.lo:+.1f}, {all_never.hi:+.1f}]. We have not explained this, and it
+is not a stable number. USDA changed how it makes the crop map in {CDL_CHANGE}. With {CDL_CHANGE} and later removed from both
+outcomes and baselines (table below; tide only; {n_before} storms) it is {nc["before change"]}, or
+{nc["before change, every field once"]} counting every field once. The 7-storm and {n_before}-storm figures are different pools that happen to
+agree. Leaving one storm out of the {n_before}: {wo}. Against prone-dry fields it spans zero.
 
 {md_table(pre)}
+
+The {len(spring)}-storm rows above keep {CDL_CHANGE}-on baseline years for the 2022-24 storms, and the {CDL_CHANGE} storm cannot avoid
+straddling the change, so this table is the safer reading of those rows.
+
+**Every field counted once** instead of by area (still matched on height; flooded - prone-dry, tide only):
+
+{md_table(eq)}
+
+Some differences grow when every field counts equally, and same-season grass and main crop changed then
+exclude zero, so the area-weighted result rests partly on a few large fields.
 
 ## Yes/no per field: did it change crop, did it leave cropland?
 
 Same comparison, with a yes/no outcome per field instead of a share: **main crop changed** (the
 field's largest land use differs from the year before) and **left cropland** (at least half
 cropland the year before, under half that year and the next). Numbers are percentage points of
-the chance, flooded minus comparison. Outcome years from {CDL_CHANGE} on are left out (CDL's
-product change), so the pooled rows use {n_storms[0]} storms for k = 0 and {n_storms[1]} for k = 1.
+the chance, flooded minus comparison. Outcome years from {CDL_CHANGE} on are left out (USDA's crop-map
+change), and {CDL_CHANGE - 1} too for left cropland, whose flag reads the next year's map. Pooled rows use, for k = 0
+and k = 1, {n_storms[(EVENTS[0], 0)]} and {n_storms[(EVENTS[0], 1)]} storms (main crop changed), {n_storms[(EVENTS[1], 0)]} and {n_storms[(EVENTS[1], 1)]} (left cropland).
 Usual yearly rates on the flood-prone fields in quiet years: {base}.
 
 {md_table(t3)}
 
+Left cropland, the outcome closest to farm exit, is {left[0]} the same season and {left[1]} the next.
+Those intervals are several times the usual yearly rate, so they say little either way.
+
 ## The chronic fields over time
 
 The {int(fc.chronic.sum())} low crop fields where the model puts ordinary spring tides on at least 10% of the field in
-one simulated month (October 2024, today's dikes) are left out above. They are often small and at
-the marsh edge, and the group grew from 100 to {int(fc.chronic.sum())} with this model version. Whether storms caused
-their wetness is untested. Their cropland, minus other fields at the same heights (percentage
-points of field area, by CDL year):
+one simulated month (October 2024 with wind, today's dikes) are left out above. This may be partly a
+model artefact: they are small, and on the older version many were a couple of wet days on the low part
+of a marsh-edge field, where a 100 m model cannot see berms or ditches. The group grew from 100 to {int(fc.chronic.sum())}
+with this model version. Whether storms caused their wetness is untested. Their cropland, minus other
+fields reweighted to the same heights (percentage points of field area, by CDL year):
 
 {md_table(gap.round(0), '{:+.0f}')}
 
 Against flood-prone fields the gap averages {gap_early:+.0f} in 2008-10 and {gap_late:+.0f} in 2015-{CDL_CHANGE - 1}.
-Against never-flooded fields it widens in steps: around 2011, at 2019 (cause unclear: CDL, weather
-or the 2018 storms) and at USDA's 2024 change in the crop map, which hit wet low ground hardest.
+Against never-flooded fields it widens at 2019 (cause unclear: CDL, weather or the 2018 storms) and at
+USDA's 2024 change in the crop map, which hit wet low ground hardest; earlier years are noisy.
 
 Put back into the storm comparison (rows "incl. chronic" above), they move the pooled same-season
 result on corn from {tilt["corn"][0]:+.1f} to {tilt["corn"][1]:+.1f} and on soybeans from {tilt["soybeans"][0]:+.1f} to {tilt["soybeans"][1]:+.1f} percentage points. {int(all_tides.sum())} of them flood
 in every storm tide and so sit in the flooded group of every storm, so this is partly one group's
 storm years against its quiet years, not seven tests. This cannot say WHY: the model has today's banks for every
-year, and the chronic fields are lower and more exposed than any comparison.
+year, and the chronic fields sit lower on average than the comparison fields.
 
 ## Caveats
 
 - **Not detectable is not "no effect".** "Flooded" is a model result, noisy field by field, which
   pulls differences toward zero. Its flooded area has not been checked against satellite images on
   this version; on an older version Landsat confirmed only a small part of the model's water at
-  overpass. CDL records what was grown, not yield or salt damage.
+  overpass (mostly one informative storm, April 2011). CDL is USDA's satellite estimate of the crop, noisy
+  on small fields; it does not measure yield or salt damage.
 - **The model moves surface water only:** no salt, groundwater, crop or marsh processes, so "flooded"
   does not mean salt damage. Gate sizes are assumed (no public inventory).
 - **The groups differ in more than this year's flood.** Flooded groups are repeat-flood fields: on
   average they flood in {hist["flooded"][0]:.0f}-{hist["flooded"][1]:.0f} of the {n_tides} storm tides, the comparison fields in {hist["comparison"][0]:.0f}-{hist["comparison"][1]:.0f}. The
   quiet-year baseline removes their usual crop mix, not a different trend.
-- **"Missed" means missed by this storm.** Comparison fields had often flooded just before ({before}),
-  and {next_storm} of {len(spring)} storms have another spring storm the next season, so "next season" is not recovery
-  from one flood.
+- **"Missed" means missed by this storm.** Share flooded in the months before, comparison fields: {before}.
+  Flooded fields: {before_t}. So 2012 and 2024 partly test the earlier storm, and 2022's comparison
+  fields had nearly all just flooded. {next_storm} of {len(spring)} storms have another spring storm the next season, so
+  "next season" is not recovery from one flood.
 - **Selection.** Fields must be at least half cropland in 2008-12, a window holding the 2010-12 storms,
   so fields that left early are screened out.
-- **CDL year = the summer crop.** March-April storms come before planting; June storms
-  (2012, 2023) after it, when CDL sees the crop already in the ground.
-- **Unmodelled storms.** Storm tides below {panel.STORM_MIN} m at Ship John are not modelled, and the quiet years
-  2015, 2017, 2020 and 2025 hold tides of 1.61-1.64 m. A tide just above the line (March 2010) floods
-  a quarter of the flood-prone fields, so these may be wet too.
-- **"Main crop changed" is not settled.** On the storms that have both ({", ".join(map(str, bc["storms"]))}), it is {bc["even"]:+.0f} points
-  against even quiet years and {bc["odd"]:+.0f} against odd ones; with no baseline, {bc["none"]:+.1f} over the
-  storms before {CDL_CHANGE}. The with-rain rows exclude zero. Possibly rotation; the yearly rate also shifts
-  between eras (higher up to 2015).
+- **CDL year = the summer crop.** March-April storms come before or during planting; early-June storms
+  (2012, 2023) during or after it (dates approximate, not checked against local crop calendars).
+- **Unmodelled storms.** Storms are picked from our Ship John series, gauge plus estimates where it was
+  out (2008-09, 2021); heights are uncertain by about 0.1 m. Storm tides below {panel.STORM_MIN} m are not modelled, and the
+  quiet years 2015, 2017, 2020 and 2025 hold tides of 1.61-1.64 m. A tide just above the line (March 2010)
+  floods a quarter of the flood-prone fields, so these may be wet too. Quiet 2008 may be one as well: the
+  gauge stops at the crest of May 12, when other bay gauges read higher than in March 2010.
+- **"Main crop changed" is not a finding yet.** It reads higher on flooded fields in {int((mc_storms.pp > 0).sum())} of {len(mc_storms)} storms, {mc_all.pp:+.0f}
+  [{mc_all.lo:+.0f}, {mc_all.hi:+.0f}] by area ({eq.loc["main crop changed", "k = 0"]} if every field counts once), but it changes a lot with the
+  2-4 baseline years each storm has. On the storms with both ({", ".join(map(str, bc["storms"]))}), it is {bc["even"]:+.0f} points against even
+  quiet years and {bc["odd"]:+.0f} against odd ones, with some storms resting on one baseline year on a side; with no
+  baseline, {bc["none"]:+.1f} over the storms before {CDL_CHANGE}. The same-season with-rain rows and two "never, incl. chronic" rows exclude
+  zero, but "never" rows rest on as few effective fields as prone-dry rows ({eff_nv.eff_comparison.min():.0f}-{eff_nv.eff_comparison.max():.0f} vs {eff.eff_comparison.min():.0f}-{eff.eff_comparison.max():.0f} per storm), so lean on neither. Possibly rotation, and on the older
+  version some of the switch was to CDL "wetland", perhaps standing water in that summer's image. The yearly
+  rate also shifts between eras (higher up to 2015).
 - **Dikes as they stand today in the model**, for every year: mapped from lidar, not surveyed.
 - **Seven storms, mostly the SAME fields.** The "all" interval resamples fields and holds the seven
   storms fixed, so it leaves out year-to-year differences and may be too narrow.

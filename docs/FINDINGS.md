@@ -1685,14 +1685,24 @@ tides (`chronic`) 248 → 359 of all fields: 112 new, 1 lost; 100 → 152 of the
 Main sample 943 → 891 low crop fields, 435 of them flood-prone.
 
 - **Crop mix: no clear response.** Pooled flooded − prone-dry, same season: corn +2.8 [−1.7,
-  +6.7], soybeans −1.0 [−5.3, +4.3], cropland +0.9 [−2.2, +4.3]; next season within ±0.7. Spring
-  storms only (7 storms, 8 peaks); the other storm tides set the groups, not the test. Without
-  outcome years from 2024 on, next season: corn +1.2, soybeans −2.1, cropland −1.1 (all spanning
-  zero). The "all" interval holds the storms fixed, so it leaves out year-to-year differences.
-  Against never-flooded fields, cropland the next season is −3.0 [−6.3, −0.3], −1.8 [−5.0, +1.0]
-  without 2024 on: mostly CDL's product change. Comparison fields are not dry: 90% of 2022's and
-  46% of 2024's flooded in the months before. Not checked: Landsat extent on this build; gauge
-  peaks on this build only for 2018-25 so far.
+  +6.7], soybeans −1.0 [−5.3, +4.3], cropland +0.9 [−2.2, +4.3]; next season within ±1. Spring
+  storms only (7 storms, 8 peaks); the other storm tides set the groups, not the test. With 2024
+  on out of outcomes AND baselines, next season: corn +0.2, soybeans −2.1, cropland −2.1 (all
+  spanning zero). The "all" interval holds the storms fixed, so it leaves out year-to-year
+  differences. The rest depends on few large fields (effective fields 8-50 per group and storm);
+  with every field counted once, same-season grass is −3.8 [−7.0, −1.0] (−1.1 by area).
+  **Unexplained and not stable:** against never-flooded fields, next-season cropland is −3.4 [−6.8,
+  −0.4] over 7 storms and −3.4 [−6.7, −0.3] over the 5 storms with 2024 on fully out (different
+  pools that happen to agree), −5.1 [−7.5, −2.4] counting every field once; without 2010 or 2022
+  the interval crosses zero (−2.9, −2.5). (`storm_panel_m65/sensitivity.csv`.) Corrected
+  2026-11-01: the earlier "−1.8, mostly CDL's product change" kept 2025 in the baseline, which
+  moved the 2022 storm (thin never group) from about −7 to +1.1; and an outcome year could sit in
+  its own baseline at k = 1 (`panel.deviations` no longer allows it). So we cannot say how much
+  of this is CDL's change. Left cropland also drops outcome 2023, whose flag reads the 2024 map:
+  −1.3 [−3.7, +0.9] same season, −1.4 [−5.7, +3.9] next.
+  Comparison fields are not dry: 90% of 2022's and 46% of 2024's flooded in the months before;
+  2012 and 2024 flooded fields far more often than their comparison (83% vs 7%, 98% vs 46%). Not
+  checked: Landsat extent on this build; gauge peaks on this build only for 2018-25 so far.
 - **§37's weak corn → soybean tilt on the chronic fields weakens.** Putting them back moves corn
   +2.8 → −0.3 and soybeans −1.0 → +1.8 (v1: −2.2 and +3.1, whose soybean interval excluded zero;
   now both span it).

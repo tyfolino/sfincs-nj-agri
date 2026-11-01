@@ -67,12 +67,36 @@ def build():
     return f.reset_index().round(ROUND), out.round(ROUND), fe.round(ROUND)
 
 
-def readme(f: pd.DataFrame, fy: pd.DataFrame, fe: pd.DataFrame, est: pd.DataFrame) -> str:
+#: Heads each copied column README: they describe our working folders, not this bundle's layout.
+DOC_NOTE = """> **In this bundle:** these notes describe our working folders. `field_season.csv` and the land-use part
+> of `field_year.csv` are merged into `data/field_year.csv`; `fields_storm.csv` is merged into
+> `data/fields.csv`; `field_event.csv` is `data/field_storm.csv`; paths like `../sandy_panel/` mean `data/`.
+> `main_class`, `main_changed`, `left_cropland`, `low_crop` and `main_sample` are defined in the top README.
+> "FINDINGS §" points to our internal notes: ask us if you need one.
+
+"""
+
+
+def readme(f: pd.DataFrame, fy: pd.DataFrame, fe: pd.DataFrame, est: pd.DataFrame, sens: pd.DataFrame) -> str:
     low, main = int(f.low_crop.sum()), int(f.main_sample.sum())
     high = f[f.m_above_mhhw >= panel.MAX_H]
     all_ = est[(est.storm == "all") & (est["flooded by"] == "tide") & (est.comparison == "prone-dry")]
-    crops = all_[all_.outcome.isin(["corn", "soybeans", "cropland"])]
     mc = all_[(all_.outcome == "main crop changed") & (all_.k == 0)].iloc[0]
+    mc_rain = est[(est.storm == "all") & (est["flooded by"] == "rain") & (est.comparison == "prone-dry")
+                  & (est.outcome == "main crop changed") & (est.k == 0)].iloc[0]  # fmt: skip
+    nv = est[(est.storm == "all") & (est["flooded by"] == "tide") & (est.comparison == "never") & (est.k == 1)
+             & (est.outcome == "cropland")].iloc[0]  # fmt: skip
+    lc = {int(x.k): x for x in all_[all_.outcome == "left cropland"].itertuples()}
+    never = f[(f.main_sample == 1) & (f.n_storms_tide == 0)]
+    ci = lambda x: f"{x.pp:+.1f} [{x.lo:+.1f}, {x.hi:+.1f}]"  # noqa: E731
+    pick = lambda c, comp, k, o: sens[(sens.check == c) & (sens.comparison == comp) & (sens.k == k) & (sens.outcome == o)].iloc[0]  # noqa: E731
+    pre = sens[(sens.check == "before change") & (sens.comparison == "prone-dry") & sens.outcome.isin(["corn", "soybeans", "cropland"])]
+    nv_pre, nv_eq = pick("before change", "never", 1, "cropland"), pick("before change, every field once", "never", 1, "cropland")
+    grass, mc_eq = pick("every field once", "prone-dry", 0, "grass (hay + pasture + idle)"), pick("every field once", "prone-dry", 0, "main crop changed")
+    drops = sens[sens.check.str.contains("without")]
+    wo = ", ".join(f"{c.rsplit(' ', 1)[1]}: {ci(x)}" for c, x in zip(drops.check, drops.itertuples()))
+    eff = est[(est.storm != "all") & (est["flooded by"] == "tide") & (est.k == 0) & (est.outcome == "corn")]
+    eff_r = {c: f"{eff[eff.comparison == c].eff_comparison.min():.0f}-{eff[eff.comparison == c].eff_comparison.max():.0f}" for c in ("never", "prone-dry")}
     sample = f[f.main_sample == 1]
     prone = int(((f.main_sample == 1) & (f.n_storms_tide > 0)).sum())
     spring = fy.dropna(subset=["spring_storm"]).groupby("spring_storm").year.first().sort_values()
@@ -90,15 +114,16 @@ grown on it (USDA Cropland Data Layer, CDL). Public data plus our model runs.
 | `data/fields.csv` | field ({len(f):,}): county, size, height, soils, sample flags. `fields.gpkg` = polygons |
 | `data/field_storm.csv` | field x storm tide it wets (no row = stayed dry, tide and rain; key `event` + `peak`): flooded share and depth, the peak's date, month and season |
 | `results/` | what we found so far (descriptive, no regression yet) |
-| `docs/` | every column defined |
+| `docs/` | column definitions; the flood and land-use columns of the tables above |
 
 Join on `field_id` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`).
 
 ## Which fields to use
 
 - `main_sample = 1` ({main:,} fields): low (< 1.5 m above high tide), mostly cropland in
-  2008-12, and not already wet on ordinary tides. {prone:,} of them flood in at least one storm.
-- `low_crop = 1` ({low:,}) also keeps the {low - main:,} fields ordinary tides already wet (`chronic = 1`).
+  2008-12, and not wet on ordinary spring tides in the model. {prone:,} of them flood in at least one modelled storm tide.
+- `low_crop = 1` ({low:,}) also keeps the {low - main:,} fields (`chronic = 1`) the model wets on ordinary spring tides in
+  one simulated month (partly a model artefact, perhaps, on small marsh-edge fields).
 
 Of the {len(high):,} fields at {panel.MAX_H} m or higher, {int((high.n_storms_tide > 0).sum())} flood on a storm tide alone; counting rain, {int((high.n_storms_rain > 0).sum()):,} do.
 
@@ -107,8 +132,9 @@ fields hold {sample.ha.nlargest(10).sum() / sample.ha.sum():.0%} of its area. {i
 
 ## Key columns (`field_year.csv`)
 
-Flooded = at least 10% of the field under more than 5 cm. Every storm tide of at least
-1.68 m NAVD88 recorded at Ship John Shoal in 2008-2025 is modelled ({fe.groupby(["event", "peak"]).ngroups} in this build), all year round.
+Flooded = at least 10% of the field under more than 5 cm in the model. Every storm tide of at least
+1.68 m in our Ship John Shoal series (gauge plus estimates where it was out: 2008-09, 2021; heights
+uncertain by about 0.1 m), 2008-2025, is modelled ({fe.groupby(["event", "peak"]).ngroups} in this build), all year round.
 
 By growing season (April-October; November-March before it is the non-growing season, so a
 December storm counts toward the next year):
@@ -129,30 +155,46 @@ By planting (the first cut, used in `results/`):
 
 **CDL has breaks.** USDA changed how it makes the crop map in 2024, and `left_cropland` also spikes
 in 2011, on upland too. In the main sample `left_cropland` is {100 * fy[(fy.year == 2024) & fy.field_id.isin(sample.field_id)].left_cropland.mean():.0f}% in 2024 and `main_changed` {100 * fy[(fy.year == 2024) & fy.field_id.isin(sample.field_id)].main_changed.mean():.0f}%.
-Use year effects and compare fields within a year.
+A `left_cropland` flag in 2023 also reads the 2024 map. Use year effects and compare fields within a year.
 
 ## What we found
 
-We could not detect a change in crop mix from a spring storm tide in the flood model's map. Against
-fields of the same heights that flood in other storms but not this one, pooled differences in corn,
-soybeans and cropland, that season or the next, are at most {crops.pp.abs().max():.1f} percentage points, with
-intervals from {crops.lo.min():+.1f} to {crops.hi.max():+.1f}. Against never-flooded fields, next-season cropland is about −3,
-much of it USDA's 2024 change.
+We could not detect a change in crop mix from a spring storm tide in the flood model's map. In our
+main comparison (storm tide alone; flooded fields against same-height fields this storm missed but
+others flood; weighted by area), pooled differences in corn, soybeans and cropland, that season or the
+next, have intervals that include zero. Without 2024 and later they are at most {pre.pp.abs().max():.1f} percentage points,
+with intervals from {pre.lo.min():+.1f} to {pre.hi.max():+.1f}. Counting every field once instead, same-season grass ({ci(grass)})
+and main crop changed ({ci(mc_eq)}) exclude zero. These intervals do not bound the effect of flooding:
+they are probably too narrow, errors in the modelled flooding shrink differences toward zero, and the
+comparison fields also flood in other storms.
+
+Against fields none of the {fe.groupby(["event", "peak"]).ngroups} storm tides floods on tide alone ({int((never.n_storms_rain > 0).sum())} of these {len(never)} do flood with
+rain), next-season cropland is {nv.pp:+.1f} [{nv.lo:+.1f}, {nv.hi:+.1f}]. We have not explained this, and it is not a stable number.
+Without 2024 and later ({int(nv_pre.storms)} storms) it is {ci(nv_pre)}, or {ci(nv_eq)} counting every field once. Leaving one
+of those storms out by area: {wo}.
+
+Leaving cropland, the outcome closest to farm exit, is {lc[0].pp:+.1f} [{lc[0].lo:+.1f}, {lc[0].hi:+.1f}] the same season and {lc[1].pp:+.1f}
+[{lc[1].lo:+.1f}, {lc[1].hi:+.1f}] the next, leaving out 2023 on, because a 2023 flag needs the 2024 map. Its usual rate is about
+1% a year, so these intervals say little either way.
 
 **That is not evidence of no effect.** The flood map is a model result, noisy field by field, which
-hides real differences, and its flooded area has not been checked against satellite images on this
-version. The model moves surface water only, so "flooded" does not mean salt damage. CDL records
-what was grown, not yield. "Missed" means missed by this storm: many comparison fields flooded in
-the months before.
+hides real differences. Its flooded area has not been checked against satellite images on this
+version, and peak water has been compared with creek gauges only for 2018-25, so the 2010-14 storms
+are unchecked. The model moves surface water only, so "flooded" does not mean salt damage. CDL is USDA's
+satellite estimate of the crop, noisy on small fields; it does not measure yield. "Missed" means
+missed by this storm: in 2022, 90% of comparison fields had flooded in the months before (46% in 2024;
+0-7% in the other storms). In 2012 and 2024, flooded fields had flooded before far more often than
+the comparison, so those storms are not clean single-flood tests.
 
 "Main crop changed" reads higher on flooded fields ({mc.pp:+.0f} points the same season, interval {mc.lo:+.0f} to
-{mc.hi:+.0f}), but it moves a lot with the baseline years, so it is not settled. Details and caveats in
-`results/storm_panel.md`.
+{mc.hi:+.0f}; with rain counted, {mc_rain.pp:+.0f} [{mc_rain.lo:+.0f}, {mc_rain.hi:+.0f}]). It is much smaller if every field counts equally and
+changes a lot with the 2-4 baseline years used. **Not a finding yet.** Never-flooded rows rest on as few
+effective fields as the main rows ({eff_r["never"]} vs {eff_r["prone-dry"]} per storm), so lean on neither. Details and caveats in `results/storm_panel.md`.
 
 Flood runs use the latest model version: rebuilt creek channels, water levels from NOAA gauges, and
 wind (a 3 km analysis from 2016; before that, a coarser reanalysis scaled up 30%, which still reads
-low at the peak of a storm). More fields flood than in the earlier tables. We have not yet explained
-why.
+low at the peak of a storm). So the earlier and later storms are not forced alike. More fields flood
+than in the earlier tables. We have not yet explained why.
 """
 
 
@@ -179,8 +221,9 @@ def main() -> None:
     shutil.copy2(config.ROOT / "scripts/plot_storm_panel.py", out / "code/plot_storm_panel.py")
     shutil.copy2(config.ROOT / "agri_sfincs/panel.py", out / "code/panel.py")
     for src, name in ((SANDY, "fields"), (STORM, "storm_panel")):
-        shutil.copy2(src / "README.md", out / f"docs/{name}_README.md")
-    (out / "README.md").write_text(readme(f, fy, fe, pd.read_csv(STORM / "estimates.csv")))
+        (out / f"docs/{name}_README.md").write_text(DOC_NOTE + (src / "README.md").read_text().replace(" (once all 18 are in)", ""))
+    shutil.copy2(STORM / "sensitivity.csv", out / "results/storm_panel_sensitivity.csv")
+    (out / "README.md").write_text(readme(f, fy, fe, pd.read_csv(STORM / "estimates.csv"), pd.read_csv(STORM / "sensitivity.csv")))
     print(f"wrote {out}: {len(f):,} fields, {len(fy):,} field-years, {len(fe):,} field-storms")
 
 

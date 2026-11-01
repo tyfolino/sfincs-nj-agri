@@ -108,10 +108,16 @@ def height_weights(height: pd.Series, ha: pd.Series, target: pd.Series, comp: pd
     return w
 
 
+def effective_n(w: pd.Series) -> float:
+    """Kish effective number of fields under weights ``w``: (sum w)^2 / sum w^2."""
+    return float(w.sum() ** 2 / (w**2).sum())
+
+
 def deviations(v: pd.DataFrame, year: int, quiet: list[int], k: int, window: int = QUIET_WINDOW) -> pd.Series:
     """field x year table ``v``: each field's value in year + k minus its mean over the quiet
-    years within ``window`` of ``year``."""
-    base = [t for t in quiet if abs(t - year) <= window]
+    years within ``window`` of ``year``, leaving out year + k itself (an outcome year is not its
+    own baseline)."""
+    base = [t for t in quiet if abs(t - year) <= window and t != year + k]
     return v[year + k] - v[base].mean(axis=1)
 
 
