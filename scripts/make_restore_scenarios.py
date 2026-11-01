@@ -28,10 +28,19 @@ seaward land and protect its farms behind a new inner dike.
   restore/<slug>_setback.gpkg = R and the inner dike (for maps)
 
 Writes data/structures/scenarios/restore/* and restore/sites.csv.
-Usage:  python scripts/make_restore_scenarios.py
+
+``--all-farm`` (the dike pay-off, FINDINGS §27, §30): the same outlet cut, 100 m, plus the no-gate
+file, for every other farm system; SITES and the set-back are left as they are. A system with
+several outlets (Gibbstown) is cut at the first and loses all its valves. Writes
+restore/sites_all_farm.csv. Each new weir still needs its ``_open`` twin
+(scripts/open_creek_links.py).
+
+Usage:  python scripts/make_restore_scenarios.py [--all-farm]
 """
 
 from __future__ import annotations
+
+import argparse
 
 import geopandas as gpd
 import numpy as np
@@ -125,7 +134,40 @@ def setback(system: str, gates, st) -> dict:
             "inner_dike_km": edge.length / 1e3, "sill_m": None}  # fmt: skip
 
 
+def cut_outlet(system, lines, sysof, gates, drn, st, widths=WIDTHS_M) -> list[dict]:
+    """Write ``system``'s <slug>_mllw<w>.weir and <slug>_nogate.drn; their sites.csv rows."""
+    g = gates[gates.system == system]
+    if g.empty:
+        raise KeyError(system)
+    xs, ys = float(g.x_site.iloc[0]), float(g.y_site.iloc[0])
+    sill = float(exposure.idw(st, "mllw", np.array([xs]), np.array([ys]), CRS)[0])
+    idx = [i for i, ln in enumerate(lines) if sysof.get(ln[0]) == system]
+    # the system's crest vertex nearest the outlet
+    i_line, j = min(((i, int(np.argmin(np.hypot(lines[i][1] - xs, lines[i][2] - ys)))) for i in idx),
+                    key=lambda t: np.hypot(lines[t[0]][1][t[1]] - xs, lines[t[0]][2][t[1]] - ys))  # fmt: skip
+    name, x, y, z = lines[i_line]
+    dist = float(np.hypot(x[j] - xs, y[j] - ys))
+    rows = []
+    for w in widths:
+        zn = dikes.breach(x, y, z, j, w, sill)
+        one = list(lines)
+        one[i_line] = (name, x, y, zn)
+        dikes.write_weir(OUT / f"{dikes.slug(system)}_mllw{int(w)}.weir", one)
+        rows.append({"system": system, "slug": dikes.slug(system), "arm": f"mllw{int(w)}", "polyline": name,
+                     "x": float(x[j]), "y": float(y[j]), "outlet_dist_m": dist, "sill_m": sill,
+                     "crest_before_min": float(z[zn < z].min()), "crest_before_max": float(z[zn < z].max()),
+                     "vertices_lowered": int((zn < z).sum())})  # fmt: skip
+    keep = [ln for ln, s in zip(drn, gates.system) if s != system]
+    (OUT / f"{dikes.slug(system)}_nogate.drn").write_text("\n".join(keep) + "\n")
+    print(f"{system}: outlet {dist:.0f} m from the bank vertex, sill {sill:+.2f} m, "
+          f"{len(drn) - len(keep)} gate(s) removed")  # fmt: skip
+    return rows
+
+
 def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--all-farm", action="store_true", help="every other farm system instead of SITES (docstring)")
+    a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     lines = dikes.read_weir(STRUCT / "dikes.weir")
     cp = gpd.read_file(STRUCT / "dikes_built.gpkg", layer="crest_points")
@@ -135,32 +177,14 @@ def main() -> None:
     if len(drn) != len(gates):
         raise RuntimeError(f"{GATES_DRN.name}: {len(drn)} rows vs {len(gates)} gates")
     st = mllw_stations()
-    rows = []
-    for system in SITES:
-        g = gates[gates.system == system]
-        if g.empty:
-            raise KeyError(system)
-        xs, ys = float(g.x_site.iloc[0]), float(g.y_site.iloc[0])
-        sill = float(exposure.idw(st, "mllw", np.array([xs]), np.array([ys]), CRS)[0])
-        idx = [i for i, ln in enumerate(lines) if sysof.get(ln[0]) == system]
-        # the system's crest vertex nearest the outlet
-        i_line, j = min(((i, int(np.argmin(np.hypot(lines[i][1] - xs, lines[i][2] - ys)))) for i in idx),
-                        key=lambda t: np.hypot(lines[t[0]][1][t[1]] - xs, lines[t[0]][2][t[1]] - ys))  # fmt: skip
-        name, x, y, z = lines[i_line]
-        dist = float(np.hypot(x[j] - xs, y[j] - ys))
-        for w in WIDTHS_M:
-            zn = dikes.breach(x, y, z, j, w, sill)
-            one = list(lines)
-            one[i_line] = (name, x, y, zn)
-            dikes.write_weir(OUT / f"{dikes.slug(system)}_mllw{int(w)}.weir", one)
-            rows.append({"system": system, "slug": dikes.slug(system), "arm": f"mllw{int(w)}", "polyline": name,
-                         "x": float(x[j]), "y": float(y[j]), "outlet_dist_m": dist, "sill_m": sill,
-                         "crest_before_min": float(z[zn < z].min()), "crest_before_max": float(z[zn < z].max()),
-                         "vertices_lowered": int((zn < z).sum())})  # fmt: skip
-        keep = [ln for ln, s in zip(drn, gates.system) if s != system]
-        (OUT / f"{dikes.slug(system)}_nogate.drn").write_text("\n".join(keep) + "\n")
-        print(f"{system}: outlet {dist:.0f} m from the bank vertex, sill {sill:+.2f} m, "
-              f"{len(drn) - len(keep)} gate(s) removed")  # fmt: skip
+    if a.all_farm:
+        farm = cp[cp.farm].drop_duplicates("system").system.sort_values()
+        rows = [r for system in farm if system not in SITES for r in cut_outlet(system, lines, sysof, gates, drn, st, (100.0,))]
+        t = pd.DataFrame(rows)
+        t.to_csv(OUT / "sites_all_farm.csv", index=False)
+        print(t.round(2).to_string(index=False))
+        return
+    rows = [r for system in SITES for r in cut_outlet(system, lines, sysof, gates, drn, st)]
     for system in SETBACK_SITES:
         rows.append(setback(system, gates, st))
     t = pd.DataFrame(rows)

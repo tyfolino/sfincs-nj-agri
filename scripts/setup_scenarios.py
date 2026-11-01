@@ -20,6 +20,9 @@ Runs, on the v1 model (dikes as weirs, check-valve gates, burned beds), TIDE-ONL
                identical repeat of the intact run (the noise floor for small differences); and the
                Middle Neck set-back (non-farmed seaward land restored, farms behind an inner dike)
                on tide2024oct x SLR {0, 0.6} and sandy2012.
+  --payoff:    the dike pay-off (FINDINGS §27, §30): tide2024oct x each farm system re-opened at its
+               outlet to MLLW over 100 m, gate removed (restore/<slug>_mllw100.weir, _nogate.drn), x
+               SLR {0, 0.3, 0.6, 1.0}. Same run names as --restore, so those are not staged twice.
 "intact" = the static model's own weirs; "removed" / "breach_*" swap in the weir files of
 scripts/make_dike_scenarios.py. Run names: <event>_<dikes>_slr<cm>[_rain][_era5|_hrrr]
 (agri_sfincs.runs.run_dir).
@@ -40,7 +43,7 @@ creeks at 100 m (FINDINGS §40). A model built on dikes_open.weir (e9_100m and l
 ``--open``: every scenario weir file is swapped for its ``<stem>_open.weir`` twin, made with
 ``scripts/open_creek_links.py --weir <file> --out <stem>_open.weir``.
 
-Usage:  python scripts/setup_scenarios.py [--model v1_100m] [--breaches] [--restore] [--storms] [--submit] [--only NAME...]
+Usage:  python scripts/setup_scenarios.py [--model v1_100m] [--breaches] [--restore] [--storms] [--payoff] [--submit] [--only NAME...]
             [--boundary gauges|chain] [--open] [--wind SCALE [--wind-source era5|hrrr]]
 """
 
@@ -87,7 +90,13 @@ def restore_runs() -> list[dict]:
     return runs
 
 
-def matrix(breaches: bool, restore: bool = False, storms: bool = False, wind: str = "") -> list[dict]:
+def payoff_runs() -> list[dict]:
+    slugs = sorted(p.stem.removesuffix("_nogate") for p in RESTORE.glob("*_nogate.drn"))
+    return [{"event": "tide2024oct", "dikes": f"restore_{sl}_mllw100", "weir": RESTORE / f"{sl}_mllw100.weir",
+             "drn": RESTORE / f"{sl}_nogate.drn", "slr": s, "precip": "none"} for sl in slugs for s in SLR]  # fmt: skip
+
+
+def matrix(breaches: bool, restore: bool = False, storms: bool = False, wind: str = "", payoff: bool = False) -> list[dict]:
     runs = []
     for ev, dk in (("tide2024oct", ["intact", "removed", "breach_all_farm"]), ("sandy2012", ["intact", "removed", "breach_all_farm"])):
         for d in dk:
@@ -100,6 +109,8 @@ def matrix(breaches: bool, restore: bool = False, storms: bool = False, wind: st
                          "precip": "none"})  # fmt: skip
     if restore:
         runs += restore_runs()
+    if payoff:
+        runs += payoff_runs()
     if storms:
         for ev in STORMS:
             for d in ("intact", "removed"):
@@ -120,6 +131,7 @@ def main() -> None:
     ap.add_argument("--breaches", action="store_true")
     ap.add_argument("--restore", action="store_true")
     ap.add_argument("--storms", action="store_true")
+    ap.add_argument("--payoff", action="store_true")
     ap.add_argument("--submit", action="store_true")
     ap.add_argument("--only", nargs="*", default=None)
     ap.add_argument("--boundary", default="gauges", choices=["gauges", "chain"])
@@ -129,7 +141,7 @@ def main() -> None:
     ap.add_argument("--wind-source", choices=("era5", "hrrr"), default="era5")  # fmt: skip
     a = ap.parse_args()
     static = config.MODELS / a.model
-    for r in matrix(a.breaches, a.restore, a.storms, wind=a.wind_source if a.wind is not None else ""):
+    for r in matrix(a.breaches, a.restore, a.storms, wind=a.wind_source if a.wind is not None else "", payoff=a.payoff):
         if a.only and r["name"] not in a.only:
             continue
         if a.open and r.get("weir"):

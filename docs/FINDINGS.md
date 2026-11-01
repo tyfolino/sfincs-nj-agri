@@ -1651,7 +1651,7 @@ observed side, hours picked on the model's favour the model.
   **Adopted (user, 2026-10-29)** over one shared level (DE's rail for both would drop NJ's
   lower-bay boundary ~9%, under a bay shore already at 0.84).
 
-## 52. Scenario compares on m65 with wind: more dike-dependent land than §29, cause not yet separated (2026-10-30; `reports/restore_phase1_e3v2a30brm65_100m_hrrr.md`, `reports/field_flood_classes_e3v2a30brm65_100m_hrrr.md`)
+## 52. Scenario compares on m65 with wind: more dike-dependent land than §29, not because of wind; beds vs boundary not separated (2026-10-30, 2026-11-01; `reports/restore_phase1_e3v2a30brm65_100m_hrrr.md`, `reports/field_flood_classes_e3v2a30brm65_100m{,_hrrr}.md`)
 
 The full rerun on `e3v2a30brm65_100m` (`--boundary chain --open`; HRRR × 1.0 from 2016, ERA5 × 1.3
 before, §50) is on disk: the 47 pre-2014 runs ended clean (every log `finish: True`, none
@@ -1662,8 +1662,13 @@ Tide2024oct set, m65 against v1, the same new field list:
 - **Dike-dependent today: 1,124 → 1,526 ha** (Salem 693 → 1,023). Floods at some level to +1 m:
   2,606 → 3,348 ha. Flooded today: 441 → 584 ha. Safe to +1 m: 69,625 → 68,665 ha. §29's old
   report had 1,117 ha, so the new field list is not the cause.
-- **Why is not separated.** Creek beds, boundary and wind all changed, and there is no windless
-  m65 tide run to take wind out. About 960 ha moved from safe to flooding at +1 m, 499 of them as
+- **Not wind (2026-11-01).** Windless m65 (tide2024oct x {intact, removed} x SLR, same boundary and
+  weirs; breach runs not repeated): dike-dependent today 1,524 ha (wind 1,526), flooded today 594
+  (584), safe to +1 m 68,608 (68,665). 62 fields (411 ha of 76,842) change class, mostly a level
+  later with wind; peak water differs by a median −4 mm (5th percentile −21 mm). A narrow result:
+  one calm tide month, whose boundary gauges already carry the wind's effect; it says nothing
+  about wind in the storm runs.
+- **Why is not separated.** Creek beds and boundary both changed. About 960 ha moved from safe to flooding at +1 m, 499 of them as
   dike-dependent (Cumberland dike-dependent at +1 m 14 → 497 against the old report): not
   explained yet. Of the land newly dike-dependent today, 268 ha were dike-dependent at +0.3 m
   and 150 ha exposed at +0.3 m. §29's number stays until this is understood.
@@ -1714,3 +1719,25 @@ Main sample 943 → 891 low crop fields, 435 of them flood-prone.
   from the July before through February. 2018, 2020 and 2025 do hold late-summer or autumn storms.
   For the yes/no outcomes, 2022 and 2023 have 3 and 2 baseline years inside the ±5 window.
 
+
+## 54. Appoquinimink: surveyed depth more than doubles Odessa's tide; not yet right (2026-11-01; `reports/creek_tides_de.md`, `de_v2ap30_100m`, `de_v2ap45_100m`)
+
+DNREC surveyed the river by ADCP on 2000-05-09 (Appoquinimink TMDL technical report, 2003, Table
+3-1, https://documents.dnrec.delaware.gov/swc/wa/Documents/Xia/Appo_NutrientsTMDL_TechReport_2003.pdf).
+Main stem, mouth to Odessa: 4.6, 4.1, 2.72, 4.8, 3.37, 3.0 m deep, 47-97 m wide (Drawyer Creek
+2.11 m). No datum is stated; the map places the sites only roughly. v2's bed was the convention,
+1.2 m below MLLW. On the calm-window tide, in v2 the range falls smoothly from 1.75 m at the mouth
+to 0.62 m at Odessa with no weir across the channel below it, so conveyance, not a closure.
+
+`build_riverbeds.py --stated appoquinimink=D@-75.6553,39.4525` (Odessa down to the mouth, taken as
+below MLLW), model − observed at Odessa:
+
+| bed | range ratio | high bias | low bias |
+|---|---|---|---|
+| v2 (1.2 m) | 0.26 | −0.10 | +0.82 |
+| 3.0 m (surveyed at Odessa) | 0.56 | 0.00 | +0.57 |
+| 4.5 m (near the deepest readings) | 0.75 | +0.07 | +0.40 |
+
+Other DE gauges and stations do not move. Odessa is both the tuned gauge and the only one on this
+river, so this is calibration, not validation. Lows stay too high: width or the reach above Odessa
+may be next. `domain.DE_TIDAL_REACHES` is unchanged until a depth is adopted.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +26,57 @@ def _map(n=3, m=3, dx=100.0, x0=1000.0, y0=2000.0, zsmax=None, days=2):
         coords={"corner_x": (("corner_n", "corner_m"), cx), "corner_y": (("corner_n", "corner_m"), cy),
                 "timemax": tmax},
     )  # fmt: skip
+
+
+class TestLinkStaticInputs(unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.TemporaryDirectory()
+        self.addCleanup(self.d.cleanup)
+        self.static = Path(self.d.name) / "m"
+        (self.static / "subgrid").mkdir(parents=True)
+        for f in ("roughness.nc", "sfincs.nc", "sfincs_subgrid.nc", "sfincs.weir", "subgrid/dep.tif"):
+            (self.static / f).write_bytes(f.encode() * 2000)
+        self.run_dir = self.static / "runs" / "r"
+        shutil.copytree(self.static, self.run_dir, ignore=shutil.ignore_patterns("runs"))
+
+    def test_dry_run_changes_nothing(self):
+        r = runs.link_static_inputs(self.static, self.run_dir)
+        self.assertEqual(r["linked"], 4)
+        self.assertGreater(r["freed"], 0)
+        self.assertFalse((self.static / "sfincs.nc").samefile(self.run_dir / "sfincs.nc"))
+
+    def test_links_identical_leaves_different_and_others(self):
+        (self.run_dir / "sfincs.nc").write_bytes(b"other")
+        r = runs.link_static_inputs(self.static, self.run_dir, apply=True)
+        self.assertEqual((r["linked"], r["differ"]), (3, ["sfincs.nc"]))
+        self.assertTrue((self.static / "subgrid/dep.tif").samefile(self.run_dir / "subgrid/dep.tif"))
+        self.assertFalse((self.static / "sfincs.nc").samefile(self.run_dir / "sfincs.nc"))
+        self.assertFalse((self.static / "sfincs.weir").samefile(self.run_dir / "sfincs.weir"))
+        self.assertEqual((self.run_dir / "roughness.nc").read_bytes(), b"roughness.nc" * 2000)
+        self.assertEqual(list(self.run_dir.rglob("*.linktmp")), [])
+
+    def test_second_pass_is_idempotent(self):
+        runs.link_static_inputs(self.static, self.run_dir, apply=True)
+        r = runs.link_static_inputs(self.static, self.run_dir, apply=True)
+        self.assertEqual((r["linked"], r["already"], r["freed"]), (0, 4, 0))
+
+    def test_new_run_gets_its_own_copy(self):
+        """setup_event's copytree must not carry a link into a new run, which it then rewrites."""
+        runs.link_static_inputs(self.static, self.run_dir, apply=True)
+        new = self.static / "runs" / "new"
+        shutil.copytree(self.static, new, ignore=shutil.ignore_patterns("runs"))
+        self.assertFalse((self.static / "sfincs.nc").samefile(new / "sfincs.nc"))
+
+    def test_build_static_refuses_an_existing_model(self):
+        """Rebuilding in place would write through the links into finished runs' inputs."""
+        from unittest import mock
+
+        from agri_sfincs import build
+
+        (self.static / "sfincs.inp").write_text("x")
+        cfg = mock.Mock(root=self.static)
+        with self.assertRaises(FileExistsError):
+            build.build_static(cfg)
 
 
 class TestRunDirs(unittest.TestCase):

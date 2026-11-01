@@ -12,6 +12,8 @@ covers day D - 1 (``block_days``).
 
 from __future__ import annotations
 
+import filecmp
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -49,10 +51,40 @@ def resolve(spec: str) -> Path:
     return config.MODELS / model / "runs" / run
 
 
+#: Static inputs every run folder copies, beside subgrid/* (see link_static_inputs).
+LINKABLE = ("roughness.nc", "sfincs.nc", "sfincs_subgrid.nc")
+
+
 def finished(run: Path) -> bool:
     """The run's log says it ended normally (not run yet, still running or crashed: False)."""
     log = run / "sfincs_log.txt"
     return log.exists() and "Total time" in log.read_text(errors="ignore")
+
+
+def link_static_inputs(static_root: Path, run: Path, apply: bool = False) -> dict:
+    """Hard-link a finished run's copies of the model's static inputs (LINKABLE, subgrid/*) to the
+    model's own files, wherever the bytes are identical, to save disk. Changes nothing unless
+    ``apply``. Nothing writes these files once staged: setup_event copies into a new folder and
+    build_static refuses an existing model (both pinned in tests). Returns files linked, bytes
+    freed, files already linked and the relative paths that differ (left alone)."""
+    out = {"linked": 0, "freed": 0, "already": 0, "differ": []}
+    rel = [*LINKABLE, *(p.relative_to(static_root) for p in sorted((static_root / "subgrid").glob("*")) if p.is_file())]
+    for f in rel:
+        src, dst = static_root / f, run / f
+        if not src.is_file() or not dst.is_file():
+            continue
+        if src.samefile(dst):
+            out["already"] += 1
+        elif filecmp.cmp(src, dst, shallow=False):
+            out["linked"] += 1
+            out["freed"] += dst.stat().st_blocks * 512
+            if apply:
+                tmp = dst.with_name(dst.name + ".linktmp")
+                os.link(src, tmp)
+                os.replace(tmp, dst)  # atomic: the run always holds a complete file
+        else:
+            out["differ"].append(str(f))
+    return out
 
 
 def subgrid_dep(model: str = MODEL) -> Path:
