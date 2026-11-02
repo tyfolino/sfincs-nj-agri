@@ -17,11 +17,12 @@ out the outcome year itself, so the 2010-12 run of floods does not sit in the ba
 weighted, in percentage points; 95% interval from Poisson-weight resampling of fields (N_BOOT).
 "All" = the plain mean of the storms (each storm counts once). k = +1 repeats it for Y + 1.
 
-Two yes/no outcomes per field, same comparison (agri_sfincs.panel.switched / left_cropland):
+Three yes/no outcomes per field, same comparison (agri_sfincs.panel.switched / left_cropland):
   main crop changed   the field's largest class (CLASSES) differs from the year before
   left cropland       >= 50% cropland the year before, < 50% that year and the next
-Outcome years from CDL_CHANGE on are left out of these two: CDL's 2024 product change shows as
-a drop in cropland on every low field (FINDINGS §37). Left cropland also drops CDL_CHANGE - 1, whose
+  left farmland       the same on cropland + pasture (agri_sfincs.panel.farmland)
+Outcome years from CDL_CHANGE on are left out of these: CDL's 2024 product change shows as
+a drop in cropland on every low field (FINDINGS §37). The two left outcomes also drop CDL_CHANGE - 1, whose
 flag reads the next year's map.
 
 Writes reports/storm_panel.md, reports/figs/storm_panel.png and data/analysis/storm_panel/estimates.csv
@@ -54,7 +55,7 @@ OUTCOMES = {
     "cropland": ["cropland"],
     "grass (hay + pasture + idle)": ["share_hay", "share_pasture", "share_idle"],
 }
-EVENTS = ["main crop changed", "left cropland"]
+EVENTS = ["main crop changed", "left cropland", "left farmland"]
 CLASSES, CDL_CHANGE = panel.CLASSES, panel.CDL_CHANGE
 QUIET_WINDOW = panel.QUIET_WINDOW
 N_BOOT = 500
@@ -79,9 +80,12 @@ def load(keep_chronic: bool = False):
     late = [t for t in years if t >= CDL_CHANGE]
     y["main crop changed"] = panel.switched(main)
     y["left cropland"] = panel.left_cropland(y["cropland"])
+    pasture = fy.pivot(index="field_id", columns="year", values="share_pasture").reindex(index=f.index, columns=years)
+    y["left farmland"] = panel.left_cropland(y["cropland"] + pasture)
     for e in EVENTS:
         y[e][late] = np.nan
-    y["left cropland"][CDL_CHANGE - 1] = np.nan  # its flag reads the next year's map
+    for e in ("left cropland", "left farmland"):
+        y[e][CDL_CHANGE - 1] = np.nan  # its flag reads the next year's map
     yr = fs.groupby("year").agg(storm=("spring_storm", "first"), off=("off_tide", "max"))
     quiet = [t for t in years if not isinstance(yr.storm[t], str) and yr.off[t] == 0]
     spring = {t: s for t, s in yr.storm.items() if isinstance(s, str)}
@@ -397,10 +401,11 @@ exclude zero, so the area-weighted result rests partly on a few large fields.
 ## Yes/no per field: did it change crop, did it leave cropland?
 
 Same comparison, with a yes/no outcome per field instead of a share: **main crop changed** (the
-field's largest land use differs from the year before) and **left cropland** (at least half
-cropland the year before, under half that year and the next). Numbers are percentage points of
+field's largest land use differs from the year before), **left cropland** (at least half
+cropland the year before, under half that year and the next) and **left farmland** (the same on
+cropland + pasture). Numbers are percentage points of
 the chance, flooded minus comparison. Outcome years from {CDL_CHANGE} on are left out (USDA's crop-map
-change), and {CDL_CHANGE - 1} too for left cropland, whose flag reads the next year's map. Pooled rows use, for k = 0
+change), and {CDL_CHANGE - 1} too for the two left outcomes, whose flag reads the next year's map. Pooled rows use, for k = 0
 and k = 1, {n_storms[(EVENTS[0], 0)]} and {n_storms[(EVENTS[0], 1)]} storms (main crop changed), {n_storms[(EVENTS[1], 0)]} and {n_storms[(EVENTS[1], 1)]} (left cropland).
 Usual yearly rates on the flood-prone fields in quiet years: {base}.
 

@@ -1802,3 +1802,42 @@ set read through daily maxima (`fieldflood.run_stats`, `compare_restore.py`). It
 gauge from a channel cell's hourly map (`waterlevel.channel_series`, Hancocks Bridge). One tide-only
 run tested, not a rain run. `--link` hard-links static inputs at staging, which `link_static_inputs`
 allows: nothing writes them once staged.
+
+## 57. Counting pasture as farmland: fewer false exits, but neither CDL measure is a clean exit on low ground (2026-11-02; `reports/exit_history.md`, `scripts/pasture_exit_spotcheck.py`, `reports/figs/pasture_exit_*.png`, `data/imagery/pasture_exit_{key,verdicts}.csv`)
+
+New `left_farmland` = `left_cropland`'s rule on cropland + CDL pasture (`panel.farmland`), beside the old
+measure, not replacing it. `left NLCD` = the same rule on Annual NLCD pasture / hay + crops (`annual_nlcd`;
+its WMS opened what §4 found closed; 81% / 87% of pixels equal NLCD 2021, NJ / DE, the peak at no offset).
+
+| % of at-risk crop-field area, per year | NJ < 1.5 m | NJ > 3 m | DE < 1.5 m | DE > 3 m | NJ 2013 | NJ 2024 | DE 2024 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Left cropland | 1.67 | 0.74 | 1.58 | 0.48 | 3.60 | 9.22 | 4.04 |
+| Left farmland | 0.88 | 0.21 | 1.08 | 0.17 | 0.03 | 3.83 | 2.27 |
+| Left NLCD | 0.13 | 0.19 | 0.16 | 0.25 | 0.08 | 0.37 | 0.18 |
+
+Means are 2009-23. **§44 correction:** its rates divided by all crop fields, not those at risk; fixed, NJ
+low 1.51 → 1.67, DE low 1.50 → 1.58, NJ all 0.79 → 0.82, DE all 0.49 → 0.50. Same pattern.
+- **Left farmland keeps the height gradient** (about 4× in NJ, 6× in DE) and drops most of the 2013 spike.
+  2024 is still high. Left NLCD loses the gradient, so it likely misses low-ground exits: a check only.
+- **Storm panel, left farmland** (flooded − comparison, pooled, 2024 on left out, `reports/storm_panel_m65.md`):
+  against prone-dry, same season −1.3 [−3.6, +0.5], next −1.4 [−4.1, +0.1]; against never-flooded, −1.3
+  [−3.6, +0.7], +0.2 [−0.4, +0.9]. No sign of flooded fields leaving more; narrower than left cropland (−1.4
+  [−5.7, +3.9] next, prone-dry). These intervals share the panel's caveats (§53).
+- **NAIP on low fields (< 1.5 m), exits 2010-19, area-weighted draw, IDs shuffled and verdicts saved before
+  unblinding; one reader, by eye, coarse chips, one later photo:**
+
+  | | farmed | kept grass | abandoned | ambiguous | not farmland |
+  |---|---:|---:|---:|---:|---:|
+  | Left cropland only (21 of 71 fields) | 8 | 4 | 2 | 6 | 1 |
+  | Flagged by both (9 of 220) | 5 | 0 | 0 | 1 | 3 |
+
+  Adding pasture mostly drops fields still in use (12 of 21), but 2-8 of 21 may be real exits it hides, so
+  the concern is real: both abandoned ones are Delaware. Fields flagged by both are not clean either:
+  none clearly abandoned, 5 of 9 still farmed. Too few to set a rate. Grass cannot be told from
+  grazed or mowed land in a single photo. Fits §24's 39-56% low-ground precision and its finding that
+  CDL labels abandoned grass "Other Hay", which `cropland` already counts.
+- **LU/LC cannot referee this:** only 14 ha (NJ) and 23 ha (DE) of low crop fields are recorded as not farmed
+  by the last edition, and §23 found it misses low-ground abandonment.
+- **Reading:** keep both in the bundle and report results on both. A CDL exit on low ground is a noisy
+  signal, which matters for any flood → exit regression. A better exit measure needs an independent
+  source (MOD-IV is the candidate) or a larger photo sample.

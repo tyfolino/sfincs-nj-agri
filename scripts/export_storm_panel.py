@@ -51,14 +51,16 @@ def build():
     main = fy.assign(main_class=fy[panel.CLASSES].idxmax(axis=1).str.removeprefix("share_"))
     wide = main.pivot(index="field_id", columns="year", values="main_class")
     crop = fy.pivot(index="field_id", columns="year", values="cropland")
+    farm = fy.assign(farmland=panel.farmland(fy)).pivot(index="field_id", columns="year", values="farmland")
     derived = pd.concat(
-        {"main_changed": panel.switched(wide), "left_cropland": panel.left_cropland(crop)}, axis=1
+        {"main_changed": panel.switched(wide), "left_cropland": panel.left_cropland(crop),
+         "left_farmland": panel.left_cropland(farm)}, axis=1
     ).stack(level=1, future_stack=True)
     derived.index.names = ["field_id", "year"]
     out = (fs[["field_id", "year", *FLOOD_COLS]]
            .merge(main, on=["field_id", "year"], how="outer", validate="1:1")
            .merge(derived.reset_index(), on=["field_id", "year"], how="left", validate="1:1"))  # fmt: skip
-    for c in ("main_changed", "left_cropland"):
+    for c in ("main_changed", "left_cropland", "left_farmland"):
         out[c] = out[c].astype("Int64")
     out = out.sort_values(["field_id", "year"])
     assert len(out) == len(fy) == len(fs), "field x year tables do not line up"
@@ -71,7 +73,7 @@ def build():
 DOC_NOTE = """> **In this bundle:** these notes describe our working folders. `field_season.csv` and the land-use part
 > of `field_year.csv` are merged into `data/field_year.csv`; `fields_storm.csv` is merged into
 > `data/fields.csv`; `field_event.csv` is `data/field_storm.csv`; paths like `../sandy_panel/` mean `data/`.
-> `main_class`, `main_changed`, `left_cropland`, `low_crop` and `main_sample` are defined in the top README.
+> `main_class`, `main_changed`, `left_cropland`, `left_farmland`, `low_crop` and `main_sample` are defined in the top README.
 > "FINDINGS §" points to our internal notes: ask us if you need one.
 
 """
@@ -152,6 +154,9 @@ By planting (the first cut, used in `results/`):
 - `share_corn`, `share_soybeans`, ..., `cropland`: share of the field in each crop that year.
 - `main_class`: the field's largest land use. `main_changed`: 1 if it differs from last year.
 - `left_cropland`: 1 if the field went from at least half cropland to under half, for 2+ years.
+- `left_farmland`: the same on cropland + pasture. Much less of CDL's artificial jumping, but it can
+  hide a field given up to grass. Neither is a clean exit on low ground: in a small aerial-photo check
+  (30 low fields, judged by eye), 5 of 9 fields flagged by both still looked farmed. Use both.
 
 **CDL has breaks.** USDA changed how it makes the crop map in 2024, and `left_cropland` also spikes
 in 2011, on upland too. In the main sample `left_cropland` is {100 * fy[(fy.year == 2024) & fy.field_id.isin(sample.field_id)].left_cropland.mean():.0f}% in 2024 and `main_changed` {100 * fy[(fy.year == 2024) & fy.field_id.isin(sample.field_id)].main_changed.mean():.0f}%.

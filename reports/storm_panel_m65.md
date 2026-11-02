@@ -94,6 +94,7 @@ straddling the change, so this table is the safer reading of those rows.
 | grass (hay + pasture + idle) | -3.8 [-7.0, -1.0] | -1.1 [-3.8, +1.6] |
 | main crop changed | +5.7 [+0.3, +11.9] | +0.7 [-4.8, +7.3] |
 | left cropland | +0.1 [-1.9, +2.2] | +0.7 [-2.1, +3.3] |
+| left farmland | -0.6 [-2.6, +1.2] | +0.8 [-1.3, +2.7] |
 
 Some differences grow when every field counts equally, and same-season grass and main crop changed then
 exclude zero, so the area-weighted result rests partly on a few large fields.
@@ -101,27 +102,28 @@ exclude zero, so the area-weighted result rests partly on a few large fields.
 ## Yes/no per field: did it change crop, did it leave cropland?
 
 Same comparison, with a yes/no outcome per field instead of a share: **main crop changed** (the
-field's largest land use differs from the year before) and **left cropland** (at least half
-cropland the year before, under half that year and the next). Numbers are percentage points of
+field's largest land use differs from the year before), **left cropland** (at least half
+cropland the year before, under half that year and the next) and **left farmland** (the same on
+cropland + pasture). Numbers are percentage points of
 the chance, flooded minus comparison. Outcome years from 2024 on are left out (USDA's crop-map
-change), and 2023 too for left cropland, whose flag reads the next year's map. Pooled rows use, for k = 0
+change), and 2023 too for the two left outcomes, whose flag reads the next year's map. Pooled rows use, for k = 0
 and k = 1, 6 and 5 storms (main crop changed), 5 and 4 (left cropland).
-Usual yearly rates on the flood-prone fields in quiet years: main crop changed 53%, left cropland 1%.
+Usual yearly rates on the flood-prone fields in quiet years: main crop changed 53%, left cropland 1%, left farmland 1%.
 
-| flooded by | comparison | k | main crop changed | left cropland |
-|---|---|---|---|---|
-| rain | never | 0 | +20.8 [+3.0, +35.8] | -1.1 [-3.5, +1.0] |
-| rain | never | 1 | +8.2 [-5.3, +19.7] | +0.6 [-4.4, +6.1] |
-| rain | prone-dry | 0 | +19.9 [+2.1, +35.5] | -0.7 [-2.7, +1.1] |
-| rain | prone-dry | 1 | +9.7 [-7.1, +22.7] | -2.0 [-7.1, +3.4] |
-| tide | never | 0 | +21.1 [-1.6, +38.2] | -1.4 [-4.0, +1.0] |
-| tide | never | 1 | +9.3 [-4.4, +21.0] | +0.6 [-4.5, +6.2] |
-| tide | never, incl. chronic | 0 | +18.8 [+1.2, +32.3] | +0.6 [-1.3, +2.7] |
-| tide | never, incl. chronic | 1 | +11.8 [+0.2, +21.6] | +0.8 [-3.5, +5.5] |
-| tide | prone-dry | 0 | +17.8 [-1.9, +33.9] | -1.3 [-3.7, +0.9] |
-| tide | prone-dry | 1 | +7.6 [-8.3, +20.3] | -1.4 [-5.7, +3.9] |
-| tide | prone-dry, incl. chronic | 0 | +14.7 [-1.6, +28.5] | +0.5 [-1.3, +2.3] |
-| tide | prone-dry, incl. chronic | 1 | +5.8 [-6.9, +17.5] | -1.4 [-5.7, +2.7] |
+| flooded by | comparison | k | main crop changed | left cropland | left farmland |
+|---|---|---|---|---|---|
+| rain | never | 0 | +20.8 [+3.0, +35.8] | -1.1 [-3.5, +1.0] | -0.9 [-2.9, +0.7] |
+| rain | never | 1 | +8.2 [-5.3, +19.7] | +0.6 [-4.4, +6.1] | +0.4 [-0.3, +1.2] |
+| rain | prone-dry | 0 | +19.9 [+2.1, +35.5] | -0.7 [-2.7, +1.1] | -0.7 [-2.7, +0.8] |
+| rain | prone-dry | 1 | +9.7 [-7.1, +22.7] | -2.0 [-7.1, +3.4] | -1.4 [-4.6, +0.5] |
+| tide | never | 0 | +21.1 [-1.6, +38.2] | -1.4 [-4.0, +1.0] | -1.3 [-3.6, +0.7] |
+| tide | never | 1 | +9.3 [-4.4, +21.0] | +0.6 [-4.5, +6.2] | +0.2 [-0.4, +0.9] |
+| tide | never, incl. chronic | 0 | +18.8 [+1.2, +32.3] | +0.6 [-1.3, +2.7] | +0.5 [-1.1, +2.3] |
+| tide | never, incl. chronic | 1 | +11.8 [+0.2, +21.6] | +0.8 [-3.5, +5.5] | +0.9 [+0.1, +2.2] |
+| tide | prone-dry | 0 | +17.8 [-1.9, +33.9] | -1.3 [-3.7, +0.9] | -1.3 [-3.6, +0.5] |
+| tide | prone-dry | 1 | +7.6 [-8.3, +20.3] | -1.4 [-5.7, +3.9] | -1.4 [-4.1, +0.1] |
+| tide | prone-dry, incl. chronic | 0 | +14.7 [-1.6, +28.5] | +0.5 [-1.3, +2.3] | +0.5 [-1.0, +2.4] |
+| tide | prone-dry, incl. chronic | 1 | +5.8 [-6.9, +17.5] | -1.4 [-5.7, +2.7] | -0.9 [-3.8, +1.3] |
 
 Left cropland, the outcome closest to farm exit, is -1.3 [-3.7, +0.9] the same season and -1.4 [-5.7, +3.9] the next.
 Those intervals are several times the usual yearly rate, so they say little either way.

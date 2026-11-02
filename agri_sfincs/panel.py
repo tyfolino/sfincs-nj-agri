@@ -82,7 +82,18 @@ def switched(main: pd.DataFrame) -> pd.DataFrame:
     return (main != prev).astype(float).where(prev.notna() & main.notna())
 
 
-def left_cropland(crop: pd.DataFrame, thr: float = 0.5) -> pd.DataFrame:
+#: At least this share the year before = at risk of leaving; under it for two years = left.
+LEFT_THR = 0.5
+
+
+def farmland(fy: pd.DataFrame) -> pd.Series:
+    """Cropland + CDL pasture: a field moving between crops and grass stays farmed. It removes
+    much of CDL's artificial swing but can also hide fields given up to grass (FINDINGS §57), so
+    it sits beside ``left_cropland``, not in place of it."""
+    return fy["cropland"] + fy["share_pasture"]
+
+
+def left_cropland(crop: pd.DataFrame, thr: float = LEFT_THR) -> pd.DataFrame:
     """field x year (consecutive year columns) of cropland share: 1.0 in year t when the field
     was >= thr cropland in t-1 and is < thr in both t and t+1 (out for at least two seasons),
     else 0.0; NaN where t-1, t or t+1 is missing."""

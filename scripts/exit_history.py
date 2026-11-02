@@ -9,6 +9,9 @@ Per state, from CDL 2008-2025 (agri_sfincs.cdl.field_years, pixel centre in poly
                   (the storm panel's exit, FINDINGS §37); per year, the share of the crop
                   fields at risk that leave (area weighted), and by median height above recent
                   MHHW (agri_sfincs.exposure on the side's bed, FINDINGS §21)
+  left farmland   the same on cropland + CDL pasture (agri_sfincs.panel.farmland)
+  left NLCD       the same on Annual NLCD pasture / hay + crops (agri_sfincs.annual_nlcd), a
+                  second reading with no CDL break; few exits, so a check, not a replacement
   CDL 2024        CDL's 2024 product change shows as a drop in cropland on every field
                   (FINDINGS §37): 2024 (and 2025, which has no t+1) are flagged, not dropped
 From LU/LC: the share of 2012 farm area no longer farmed at each later edition, by county.
@@ -24,13 +27,16 @@ import argparse
 import numpy as np
 import pandas as pd
 
-from agri_sfincs import cdl, config, domain, exposure, fields, landuse, panel
+from agri_sfincs import annual_nlcd, cdl, config, domain, exposure, fields, landuse, panel
 from agri_sfincs.report import md_table
 
 OUT = config.ANALYSIS_DIR / "exit_history"
 YEARS = range(2008, 2026)
 EARLY = range(2008, 2013)
 CROP_MIN = 0.5
+#: Exit column -> the share it is read from, and its label.
+MEASURES = {"left_cropland": ("cropland", "left cropland"), "left_farmland": ("farmland", "left farmland"),
+            "left_nlcd": ("nlcd_ag", "left NLCD")}  # fmt: skip
 HEIGHT_BANDS = [(-99, 1.5, "< 1.5 m"), (1.5, 3.0, "1.5-3 m"), (3.0, 999, "> 3 m")]
 FIPS = {sd.state: sd.state_fips for sd in domain.SIDES.values()}
 SIDE_OF = {sd.state: sd.key for sd in domain.SIDES.values()}
@@ -55,19 +61,24 @@ def build(state: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     crop = fy.pivot(index="field_id", columns="year", values="cropland")
     f["crop_early"] = crop[[y for y in EARLY if y in crop]].mean(axis=1)
     f["crop_field"] = f.crop_early >= CROP_MIN
-    left = panel.left_cropland(crop).stack().rename("left_cropland")
-    fy = fy.merge(left.reset_index(), on=["field_id", "year"], how="left")
+    fy["farmland"] = panel.farmland(fy)
+    fy = fy.merge(annual_nlcd.field_shares(g, YEARS, SIDE_OF[state]), on=["field_id", "year"], how="left", validate="1:1")
+    for col, (share, _) in MEASURES.items():
+        w = fy.pivot(index="field_id", columns="year", values=share)
+        # NaN unless the field was at risk: >= 50% the year before
+        left = panel.left_cropland(w).where(w.shift(1, axis=1) >= panel.LEFT_THR).stack().rename(col)
+        fy = fy.merge(left.reset_index(), on=["field_id", "year"], how="left")
     OUT.mkdir(parents=True, exist_ok=True)
     f.to_csv(OUT / f"fields_{state}.csv", float_format="%.6g")
     fy.to_csv(OUT / f"field_year_{state}.csv", index=False, float_format="%.6g")
     return f, fy
 
 
-def yearly(f: pd.DataFrame, fy: pd.DataFrame, sel=None) -> pd.Series:
-    """% of crop-field area at risk (>= 50% cropland the year before) that leaves, per year."""
+def yearly(f: pd.DataFrame, fy: pd.DataFrame, sel=None, col: str = "left_cropland") -> pd.Series:
+    """% of crop-field area at risk (>= 50% the year before, in ``col``'s share) that leaves, per year."""
     keep = f.index[f.crop_field & (True if sel is None else sel)]
-    d = fy[fy.field_id.isin(keep) & fy.left_cropland.notna()].merge(f[["ha"]], left_on="field_id", right_index=True)
-    return 100 * d.groupby("year").apply(lambda x: (x.left_cropland * x.ha).sum() / x.ha.sum(), include_groups=False)
+    d = fy[fy.field_id.isin(keep) & fy[col].notna()].merge(f[["ha"]], left_on="field_id", right_index=True)
+    return 100 * d.groupby("year").apply(lambda x: (x[col] * x.ha).sum() / x.ha.sum(), include_groups=False)
 
 
 def lulc_left(state: str, f: pd.DataFrame) -> pd.DataFrame:
@@ -93,6 +104,17 @@ def main() -> None:
         if f.m_above_mhhw.notna().any():
             for lo, hi, lab in HEIGHT_BANDS:
                 cols[f"{s} {lab}"] = yearly(f, fy, f.m_above_mhhw.between(lo, hi, inclusive="left"))
+    means = {}
+    for col, (_, lab) in MEASURES.items():
+        for s, (f, fy) in built.items():
+            r = {"all crop fields": yearly(f, fy, None, col)}
+            if f.m_above_mhhw.notna().any():
+                for lo, hi, band in HEIGHT_BANDS:
+                    r[band] = yearly(f, fy, f.m_above_mhhw.between(lo, hi, inclusive="left"), col)
+            n_exit = fy[fy.field_id.isin(f.index[f.crop_field]) & fy.year.lt(panel.CDL_CHANGE)][col].sum()
+            means[(lab, s)] = {**{k: v[v.index < panel.CDL_CHANGE].mean() for k, v in r.items()},
+                               "2011": r["all crop fields"].get(2011), "2013": r["all crop fields"].get(2013),
+                               "2024": r["all crop fields"].get(2024), "exits 2009-23": n_exit}  # fmt: skip
     t = pd.DataFrame(cols)
     t.index = [f"{y}{' (CDL change)' if y >= panel.CDL_CHANGE else ''}" for y in t.index]
     pre = pd.DataFrame(cols).loc[lambda d: d.index < panel.CDL_CHANGE]
@@ -110,6 +132,10 @@ def main() -> None:
               "2024: CDL's product change (FINDINGS §37), not only land change. 2025 has no t+1.", "",
               "## Mean exit rate 2009-2023, % per year", "", md_table(pre.mean().to_frame("mean").T.round(2),
                                                                      floatfmt="{:.2f}"), ""]  # fmt: skip
+    lines += ["## Three readings of an exit (% of area at risk per year; means are 2009-2023)", "",
+              "Left farmland keeps cropland + CDL pasture. Left NLCD reads Annual NLCD's agriculture on "
+              f"fields of at least {annual_nlcd.MIN_PX} pixels. 'exits' counts fields.", "",
+              md_table(pd.DataFrame(means).T.rename_axis(["measure", "state"]).round(2).reset_index(), floatfmt="{:.2f}"), ""]  # fmt: skip
     for s, (f, _) in built.items():
         lines += [f"## {s}: 2012 farm area no longer farmed in later LU/LC editions (all farm polygons)", "",
                   md_table(lulc_left(s, f).round(1), floatfmt="{:,.1f}"), ""]

@@ -71,6 +71,12 @@ class TestSwitchExit(unittest.TestCase):
         self.assertTrue(np.isnan(out[0]) and np.isnan(out[3]))  # no year before / missing
         self.assertEqual(out[1:3], [1.0, 0.0])
 
+    def test_farmland_keeps_a_field_moved_to_pasture(self):
+        fy = pd.DataFrame({"cropland": [0.9, 0.1, 0.1, 0.1], "share_pasture": [0.0, 0.8, 0.8, 0.8]})
+        wide = lambda v: pd.DataFrame([v.tolist()], columns=[2010, 2011, 2012, 2013])  # noqa: E731
+        self.assertEqual(panel.left_cropland(wide(fy.cropland))[2011].tolist(), [1.0])
+        self.assertEqual(panel.left_cropland(wide(panel.farmland(fy)))[2011].tolist(), [0.0])
+
     def test_left_cropland(self):
         c = pd.DataFrame([[0.9, 0.2, 0.1, 0.8], [0.9, 0.2, 0.7, 0.1]], columns=[2010, 2011, 2012, 2013])
         out = panel.left_cropland(c)
