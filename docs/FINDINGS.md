@@ -1671,7 +1671,7 @@ Tide2024oct set, m65 against v1, the same new field list:
 - **Why is not separated.** Creek beds and boundary both changed. About 960 ha moved from safe to flooding at +1 m, 499 of them as
   dike-dependent (Cumberland dike-dependent at +1 m 14 → 497 against the old report): not
   explained yet. Of the land newly dike-dependent today, 268 ha were dike-dependent at +0.3 m
-  and 150 ha exposed at +0.3 m. §29's number stays until this is understood.
+  and 150 ha exposed at +0.3 m. §29's number stays until this is understood. (Separated: §55.)
 
 Restoration, m65 (v1 in brackets), tide2024oct:
 - **Middle Neck today:** fields flooded inside 9 → 50 (6 → 47), flooded farmland 12 → 142 ha
@@ -1743,3 +1743,62 @@ river, so this is calibration, not validation. Lows stay too high: width or the 
 may be next. **Adopted (user, 2026-11-01): 4.5 m, as an effective depth** (`domain.DE_TIDAL_REACHES`):
 deeper than the 3.0 m measured at Odessa, within the reach's readings, and probably also standing
 in for width. The DE model is now `de_v2ap45_100m`.
+
+## 55. The rise from §29: mostly the bay boundary, and a large share is fields just crossing the 10% line (2026-11-02; one-off compare of the windless `tide2024oct_{intact,removed}_slr{000,100}` runs: `v1_100m`, `e3v2a30brm65_100m` `_gaugesbnd` and chain)
+
+Three windless sets on the same fields (farmed 2020): v1; m65 on v1's boundary (same file, byte for
+byte; `_gaugesbnd`, jobs 63388896-899, logs clean); m65 on the chain. Only the boundary file differs
+between the last two. "New beds" below also carries the E3 grid and the Alloway changes. The sets
+have two levels only (0, +1 m), which is enough for these classes; they reproduce §52's windless
+1,524 / 594 / 68,608 ha and v1's 1,124 / 441 / 69,625.
+
+| ha of whole fields | v1 | new beds | new beds + chain |
+|---|---:|---:|---:|
+| Dike-dependent today | 1,124 | 1,303 | 1,524 |
+| Flooded today | 441 | 466 | 594 |
+| Safe to +1 m | 69,625 | 69,436 | 68,608 |
+
+| ha actually under water | v1 | new beds | new beds + chain |
+|---|---:|---:|---:|
+| Dikes as built, today | 228 | 256 | 321 |
+| Dikes removed, today | 635 | 686 | 813 |
+| Difference (dike-dependent water) | 407 | 430 | 492 |
+| Dikes as built, +1 m | 3,969 | 4,048 | 4,258 |
+| Dikes removed, +1 m | 4,168 | 4,208 | 4,423 |
+
+- **Dike-dependent today, +400 ha:** beds +179 (all Salem), boundary +221 (Salem 140, Cumberland 63,
+  Gloucester 18). **Safe to +1 m, −1,017 ha windless (§52's ~960 is with wind):** beds −189,
+  boundary −828.
+- **Cumberland's 14 → 497 ha at +1 m (§52) is one field.** Field 213 (484 ha) goes from a flooded
+  share of 0.100 to 0.104, about 2 ha more water. The fields the boundary moved have median shares
+  around 0.05-0.07 before and 0.14-0.15 after; almost none reach half flooded.
+- **The 10% line drives the headline.** Dike-dependent today, by the share that counts as flooding
+  (v1 / new beds / chain, ha): 5%: 1,472 / 1,479 / 1,559; 10%: 1,124 / 1,303 / 1,524; 15%: 562 /
+  597 / 688; 25%: 418 / 452 / 608; 50%: 307 / 310 / 383. Flooded water rises 21% where whole-field
+  hectares rise 36%.
+- **Which boundary is closer, Oct 2024** (model − observed, m, USGS 15-min, `fetch_usgs_event.py`;
+  60 high tides per gauge; beds + gauges / beds + chain; Hancocks Bridge read from the hourly map):
+
+  | Gauge | All highs | Top 6 highs | Month's peak (obs) | Lows |
+  |---|---|---|---|---|
+  | Bivalve | −0.05 / +0.02 | −0.04 / +0.06 | −0.04 / +0.13 (1.39) | +0.20 / +0.06 |
+  | Greenwich | +0.00 / +0.02 | +0.00 / +0.03 | 0.00 / +0.06 (1.22) | +0.16 / +0.13 |
+  | Hancocks Bridge | −0.14 / −0.12 | −0.14 / −0.12 | −0.13 / −0.10 (1.17) | +0.30 / +0.27 |
+
+  The chain is better on Bivalve's ordinary highs and on lows everywhere, but it overshoots the
+  month's top tide on the Maurice and at Greenwich, and classes use the month's maximum. Hancocks
+  Bridge is still low on either boundary. One month at three gauges; the chain stays (§41, §48).
+- **Reading:** the rise is real water, mostly from a boundary that fits better overall, but its size
+  in whole-field hectares comes largely from the threshold. Report flooded hectares, with the
+  threshold range, beside any field-class number. §29's 1,124 ha is v1's and is superseded for new
+  work; the +0.3 and +0.6 m levels were not separated.
+
+## 56. Daily map output changes no result and saves 93% of the map (2026-11-02; `tide2024oct_restore_durham_mllw100_slr000_hrrr{,_dailymap}`, jobs on `e3v2a30brm65_100m`)
+
+One tide2024oct breach run repeated with `dtmapout` = 1 day instead of 1 h: `zsmax`, `tmax`, `cumprcp`
+(38 daily blocks, 628,422 cells) and every his series are bit-identical, and the map falls from 1.28 GB
+to 88 MB. Only the hourly `zs` / `Seff` snapshots go. So `setup_scenarios.py --daily-map` is safe for a
+set read through daily maxima (`fieldflood.run_stats`, `compare_restore.py`). It loses the reading of a
+gauge from a channel cell's hourly map (`waterlevel.channel_series`, Hancocks Bridge). One tide-only
+run tested, not a rain run. `--link` hard-links static inputs at staging, which `link_static_inputs`
+allows: nothing writes them once staged.

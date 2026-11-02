@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-11-01** (wind ruled out of §29's rise; storm panel corrected; Appoquinimink depth test; §52-§54).
+Last updated: **2026-11-02** (§29's rise separated into beds and boundary, §55).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -18,13 +18,10 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   by storm −0.25..+0.20 (§48).
   **Full m65 rerun done (2026-10-30, all logs clean)**: `*_hrrr` (HRRR × 1.0) from 2016, `*_era5`
   (ERA5 × 1.3, user's call; RAP / RUC tested, not adopted, §50) before. Compares in §52.
-  Storm panel + Seowoo's bundle rebuilt on it (§53; `--tag m65`). **Then §29's number:** explain
-  the rise to 1,526 ha and the ~960 ha shift at +1 m. Not wind (windless m65 1,524 ha, §52). Next:
-  separate creek beds from boundary. **Running (jobs 63388896-899, nothing has read them yet):**
-  `e3v2a30brm65_100m/runs/tide2024oct_{intact,removed}_slr{000,100}_gaugesbnd` (no wind, v1's gauge
-  boundary). When done: check logs, `link_run_inputs.py`, then compare dike-dependent today and
-  flooded at +1 m with the windless chain runs of the same names (`fieldflood.run_stats`;
-  `field_flood_classes.py` needs all four levels). Any change is the boundary's.
+  Storm panel + Seowoo's bundle rebuilt on it (§53; `--tag m65`). **§29's rise explained (§55):**
+  beds +179 ha, boundary +221 ha, and much of it is fields just crossing the 10% line. Chain stays,
+  but it overshoots Oct 2024's top tide at Bivalve (+0.13 m). Report flooded hectares and the
+  threshold range beside any field-class number.
   Bivalve's storm-peak scatter: not wind, boundary or gauge drift (§50); open. Stow / upper
   Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
 - **Step 3, Delaware: boundary fixed (§51).** DE rail (Lewes → Brandywine → Mahon → Ship
@@ -32,9 +29,9 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   (user, 2026-10-29)**: each grid fitted to its own shore; the line differs by ~0.11 m of range
   at 39.0-39.2 N; say so in the bundle notes for Seowoo. Next:
   the Appoquinimink is at 4.5 m, adopted: `de_v2ap45_100m`, Odessa 0.26 → 0.75, lows still high (§54).
-  Rain: fetched for 19 event windows over `DE_RAIN_BBOX` (`data/precip/*_de/`); wind already
-  covers DE. Next: DE storm runs on `de_v2ap45_100m`; size the set against the quota first (about
-  70 G before linking for the full set), after the boundary result.
+  **DE storm runs on `de_v2ap45_100m`:** 17 tide-only done (2026-11-02, logs clean, linked, not yet
+  checked against any gauge). Rain twins queued (stage jobs 63432921-922, `--daily-map --link`).
+  When done: check logs, then a DE gauge check of the storm peaks before the panel.
 - **Step 5, Delaware exits:** first look done without SFINCS (§44): same pattern as NJ (low
   ground ~1.5 %/yr in both). Next, after the DE boundary fix: DE storm runs → DE storm panel
   (`build_storm_panel.py` side-aware) → one bundle with a `state` column for Seowoo.
@@ -47,11 +44,12 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
    growing season = Apr-Oct. `sandy_panel` / `storm_panel` untagged are still v1.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
-3. **Per-system breach runs** (18 systems) on tide2024oct × SLR with a scoured sill (MLLW): the
-   farmland each bank protects, against repair costs ($0.75-14 M). (§27, §30) Now the dike
-   pay-off's input; run once on v2 beds with `--open`, after §29: prep done (MLLW-sill weirs and
-   `_open` twins for all 18), `setup_scenarios.py --payoff` lists 72 runs. Gibbstown has 6 outlets,
-   cut at one: read it with care. Then `link_run_inputs.py`.
+3. **Per-system breach runs** (18 systems × 4 SLR) on tide2024oct with a scoured sill (MLLW): the
+   farmland each bank protects, against repair costs ($0.75-14 M). (§27, §30) The dike pay-off's
+   input. **Running (2026-11-02):** 68 new runs, `*_restore_<system>_mllw100_slr*_hrrr`, listed in
+   `logs/py_63432268.out`; daily maps (§56), 4 older Durham / Middle Neck runs reused. When done:
+   check logs, then the farmland per system. Report flooded ha and the threshold range (§55).
+   Gibbstown has 6 outlets, cut at one: read it with care.
 4. **Wetness exposure for the conversion model** (§31): rain-event ponding per field + SSURGO
    drainage → `data/analysis/farm_units.csv`. Decide first on open-water evaporation
    (`agri_sfincs/evap.py`; −40% cropland area-days wet on Sep 2023, §17).
@@ -70,9 +68,9 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   (`scripts/export_storm_panel.py`); the user makes it a private GitHub repo.
 
 ## Operational
-- **Scratch quota (shared with nj_bight_sfincs):** 1 T soft, about 1013 G on 2026-11-01, so little
-  room. Finished runs' static inputs are hard-linked (`scripts/link_run_inputs.py`, ran on m65, v1,
-  e9); run it after each new set. Never edit a run's linked inputs in place. `e9_100m` outputs
+- **Scratch quota (shared with nj_bight_sfincs):** 1 T soft, about 1005 G on 2026-11-02 and about 15 G
+  more to come from the running sets, so little room. Finished runs' static inputs are hard-linked (`scripts/link_run_inputs.py`, ran on m65, v1,
+  e9); run it after each new set, or stage with `--link`; `--daily-map` where hourly maps are not read (§56). Never edit a run's linked inputs in place. `e9_100m` outputs
   (~18 G) go first if more room is needed.
 - **Bulk data is symlinked into /scratch/tpj8/sfincs-nj-agri/data_bulk** (bed_*.tif, nwm grid,
   ehydro, landsat, floodplain, prism, rma_states). After a purge, rebuild with the script named

@@ -43,17 +43,25 @@ creeks at 100 m (FINDINGS §40). A model built on dikes_open.weir (e9_100m and l
 ``--open``: every scenario weir file is swapped for its ``<stem>_open.weir`` twin, made with
 ``scripts/open_creek_links.py --weir <file> --out <stem>_open.weir``.
 
+Disk: ``--daily-map`` writes map snapshots daily instead of hourly (88 MB against 1.28 GB on a
+tide2024oct run; zsmax, tmax, cumprcp and the his series are bit-identical, FINDINGS §56). The hourly
+zs is gone, so use it only on a set whose reader wants daily maxima. ``--link`` hard-links each new
+run's static inputs to the model's as soon as it is staged (runs.link_static_inputs), so a set never
+needs the unlinked copies' room.
+
 Usage:  python scripts/setup_scenarios.py [--model v1_100m] [--breaches] [--restore] [--storms] [--payoff] [--submit] [--only NAME...]
-            [--boundary gauges|chain] [--open] [--wind SCALE [--wind-source era5|hrrr]]
+            [--boundary gauges|chain] [--open] [--wind SCALE [--wind-source era5|hrrr]] [--daily-map] [--link]
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import subprocess
 
 from agri_sfincs import config
-from agri_sfincs.events import EVENTS, setup_event
+from agri_sfincs.events import DAY_S, EVENTS, setup_event
+from agri_sfincs.runs import link_static_inputs
 
 SC = config.STRUCT_DIR / "scenarios"
 SLR = [0.0, 0.3, 0.6, 1.0]
@@ -139,6 +147,8 @@ def main() -> None:
     ap.add_argument("--wind", type=float, default=None, metavar="SCALE",
                     help="wind x SCALE (agri_sfincs.wind); names get _<source>")
     ap.add_argument("--wind-source", choices=("era5", "hrrr"), default="era5")  # fmt: skip
+    ap.add_argument("--daily-map", action="store_true", help="map snapshots daily, not hourly (docstring)")
+    ap.add_argument("--link", action="store_true", help="hard-link static inputs at staging (docstring)")
     a = ap.parse_args()
     static = config.MODELS / a.model
     for r in matrix(a.breaches, a.restore, a.storms, wind=a.wind_source if a.wind is not None else "", payoff=a.payoff):
@@ -150,10 +160,13 @@ def main() -> None:
                 raise SystemExit(f"{r['weir']} missing: scripts/open_creek_links.py --weir <closed file> --out {r['weir']}")
         run = static / "runs" / r["name"]
         if not run.exists():
-            setup_event(static, EVENTS[r["event"]], r["name"],
+            ev = EVENTS[r["event"]]
+            setup_event(static, dataclasses.replace(ev, dtmapout=DAY_S) if a.daily_map else ev, r["name"],
                         structures={k: r[v] for k, v in (("weirfile", "weir"), ("drnfile", "drn")) if r.get(v)} or None,
                         precip=r["precip"], wl_offset=r["slr"], boundary=a.boundary, wind_scale=a.wind,
                         wind_source=a.wind_source)  # fmt: skip
+            if a.link:
+                link_static_inputs(static, run, apply=True)
         if a.submit and not (run / "sfincs_map.nc").exists():
             out = subprocess.run(["sbatch", "-J", f"agri-{r['name'][:20]}", "hpc/sfincs_run.slurm", str(run)],
                                  capture_output=True, text=True, check=True).stdout.strip()  # fmt: skip
