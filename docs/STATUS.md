@@ -13,27 +13,16 @@ Canal to Lewes) as twin grids forced on the same mid-bay state line. Joint ag-ec
 result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-goblet.md`.
 
 ## Resume here (plan steps)
-- **Step 1, v2 beds (NJ): done** on the E3 grid; **Alloway adopted: `e3v2a30brm65_100m`**
-  (§45, §47). Storm check passed: peaks within ~0.1 m at the three creek gauges, Bivalve storm
-  by storm −0.25..+0.20 (§48).
-  **Full m65 rerun done (2026-10-30, all logs clean)**: `*_hrrr` (HRRR × 1.0) from 2016, `*_era5`
-  (ERA5 × 1.3, user's call; RAP / RUC tested, not adopted, §50) before. Compares in §52.
-  Storm panel + Seowoo's bundle rebuilt on it (§53; `--tag m65`). **§29's rise explained (§55):**
-  beds +179 ha, boundary +221 ha, and much of it is fields just crossing the 10% line. Chain stays,
-  but it overshoots Oct 2024's top tide at Bivalve (+0.13 m). Report flooded hectares and the
-  threshold range beside any field-class number.
-  Bivalve's storm-peak scatter: not wind, boundary or gauge drift (§50); open. Stow / upper
+- **Step 1, NJ model: `e3v2a30brm65_100m` adopted** (§45, §47, §48); full rerun done with wind (§50,
+  §52); storm panel on it (§53). **§29's rise explained (§55):** report flooded hectares and the
+  threshold range beside any field-class number. Open: Bivalve's storm-peak scatter (§50); Stow / upper
   Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
-- **Step 3, Delaware: boundary fixed (§51).** DE rail (Lewes → Brandywine → Mahon → Ship
-  John) + the held-out yardstick corrected: DE held-out median 1.00, Bowers 1.08. **Adopted
-  (user, 2026-10-29)**: each grid fitted to its own shore; the line differs by ~0.11 m of range
-  at 39.0-39.2 N; say so in the bundle notes for Seowoo. Next:
-  the Appoquinimink is at 4.5 m, adopted: `de_v2ap45_100m`, Odessa 0.26 → 0.75, lows still high (§54).
-  **DE storm runs on `de_v2ap45_100m`:** 17 tide-only done (2026-11-02, logs clean, linked, not yet
-  checked against any gauge). Rain twins queued (stage jobs 63432921-922, `--daily-map --link`).
-  When done: check logs, then a DE gauge check of the storm peaks before the panel.
-- **Step 5, Delaware exits:** first look done without SFINCS (§44): same pattern as NJ (low
-  ground ~1.5 %/yr in both). Next, after the DE boundary fix: DE storm runs → DE storm panel
+- **Step 3, Delaware: `de_v2ap45_100m` adopted** (§51, §54). The line differs from NJ's by ~0.11 m of
+  range at 39.0-39.2 N; say so in the bundle notes for Seowoo. **Storm runs:** 17 tide-only done
+  (logs clean, linked, no gauge check yet). Rain twins running (`*_rain_{hrrr,era5}`, listed in
+  `logs/py_63432921.out` and `py_63432922.out`; daily maps). When done: check logs, compare one rain
+  run's daily peaks against an hourly twin (§56 tested tide-only), then a DE gauge check of the storm peaks.
+- **Step 5, Delaware exits:** first look done without SFINCS (§44). Next: DE storm panel
   (`build_storm_panel.py` side-aware) → one bundle with a `state` column for Seowoo.
 
 ## Next, in order
@@ -68,10 +57,11 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   (`scripts/export_storm_panel.py`); the user makes it a private GitHub repo.
 
 ## Operational
-- **Scratch quota (shared with nj_bight_sfincs):** 1 T soft, about 1005 G on 2026-11-02 and about 15 G
-  more to come from the running sets, so little room. Finished runs' static inputs are hard-linked (`scripts/link_run_inputs.py`, ran on m65, v1,
-  e9); run it after each new set, or stage with `--link`; `--daily-map` where hourly maps are not read (§56). Never edit a run's linked inputs in place. `e9_100m` outputs
-  (~18 G) go first if more room is needed.
+- **Scratch quota (shared with nj_bight_sfincs):** 1 T soft, about 1005 G on 2026-11-02, about 15 G
+  more to come from the running sets. Stage new sets with `--link`, and `--daily-map` where hourly
+  maps are not read (§56); `scripts/link_run_inputs.py` for older runs. Never edit a run's linked
+  inputs in place. If more room is needed, first `e9_100m` outputs (~18 G), then the
+  23 superseded test models (one or two runs each, ~66 G: e2-e6, v2*, e3v2 tests, de_v0, de_v2, de_v2ap30, v1dikes, v1drained).
 - **Bulk data is symlinked into /scratch/tpj8/sfincs-nj-agri/data_bulk** (bed_*.tif, nwm grid,
   ehydro, landsat, floodplain, prism, rma_states). After a purge, rebuild with the script named
   in each one's docstring.

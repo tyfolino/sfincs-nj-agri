@@ -1,6 +1,6 @@
 """Stage (and optionally submit) the dike x sea-level scenario matrix (plan §2.4).
 
-Runs, on the v1 model (dikes as weirs, check-valve gates, burned beds), TIDE-ONLY unless noted:
+Runs, on ``--model`` (default v1_100m; dikes as weirs, check-valve gates, burned beds), TIDE-ONLY unless noted:
   tide2024oct  x {intact, removed, breach_all_farm}  x SLR {0, 0.3, 0.6, 1.0} m
                (breach_all_farm added 2026-10-06: one Sandy is too short for a 100 m gap to fill
                a polder, FINDINGS §27)

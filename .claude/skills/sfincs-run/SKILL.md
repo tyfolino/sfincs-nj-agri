@@ -19,14 +19,17 @@ The scripts' docstrings are the source of truth for flags; this is the order and
 ## 1. Stage
 - One event: `python scripts/setup_event.py --model <model> --event <event> [--name RUN] ...`
 - Scenario / storm sets: `python scripts/setup_scenarios.py --model <model> [--storms]
-  [--breaches] [--restore] [--boundary chain] [--open] [--only NAME...]`.
+  [--breaches] [--restore] [--payoff] [--boundary chain] [--open] [--only NAME...]`.
   On v2 models: `--boundary chain --open` (STATUS). A run added to an existing set must keep
   that set's boundary, or it is not comparable with its siblings.
+- Disk: `--link` hard-links static inputs at staging; `--daily-map` drops the hourly snapshots
+  (FINDINGS §56). Size a set against the quota first (`mmlsquota -u $USER --block-size auto scratch`,
+  in /usr/lpp/mmfs/bin).
 - Long staging goes through `sbatch -J agri-stage hpc/agri_py.slurm scripts/setup_scenarios.py ... --submit`
   so it survives the interactive node timing out.
 - Tide-only runs need ZEROED rain, not no rain: the engine segfaults with cnb and no rain file.
-- Rain forcing is clipped to NJ's `RAIN_BBOX`; a Delaware run needs the event window
-  refetched over the union first.
+- Delaware rain is fetched per event window over `DE_RAIN_BBOX` (`data/precip/*_de/`); a new
+  window needs its own fetch first.
 
 ## 2. Submit
 - ALWAYS `sbatch hpc/sfincs_run.slurm <run dir>` (32 threads, `main`, requeue + resume).
