@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-11-02** (§29's rise separated into beds and boundary, §55).
+Last updated: **2026-11-02** (§55-§58: §29's rise, daily maps, exit measures, satellite check; breach and DE rain runs out).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -21,22 +21,22 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   range at 39.0-39.2 N; say so in the bundle notes for Seowoo. **Storm runs:** 17 tide-only done
   (logs clean, linked, no gauge check yet). Rain twins running (`*_rain_{hrrr,era5}`, listed in
   `logs/py_63432921.out` and `py_63432922.out`; daily maps). When done: check logs, compare one rain
-  run's daily peaks against an hourly twin (§56 tested tide-only), then a DE gauge check of the storm peaks.
+  `storm2022apr_intact_slr000_rain_hrrr`'s daily peaks against `..._hourlycheck` (job 63445414; §56 tested tide-only), then a DE gauge check of the storm peaks.
 - **Step 5, Delaware exits:** first look done without SFINCS (§44). Next: DE storm panel
   (`build_storm_panel.py` side-aware) → one bundle with a `state` column for Seowoo.
 
 ## Next, in order
-0. **Storm-history land-use test:** no clear crop response to the 7 spring storms, m65 (§53, §35,
-   §37). "Not detectable", not "no effect"; the next-season cropland gap against never-flooded
-   fields is unexplained. Reviewed and corrected 2026-11-01; show the colleague and the advisor
-   (`reports/storm_panel_m65.md`, `data/analysis/storm_panel_m65/`). User: storm tides only;
-   growing season = Apr-Oct. `sandy_panel` / `storm_panel` untagged are still v1.
+0. **Storm-history land-use test:** no clear crop response by area to the 7 spring storms, m65 (§53, §57). "Not
+   detectable", not "no effect"; the next-season cropland gap is unexplained (every field once, also against prone-dry).
+   Bundle README: reviewed 2026-11-02, fixes staged, the new text needs one more `claims-reviewer` pass before it goes
+   to the colleague and the advisor. User: storm tides only; growing season = Apr-Oct.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
 3. **Per-system breach runs** (18 systems × 4 SLR) on tide2024oct with a scoured sill (MLLW): the
    farmland each bank protects, against repair costs ($0.75-14 M). (§27, §30) The dike pay-off's
    input. **Running (2026-11-02):** 68 new runs, `*_restore_<system>_mllw100_slr*_hrrr`, listed in
-   `logs/py_63432268.out`; daily maps (§56), 4 older Durham / Middle Neck runs reused. When done:
+   `logs/py_63432268.out`; daily maps (§56), 4 older Durham / Middle Neck runs reused. Four failed at launch (0:53, no log:
+   Gibbstown slr030, slr100; Jones Island Road slr060, slr100), resubmitted as 63445410 63445411 63445412 63445413. When done:
    check logs, then the farmland per system. Report flooded ha and the threshold range (§55).
    Gibbstown has 6 outlets, cut at one: read it with care.
 4. **Wetness exposure for the conversion model** (§31): rain-event ponding per field + SSURGO
