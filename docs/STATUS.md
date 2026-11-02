@@ -44,9 +44,9 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
    (`agri_sfincs/evap.py`; −40% cropland area-days wet on Sep 2023, §17).
 5. **Farm → wetland options (only if the user wants them):** set-back variants, Middle Neck at
    marsh level, roughness, Sandy with rain, Durham's lidar marsh bias.
-5a. **Flood-map check** (dataset audit, 2026-11-02): score the four Sentinel-2 scenes, Landsat on m65. Then
-   salt tests (bay position, tide vs rain, recovery). **Exit measure:** both `left_cropland` and
-   `left_farmland` kept; low-ground exits are noisy (§57). Next: ask Seowoo her definition; MOD-IV pilot.
+5a. **Flood-map check done (§58):** place partly right, extent too wide, field flags barely match satellites. **Next:
+   salt tests** (bay position, tide vs rain, recovery), using flooded share too. **Exit measure:** both flags kept;
+   noisy on low ground, and over half of flags return (§57). Ask Seowoo her definition; MOD-IV pilot.
 6. **NAIP validation of the exits**, NJ (`exit_spotcheck.py`, default tag cells_v2) and DE.
 7. **Check NLD** for levee condition / inspection fields.
 

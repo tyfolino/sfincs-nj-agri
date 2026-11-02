@@ -1821,8 +1821,13 @@ low 1.51 → 1.67, DE low 1.50 → 1.58, NJ all 0.79 → 0.82, DE all 0.49 → 0
   2024 is still high. Left NLCD loses the gradient, so it likely misses low-ground exits: a check only.
 - **Storm panel, left farmland** (flooded − comparison, pooled, 2024 on left out, `reports/storm_panel_m65.md`):
   against prone-dry, same season −1.3 [−3.6, +0.5], next −1.4 [−4.1, +0.1]; against never-flooded, −1.3
-  [−3.6, +0.7], +0.2 [−0.4, +0.9]. No sign of flooded fields leaving more; narrower than left cropland (−1.4
-  [−5.7, +3.9] next, prone-dry). These intervals share the panel's caveats (§53).
+  [−3.6, +0.7], +0.2 [−0.4, +0.9]; narrower than left cropland (−1.4 [−5.7, +3.9] next, prone-dry). **By area only:**
+  with every field counted once against never-flooded fields, next-season exits read slightly higher, left cropland +2.1
+  [+0.04, +4.2], left farmland +1.6 [+0.06, +3.2]. Barely excluding zero among many rows: weak, not a finding, and beside
+  the cropland gap. Without 2024 on, every field once, next-season cropland is also −4.4 [−7.5, −0.8] against prone-dry
+  (by area within ±1, §53), so that gap is not only against never-flooded fields. Same caveats as §53.
+- **A flag is not a stop.** Main sample, flags through 2022: 58% of `left_cropland` and 55% of `left_farmland` flags return
+  to at least half at some later year; 39% and 34% are there in 2023. Fields can be flagged twice.
 - **NAIP on low fields (< 1.5 m), exits 2010-19, area-weighted draw, IDs shuffled and verdicts saved before
   unblinding; one reader, by eye, coarse chips, one later photo:**
 
@@ -1830,6 +1835,8 @@ low 1.51 → 1.67, DE low 1.50 → 1.58, NJ all 0.79 → 0.82, DE all 0.49 → 0
   |---|---:|---:|---:|---:|---:|
   | Left cropland only (21 of 71 fields) | 8 | 4 | 2 | 6 | 1 |
   | Flagged by both (9 of 220) | 5 | 0 | 0 | 1 | 3 |
+
+  By state, flagged by both: NJ 5 farmed of 7, 1 ambiguous, 1 not farmland; DE 2 of 2 not farmland.
 
   Adding pasture mostly drops fields still in use (12 of 21), but 2-8 of 21 may be real exits it hides, so
   the concern is real: both abandoned ones are Delaware. Fields flagged by both are not clean either:
@@ -1841,3 +1848,34 @@ low 1.51 → 1.67, DE low 1.50 → 1.58, NJ all 0.79 → 0.82, DE all 0.49 → 0
 - **Reading:** keep both in the bundle and report results on both. A CDL exit on low ground is a noisy
   signal, which matters for any flood → exit regression. A better exit measure needs an independent
   source (MOD-IV is the candidate) or a larger photo sample.
+
+## 58. Satellite water on m65: place partly right, extent too wide, and little field-by-field agreement (2026-11-02; `reports/storm_landsat_e3v2a30brm65_100m_wind.md`, `scripts/validate_storm_landsat.py --wind`, `agri_sfincs/sentinel2.py`)
+
+§39's check rerun on the panel's wind runs, now reading the model's own subgrid ground (it read v1's before, on any
+`--model`), with four Sentinel-2 scenes never used here. New water on field interiors, MNDWI > 0, against a pre-storm scene.
+
+| Low fields (< 1.5 m), tide only | observed ha | model ha, overpass | found | confirmed | fields seen / modelled / both (all fields, 10%) |
+|---|---:|---:|---:|---:|---|
+| Apr 2011, Landsat, +13 h | 41 | 226 | 59% | 11% | 129 / 139 / 24 |
+| Jan 2024, S2, +14 h | 40 | 283 | 44% | 6% | 234 / 209 / 16 |
+| Mar 2024, S2, +14 h | 13 | 71 | 20% | 4% | 123 / 68 / 4 |
+| Aug 2025, S2, +14 h | 1.4 | 56 | 60% | 1% | 34 / 34 / 1 |
+| Jun 2023, S2, +13 h | 0.3 | 36 | 33% | 0% | 25 / 20 / 0 |
+| Jun 2023, Landsat, +1.5 d | 11 | 51 | 11% | 2% | 13 / 44 / 0 |
+| Jun 2012, Landsat, +1.5 d | 0 | 3 | n/a | 0% | 2 / 2 / 0 |
+
+At the run's peak, found rises (Apr 2011 78%, Jan 2024 54%, Mar 2024 60%) but those footprints are larger still (confirmed 3-4%).
+- **Cool-season scenes carry the information; summer ones do not** (canopy): Aug 2025 sees none of 238 pixels the model has
+  ≥ 0.6 m deep, and in June 2023 S2 the MNDWI change is negative at every depth.
+- **Place:** in April 2011 the share of pixels seen as water climbs with model depth, 0.5% dry to 22% at ≥ 0.6 m. January 2024
+  rises from 0.6% to about 5-7% and then flattens; March 2024 is weak and not monotone.
+- **Extent:** satellites confirm 11% at most of the model's overpass water, about §39's 13%. No better on m65, on one comparable storm.
+- **Fields:** at the 10% line the flagged sets barely overlap (16 of 234 seen in January 2024). Adding rain helps only a little (32 of
+  234, with 341 modelled).
+- **What this does not say:** MNDWI sees open water only, misses water under crops or stubble and water already drained, can read
+  saturated bare soil as water, and observed water may be rain or standing water from other causes. 13-14 h after the peak is ~1-2 h past
+  the next, lower, high tide. Thin water in a 30 m pixel may not read as water. So these are not error rates for the panel's peak flag, and
+  no misclassification rate can be set from them. The March 2024 scene covers only the southern tiles.
+- **Reading:** do not read the field flags as observed floods. The flooded / not-flooded contrast is likely noisy, so a null is weak.
+  Field-level noise of this size is a reason to report continuous `tide_share` and to prefer larger, deeper flooding.
+

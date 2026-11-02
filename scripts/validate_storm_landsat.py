@@ -7,6 +7,10 @@ water already there (ponds, wet winter ground) is not scored.
   storm2011apr  2011-04-17 (Landsat 7, ~13 h after the peak, near the next high tide)  ref 2011-03-08
   storm2012jun  2012-06-06 (Landsat 7, ~1.5 days after)                                  ref 2012-04-19
   storm2023jun  2023-06-05 (Landsat 9, ~1.5 days after)                                  ref 2023-05-26
+Sentinel-2 (2026-11-02; agri_sfincs.sentinel2, read on the same 30 m grid), each ~13-14 h after the
+peak, so ~1-2 h after the next high tide:
+  storm2023jun  2023-06-04  ref 2023-06-01    storm2024jan  2024-01-10  ref 2024-01-05
+  storm2024spr  2024-03-10  ref 2024-02-29    storm2025aug  2025-08-22  ref 2025-08-04
 
 Observed water (30 m Landsat pixel): clear (QA bits 0-5 unset) and MNDWI > MNDWI_WATER. Scored
 pixels: inside a farm field (sandy_panel/fields.gpkg, the LU/LC 2012 farm polygons, inset
@@ -29,8 +33,10 @@ the model puts water where there is none.
 
 Writes reports/storm_landsat.md and reports/figs/storm_landsat_<storm>.png (the N_ZOOM
 TILE_M tiles holding the most observed or model water on low fields); with ``--model`` other
-than runs.MODEL, storm_landsat_<model>.md and figs/storm_landsat_<storm>_<model>.png.
-Usage:  python scripts/validate_storm_landsat.py [--model v1_100m]
+than runs.MODEL, storm_landsat_<model>.md and figs/storm_landsat_<storm>_<model>.png. ``--wind``
+scores the storm panel's wind runs (events.wind_suffix); names get ``_wind``. A Sentinel-2 case's storm
+reads "<storm> S2" in the tables and "<storm>_s2" in file names.
+Usage:  python scripts/validate_storm_landsat.py [--model v1_100m] [--wind]
 """
 
 from __future__ import annotations
@@ -50,15 +56,20 @@ from matplotlib.colors import ListedColormap  # noqa: E402
 from rasterio.features import rasterize  # noqa: E402
 from rasterio.transform import from_origin  # noqa: E402
 
-from agri_sfincs import config, domain, runs  # noqa: E402
+from agri_sfincs import config, domain, runs, sentinel2  # noqa: E402
 from agri_sfincs import landsat as ls  # noqa: E402
 from agri_sfincs import landsat_stac as stac  # noqa: E402
+from agri_sfincs.events import wind_suffix  # noqa: E402
 from agri_sfincs.report import md_table  # noqa: E402
 
 SANDY = config.ANALYSIS_DIR / "sandy_panel"
-CASES = [("storm2011apr", "2011-04-17", "2011-03-08"),
-         ("storm2012jun", "2012-06-06", "2012-04-19"),
-         ("storm2023jun", "2023-06-05", "2023-05-26")]  # fmt: skip
+CASES = [("storm2011apr", "2011-04-17", "2011-03-08", "L"),
+         ("storm2012jun", "2012-06-06", "2012-04-19", "L"),
+         ("storm2023jun", "2023-06-05", "2023-05-26", "L"),
+         ("storm2023jun", "2023-06-04", "2023-06-01", "S2"),
+         ("storm2024jan", "2024-01-10", "2024-01-05", "S2"),
+         ("storm2024spr", "2024-03-10", "2024-02-29", "S2"),
+         ("storm2025aug", "2025-08-22", "2025-08-04", "S2")]  # fmt: skip
 INSET_M, RES = 15.0, 30.0
 MNDWI_WATER = 0.0
 SHARE, MIN_PX = 0.10, 3
@@ -89,9 +100,19 @@ def water(items, tr, shape):
     return ok, ok & (mndwi > MNDWI_WATER), mndwi
 
 
-def field_pixels(fields: gpd.GeoDataFrame):
+def scene(sensor: str, day: str, bbox_ll, tr, shape):
+    """(items, clear, water, mndwi) of one day's scenes on the grid."""
+    if sensor == "L":
+        it = stac.items_on(day, bbox_ll)
+        return (it, *water(it, tr, shape))
+    it = sentinel2.items_on(day, bbox_ll)
+    ok, mndwi = sentinel2.water(it, tr, shape, CRS)
+    return it, ok, ok & (mndwi > MNDWI_WATER), mndwi
+
+
+def field_pixels(fields: gpd.GeoDataFrame, model: str):
     """10 m subgrid pixels inside the inset fields: x, y, ground z, field_id."""
-    with rasterio.open(runs.subgrid_dep()) as d:
+    with rasterio.open(runs.subgrid_dep(model)) as d:
         dep, tr, shape = d.read(1, masked=True).filled(np.nan), d.transform, d.shape
     inset = fields.geometry.buffer(-INSET_M)
     keep = ~inset.is_empty
@@ -171,7 +192,7 @@ def figure(storm, day, tr, shape, lpx, obs, mod, tiles, tag) -> None:
     handles = [plt.Rectangle((0, 0), 1, 1, color=c) for c in (BLUE, AQUA, ORANGE, GREY)]
     fig.legend(handles, ["water in both", "water seen by Landsat only", "water in the model only",
                          "dry in both"], fontsize=8, frameon=False, loc="lower center", ncol=4)  # fmt: skip
-    fig.suptitle(f"{storm}: Landsat {day} vs the model (tide only) at the overpass hour, farm-field interiors "
+    fig.suptitle(f"{storm}: satellite scene {day} vs the model (tide only) at the overpass hour, farm-field interiors "
                  f"clear in both scenes, 30 m pixels ({TILE_M / 1000:.0f} km tiles with the most water)",
                  fontsize=9, color=INK)  # fmt: skip
     fig.tight_layout(rect=(0, 0.06, 1, 0.95))
@@ -184,11 +205,12 @@ def figure(storm, day, tr, shape, lpx, obs, mod, tiles, tag) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--model", default=runs.MODEL)
+    ap.add_argument("--wind", action="store_true", help="the storm panel's wind runs")
     a = ap.parse_args()
-    tag = "" if a.model == runs.MODEL else f"_{a.model}"
+    tag = ("" if a.model == runs.MODEL else f"_{a.model}") + ("_wind" if a.wind else "")
     attrs = pd.read_csv(SANDY / "fields.csv").set_index("field_id")
     fields = gpd.read_file(SANDY / "fields.gpkg")[["field_id", "geometry"]].to_crs(CRS)
-    x, y, z, fid = field_pixels(fields)
+    x, y, z, fid = field_pixels(fields, a.model)
     tr, shape = landsat_grid(fields.total_bounds)
     col = np.floor((x - tr.c) / RES).astype(np.int64)
     row = np.floor((tr.f - y) / RES).astype(np.int64)
@@ -204,16 +226,16 @@ def main() -> None:
     inside = face >= 0
     low = attrs.m_above_mhhw < 1.5
     rows, frows, drows = [], [], []
-    for storm, day, ref in CASES:
-        it, rf = stac.items_on(day, bbox_ll), stac.items_on(ref, bbox_ll)
+    for event, day, ref, sensor in CASES:
+        storm = event if sensor == "L" else f"{event} S2"
+        it, clear_s, water_s, mndwi_s = scene(sensor, day, bbox_ll, tr, shape)
+        _, clear_r, water_r, mndwi_r = scene(sensor, ref, bbox_ll, tr, shape)
         when = pd.Timestamp(it[0]["properties"]["datetime"]).tz_convert(None)
-        clear_s, water_s, mndwi_s = water(it, tr, shape)
-        clear_r, water_r, mndwi_r = water(rf, tr, shape)
         scored = (clear_s & clear_r & ~water_r).ravel()[lpx] & (to_landsat(lp10, inside, n)[lpx] == 1)
         obs = water_s.ravel()[lpx]
         mods = {}
         for run_name, sfx in (("tide", ""), ("tide + rain", "_rain")):
-            run = runs.run_dir(storm, "intact", 0, suffix=sfx, model=a.model)
+            run = runs.run_dir(event, "intact", 0, suffix=sfx + (wind_suffix(event) if a.wind else ""), model=a.model)
             for t_name, t in (("overpass", when), ("peak", None)):
                 h = np.zeros(len(z))
                 h[inside] = model_depth(run, t, face[inside], z[inside])
@@ -243,18 +265,20 @@ def main() -> None:
         hot = scored & lowpx & (obs | mods["tide, overpass"])
         if hot.any():
             tiles = zoom_tiles(tr, shape, lpx, hot)
-            figure(storm, day, tr, shape, lpx[scored], obs[scored], mods["tide, overpass"][scored], tiles, tag)
+            figure(storm.replace(" S2", "_s2"), day, tr, shape, lpx[scored], obs[scored], mods["tide, overpass"][scored], tiles, tag)
         print(storm, when, f"scored {scored.sum() * 0.09:.0f} ha", flush=True)
     d, f, dep = pd.DataFrame(rows), pd.DataFrame(frows), pd.concat(drows, ignore_index=True)
     print(md_table(d, floatfmt="{:,.2f}"))
     print(md_table(f))
     print(md_table(dep))
-    figs = "\n".join(f"![](figs/storm_landsat_{s}{tag}.png)" for s, _, _ in CASES
+    names = [c[0] if c[3] == "L" else f"{c[0]}_s2" for c in CASES]
+    figs = "\n".join(f"![](figs/storm_landsat_{s}{tag}.png)" for s in names
                      if (config.REPORTS / "figs" / f"storm_landsat_{s}{tag}.png").exists())
     md = f"""# Spring storm tides: does Landsat see the water the model puts on the fields? ({a.model})
 
-Generated by `scripts/validate_storm_landsat.py --model {a.model}` (method in its docstring). Three storms have
-a clear Landsat scene within about a day and a half of the peak. Water = MNDWI > {MNDWI_WATER}
+Generated by `scripts/validate_storm_landsat.py --model {a.model}{" --wind" if a.wind else ""}` (method in its docstring). Three storms have
+a clear Landsat scene within about a day and a half of the peak; four more have a Sentinel-2 scene ("S2"),
+13-14 h after it. Water = MNDWI > {MNDWI_WATER}
 on farm-field interiors clear in both the storm scene and a pre-storm reference, and not water
 in the reference. "found" = share of the water Landsat sees that the model also has;
 "confirmed" = share of the model's water that Landsat sees. Model water at the overpass hour is
@@ -283,6 +307,7 @@ calls water; "MNDWI rise" = mean MNDWI change from the reference scene (wetter =
 
 - MNDWI sees open water. Water under a crop canopy or in dense stubble is missed, so "found"
   and "confirmed" are lower bounds where fields are vegetated (June more than April).
+- Sentinel-2 scenes 2024-01-10 and 2024-03-10 are partly cloudy or cover only the southern tiles.
 - Landsat 7 (2011, 2012) has stripes of missing data; those pixels are not scored.
 - The scene is hours to a day and a half after the peak; water that drained is gone, water
   that ponds behind banks stays. The model's drainage after the peak is not validated (§16).

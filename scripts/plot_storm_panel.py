@@ -169,8 +169,10 @@ def sensitivity(f, y, sp, spring, quiet) -> pd.DataFrame:
             for o in y:
                 add("every field once", comp, k, o, pooled(equal, y, sp, spring, quiet, o, comp, k), np.nan)
     o = "cropland"
-    add("before change, every field once", "never", 1, o, pooled(equal, y, sp, spring, before, o, "never", 1, CDL_CHANGE),
-        sum(1 for t in spring if t + 1 < CDL_CHANGE))  # fmt: skip
+    for comp in ("prone-dry", "never"):
+        for k in (0, 1):
+            add("before change, every field once", comp, k, o, pooled(equal, y, sp, spring, before, o, comp, k, CDL_CHANGE),
+                sum(1 for t in spring if t + k < CDL_CHANGE))  # fmt: skip
     kept = [t for t in spring if t + 1 < CDL_CHANGE]
     for drop in kept:
         rest = {t: n for t, n in spring.items() if t != drop}
@@ -312,7 +314,7 @@ def report(r: pd.DataFrame, f: pd.DataFrame, prone: pd.Series, spring: dict, qui
     nc = sens[(sens.comparison == "never") & (sens.k == 1) & (sens.outcome == "cropland")].set_index("check").v
     drops = [c for c in nc.index if "without" in c]
     wo = "; ".join(f"without {c.rsplit(' ', 1)[1]}, {nc[c]}" for c in drops)
-    n_before = int(sens[sens.check == "before change, every field once"].storms.iloc[0])
+    n_before = int(sens[(sens.check == "before change, every field once") & (sens.comparison == "never") & (sens.k == 1)].storms.iloc[0])
     eff = in_pool[(in_pool.k == 0) & (in_pool.outcome == "corn")]
     eff_nv = r[(r.storm != "all") & (r["flooded by"] == "tide") & (r.comparison == "never") & (r.k == 0) & (r.outcome == "corn")]
     n_tides = pd.read_csv(SANDY / "field_event.csv").groupby(["event", "peak"]).ngroups
@@ -330,6 +332,10 @@ def report(r: pd.DataFrame, f: pd.DataFrame, prone: pd.Series, spring: dict, qui
                   & (r.outcome == "cropland")].iloc[0]  # fmt: skip
     left = r[(r.storm == "all") & (r["flooded by"] == "tide") & (r.comparison == "prone-dry") & (r.outcome == "left cropland")]
     left = {int(x.k): f"{x.pp:+.1f} [{x.lo:+.1f}, {x.hi:+.1f}]" for x in left.itertuples()}
+    lf = r[(r.storm == "all") & (r["flooded by"] == "tide") & (r.comparison == "prone-dry") & (r.outcome == "left farmland")]
+    left_f = {int(x.k): f"{x.pp:+.1f} [{x.lo:+.1f}, {x.hi:+.1f}]" for x in lf.itertuples()}
+    nv_eq = sens[(sens.check == "every field once") & (sens.comparison == "never") & (sens.k == 1)].set_index("outcome")
+    eq_nv = {o: f"{nv_eq.pp[o]:+.1f} [{nv_eq.lo[o]:+.2f}, {nv_eq.hi[o]:+.1f}]" for o in ("left cropland", "left farmland")}
     next_storm = sum(1 for t in spring if t + 1 in spring)
     base = ", ".join(f"{e} {r:.0f}%" for e, r in rates.items())
     md = f"""# Storm panel: crop mix in the season a spring storm tide floods a field
@@ -411,8 +417,11 @@ Usual yearly rates on the flood-prone fields in quiet years: {base}.
 
 {md_table(t3)}
 
-Left cropland, the outcome closest to farm exit, is {left[0]} the same season and {left[1]} the next.
-Those intervals are several times the usual yearly rate, so they say little either way.
+Left cropland is {left[0]} the same season and {left[1]} the next; left farmland {left_f[0]} and {left_f[1]}, by area against
+flood-prone comparison fields. Neither flag means the field stopped farming (over half of flags come back). With every field
+counted once, next-season exits against never-flooded fields read slightly higher: left cropland {eq_nv["left cropland"]}, left
+farmland {eq_nv["left farmland"]} (`sensitivity.csv`). Among many rows, two barely excluding zero is weak evidence, but they sit
+beside the next-season cropland gap. Not a finding.
 
 ## The chronic fields over time
 

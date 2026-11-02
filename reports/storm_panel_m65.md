@@ -125,8 +125,11 @@ Usual yearly rates on the flood-prone fields in quiet years: main crop changed 5
 | tide | prone-dry, incl. chronic | 0 | +14.7 [-1.6, +28.5] | +0.5 [-1.3, +2.3] | +0.5 [-1.0, +2.4] |
 | tide | prone-dry, incl. chronic | 1 | +5.8 [-6.9, +17.5] | -1.4 [-5.7, +2.7] | -0.9 [-3.8, +1.3] |
 
-Left cropland, the outcome closest to farm exit, is -1.3 [-3.7, +0.9] the same season and -1.4 [-5.7, +3.9] the next.
-Those intervals are several times the usual yearly rate, so they say little either way.
+Left cropland is -1.3 [-3.7, +0.9] the same season and -1.4 [-5.7, +3.9] the next; left farmland -1.3 [-3.6, +0.5] and -1.4 [-4.1, +0.1], by area against
+flood-prone comparison fields. Neither flag means the field stopped farming (over half of flags come back). With every field
+counted once, next-season exits against never-flooded fields read slightly higher: left cropland +2.1 [+0.04, +4.2], left
+farmland +1.6 [+0.06, +3.2] (`sensitivity.csv`). Among many rows, two barely excluding zero is weak evidence, but they sit
+beside the next-season cropland gap. Not a finding.
 
 ## The chronic fields over time
 
