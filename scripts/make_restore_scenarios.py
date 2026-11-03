@@ -29,13 +29,19 @@ seaward land and protect its farms behind a new inner dike.
 
 Writes data/structures/scenarios/restore/* and restore/sites.csv.
 
+``--joint`` (2026-11-03): systems that act as one (FINDINGS §59: opening Locust Island floods
+Silver Lake's fields and back) opened together, from their own files: the weir = the vertex-wise
+lowest crest of the members' <slug>_mllw100.weir, the gates = those every member's _nogate.drn
+keeps. Writes restore/<slug1>_<slug2>_mllw100.weir, _nogate.drn and restore/sites_joint.csv
+(members ";"-joined). Needs its ``_open`` twin too.
+
 ``--all-farm`` (the dike pay-off, FINDINGS §27, §30): the same outlet cut, 100 m, plus the no-gate
 file, for every other farm system; SITES and the set-back are left as they are. A system with
 several outlets (Gibbstown) is cut at the first and loses all its valves. Writes
 restore/sites_all_farm.csv. Each new weir still needs its ``_open`` twin
 (scripts/open_creek_links.py).
 
-Usage:  python scripts/make_restore_scenarios.py [--all-farm]
+Usage:  python scripts/make_restore_scenarios.py [--all-farm | --joint]
 """
 
 from __future__ import annotations
@@ -60,6 +66,25 @@ GATES_DRN = STRUCT / "dike_gates_lo.drn"  # what the v1 runs use
 SETBACK_SITES = ["Middle Neck"]
 SETBACK_BUF_M, SETBACK_SIMPLIFY_M, SETBACK_CREST_M = 50.0, 30.0, 2.0
 GATE_SEARCH_M, GATE_C = 150.0, 1.5  # GATE_C as dike_gates_lo
+JOINT = [("Locust Island", "Silver Lake")]
+
+
+def joint(members) -> dict:
+    """Write the members' joint <slugs>_mllw100.weir and _nogate.drn (docstring); its sites_joint.csv row."""
+    slugs = [dikes.slug(m) for m in members]
+    ws = [dikes.read_weir(OUT / f"{s}_mllw100.weir") for s in slugs]
+    if any([ln[0] for ln in w] != [ln[0] for ln in ws[0]] for w in ws):
+        raise RuntimeError(f"{members}: weir files differ in their polylines")
+    lines = [(name, x, y, np.minimum.reduce([w[i][3] for w in ws])) for i, (name, x, y, _) in enumerate(ws[0])]
+    sl = "_".join(slugs)
+    dikes.write_weir(OUT / f"{sl}_mllw100.weir", lines)
+    drns = [(OUT / f"{s}_nogate.drn").read_text().splitlines() for s in slugs]
+    keep = [ln for ln in drns[0] if all(ln in d for d in drns[1:])]
+    (OUT / f"{sl}_nogate.drn").write_text("\n".join(keep) + "\n")
+    n0 = len(GATES_DRN.read_text().splitlines())
+    print(f"{' + '.join(members)}: {sum((a != b).any() for a, b in zip((ln[3] for ln in lines), (ln[3] for ln in dikes.read_weir(STRUCT / 'dikes.weir'))))} "
+          f"polylines lowered, {n0 - len(keep)} gate(s) removed")  # fmt: skip
+    return {"system": " + ".join(members), "slug": sl, "arm": "mllw100", "members": ";".join(members)}
 
 
 def mllw_stations() -> pd.DataFrame:
@@ -167,8 +192,14 @@ def cut_outlet(system, lines, sysof, gates, drn, st, widths=WIDTHS_M) -> list[di
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--all-farm", action="store_true", help="every other farm system instead of SITES (docstring)")
+    ap.add_argument("--joint", action="store_true", help="the JOINT systems opened together (docstring)")
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
+    if a.joint:
+        t = pd.DataFrame([joint(m) for m in JOINT])
+        t.to_csv(OUT / "sites_joint.csv", index=False)
+        print(t.to_string(index=False))
+        return
     lines = dikes.read_weir(STRUCT / "dikes.weir")
     cp = gpd.read_file(STRUCT / "dikes_built.gpkg", layer="crest_points")
     sysof = cp.drop_duplicates("name").set_index("name")["system"]

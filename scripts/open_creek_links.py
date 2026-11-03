@@ -8,8 +8,12 @@ drops every weir segment that crosses a link along a tidal centreline
 agri_sfincs.dikes.drop_crossings). On a uniform 100 m grid both cells of such a link hold the
 channel, so no bank between channel and field is lost that the grid could represent.
 
+The links come from the map grid of ``--grid`` (a run, runs.resolve). Every ``_open`` weir so far
+was made on the 100 m v1 grid; the default, v1's identical repeat run, is that grid (2026-11-03:
+the v1 tide2024oct_intact_slr000 used before was deleted). m65's map grid is 25 m and drops nothing.
+
 Writes data/structures/dikes_open.weir (from dikes.weir) and prints what it removed.
-Usage:  python scripts/open_creek_links.py [--weir data/structures/dikes.weir] [--out ...] [--model v1_100m]
+Usage:  python scripts/open_creek_links.py [--weir data/structures/dikes.weir] [--out ...] [--grid v1_100m/tide2024oct_intact_slr000_rep]
 """
 
 from __future__ import annotations
@@ -27,9 +31,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--weir", default=str(config.STRUCT_DIR / "dikes.weir"))
     ap.add_argument("--out", default=str(config.STRUCT_DIR / "dikes_open.weir"))
-    ap.add_argument("--model", default=runs.MODEL)
+    ap.add_argument("--grid", default="v1_100m/tide2024oct_intact_slr000_rep", help="run whose map grid sets the links")
     a = ap.parse_args()
-    with xr.open_dataset(runs.run_dir("tide2024oct", "intact", 0, model=a.model) / "sfincs_map.nc") as mp:
+    with xr.open_dataset(runs.resolve(a.grid) / "sfincs_map.nc") as mp:
         grid = runs.MapGrid.from_map(mp)
     c = gpd.read_file(config.ELEV_DIR / "riverbed_centrelines.gpkg")
     links = []

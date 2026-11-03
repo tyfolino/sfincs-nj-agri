@@ -20,7 +20,15 @@ Runs are read from ``--model`` (default runs.MODEL, v1_100m), names ending in ``
 
 Writes reports/restore_phase1.md and reports/figs/restore_dlevel_<site>.png; with --model or
 --suffix, restore_phase1_<model><suffix>.md and restore_dlevel_<site>_<model><suffix>.png.
-Usage:  python scripts/compare_restore.py [--model e3v2a30brm65_100m] [--suffix _hrrr]
+
+``--payoff`` (the dike pay-off, FINDINGS §27, §30): instead, every farm system of
+setup_scenarios.py --payoff (SITES + restore/sites_all_farm.csv) re-opened at its outlet
+(restore_mllw100) on tide2024oct x SLR {0, 0.3, 0.6, 1.0}, against the intact twin at the same
+SLR; joint systems (restore/sites_joint.csv) on their members' leveed areas together. Per system x SLR: farm fields inside the leveed area, flooded ha in them (water > 5 cm at
+least once) as built -> opened, and whole-field ha counted flooded at a flooded share of
+fieldflood.SHARE with the range over SHARES (§55); the same flooded ha on neighbour fields
+(RING_KM). Writes reports/restore_payoff_<model><suffix>.md and data/analysis/restore_payoff_<model><suffix>.csv.
+Usage:  python scripts/compare_restore.py [--model e3v2a30brm65_100m] [--suffix _hrrr] [--payoff]
 """
 
 from __future__ import annotations
@@ -47,6 +55,20 @@ from agri_sfincs.report import md_table  # noqa: E402
 SITES = {"middle_neck": "Middle Neck", "durham": "Durham"}
 RING_KM = 3.0
 THRESH = runs.THRESH
+PAYOFF_SLR = (0, 30, 60, 100)
+SHARES = (0.05, 0.10, 0.25, 0.50)  # flooded-share lines for the threshold range (FINDINGS §55)
+
+
+def payoff_sites() -> dict[str, tuple[str, list[str]]]:
+    """slug -> (label, NLD system names) for every system of setup_scenarios.py --payoff,
+    joint ones (make_restore_scenarios.py --joint) last."""
+    R = config.STRUCT_DIR / "scenarios" / "restore"
+    extra = pd.read_csv(R / "sites_all_farm.csv")
+    out = {sl: (sy, [sy]) for sl, sy in [*SITES.items(), *zip(extra.slug, extra.system)]}
+    if (R / "sites_joint.csv").exists():
+        j = pd.read_csv(R / "sites_joint.csv")
+        out |= {sl: (sy, m.split(";")) for sl, sy, m in zip(j.slug, j.system, j.members)}
+    return out
 
 
 def cell_levels(run, event: str, grid: runs.MapGrid) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -86,10 +108,66 @@ class Pixels:
                              "always_wet_ha": b((wet >= ks.size).astype(float)) * self.px_ha})  # fmt: skip
 
 
+def field_ha(s: pd.DataFrame, share: float) -> float:
+    """ha of the whole fields in ``s`` (Pixels.stats rows) with a flooded share >= ``share``."""
+    return float(s.ha[s.flooded_ha / s.ha >= share].sum())
+
+
+def payoff(model, suffix, out_tag, lines, dep, tr, shape, grid, lev, allf) -> None:
+    """The --payoff report (docstring)."""
+    rows = []
+    for slug, (system, members) in payoff_sites().items():
+        L = lev[lev.SYSTEM_NAME.isin(members)]
+        Lu = L.union_all()
+        ring = L.buffer(RING_KM * 1000).union_all().difference(Lu)
+        inn = allf[allf.representative_point().within(Lu)].reset_index(drop=True)
+        nb = allf[allf.representative_point().within(ring)].reset_index(drop=True)
+        pxi, px = Pixels(L, inn, tr, shape, dep, grid), Pixels(L, nb, tr, shape, dep, grid)
+        for slr in PAYOFF_SLR:
+            run = runs.run_dir("tide2024oct", f"restore_{slug}_mllw100", slr, suffix, model=model)
+            twin = runs.run_dir("tide2024oct", "intact", slr, suffix, model=model)
+            if not (runs.finished(run) and runs.finished(twin)):
+                continue
+            # unit 1 from px: in pxi the inside fields overwrite the leveed area
+            s0, s1 = px.stats(twin, "tide2024oct"), px.stats(run, "tide2024oct")
+            n0, n1 = s0.iloc[1:], s1.iloc[1:]
+            f0, f1 = pxi.stats(twin, "tide2024oct").iloc[1:], pxi.stats(run, "tide2024oct").iloc[1:]
+            d = {sh: field_ha(f1, sh) - field_ha(f0, sh) for sh in SHARES}
+            rows.append({"system": system, "slr_cm": slr, "leveed ha": s0.ha.iloc[0],
+                         "fields": len(inn), "field ha": f0.ha.sum(),
+                         "leveed flooded ha, built": s0.flooded_ha.iloc[0], "opened": s1.flooded_ha.iloc[0],
+                         "field flooded ha, built": f0.flooded_ha.sum(), "field flooded ha, opened": f1.flooded_ha.sum(),
+                         "Δ field flooded ha": f1.flooded_ha.sum() - f0.flooded_ha.sum(),
+                         f"Δ whole-field ha @{fieldflood.SHARE:.0%}": d[fieldflood.SHARE],
+                         **{f"Δ whole-field ha @{sh:.0%}": d[sh] for sh in SHARES if sh != fieldflood.SHARE},
+                         "Δ nbr field flooded ha": n1.flooded_ha.sum() - n0.flooded_ha.sum()})  # fmt: skip
+    df = pd.DataFrame(rows)
+    df.to_csv(config.ANALYSIS_DIR / f"restore_payoff{out_tag}.csv", index=False)
+    show = df.copy()
+    lo, hi = show.filter(like="Δ whole-field ha @").min(axis=1), show.filter(like="Δ whole-field ha @").max(axis=1)
+    k = f"Δ whole-field ha @{fieldflood.SHARE:.0%}"
+    show[f"Δ whole-field ha, {fieldflood.SHARE:.0%} line ({SHARES[0]:.0%}-{SHARES[-1]:.0%} range)"] = [f"{v:+,.0f} ({a:+,.0f} to {b:+,.0f})" for v, a, b in zip(show[k], lo, hi)]
+    show = show.drop(columns=[c for c in show if c.startswith("Δ whole-field ha @")])
+    text = "\n".join(["# Dike pay-off: farmland behind each bank, re-opened to the tide (tide2024oct x SLR)", "",
+                      "Generated by `scripts/compare_restore.py --payoff` (method in its docstring). Each farm "
+                      "system's outlet re-opened 100 m to local MLLW, gate removed, every other bank as built; "
+                      f"compared with the intact run at the same SLR. Runs: `{model}`, names ending `{suffix or '(none)'}`. "
+                      "Fields: farmed 2020 (`field_flood_classes.gpkg`), inside = representative point in the "
+                      f"NLD leveed area; neighbours within {RING_KM:g} km outside it. Flooded = water > "
+                      f"{100 * THRESH:.0f} cm at least once in the focus days. Gibbstown has several outlets and "
+                      "is cut at one (it loses all its valves). Table: `data/analysis/restore_payoff"
+                      f"{out_tag}.csv`.", "", *lines,
+                      "## Per system and sea-level rise (as built -> opened)", "",
+                      md_table(show.set_index(["system", "slr_cm"]), floatfmt="{:,.0f}") if rows else "(no runs finished)", ""])  # fmt: skip
+    (config.REPORTS / f"restore_payoff{out_tag}.md").write_text(text + "\n")
+    print(text)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--model", default=runs.MODEL)
     ap.add_argument("--suffix", default="", help="run-name ending, e.g. _hrrr")
+    ap.add_argument("--payoff", action="store_true", help="every farm system x SLR (docstring)")
     a_ = ap.parse_args()
     model, suffix = a_.model, a_.suffix
     out_tag = "" if model == runs.MODEL and not suffix else f"_{model}{suffix}"
@@ -120,6 +198,9 @@ def main() -> None:
                   f"month max {noise['month max']:.4f} m.", ""]  # fmt: skip
     else:
         lines += ["## Noise floor: the repeat run has not finished.", ""]
+    if a_.payoff:
+        payoff(model, suffix, out_tag, lines, dep, tr, shape, grid, lev, allf)
+        return
 
     rows, lvl = [], []
     for slug, system in SITES.items():

@@ -1799,8 +1799,9 @@ One tide2024oct breach run repeated with `dtmapout` = 1 day instead of 1 h: `zsm
 (38 daily blocks, 628,422 cells) and every his series are bit-identical, and the map falls from 1.28 GB
 to 88 MB. Only the hourly `zs` / `Seff` snapshots go. So `setup_scenarios.py --daily-map` is safe for a
 set read through daily maxima (`fieldflood.run_stats`, `compare_restore.py`). It loses the reading of a
-gauge from a channel cell's hourly map (`waterlevel.channel_series`, Hancocks Bridge). One tide-only
-run tested, not a rain run. `--link` hard-links static inputs at staging, which `link_static_inputs`
+gauge from a channel cell's hourly map (`waterlevel.channel_series`, Hancocks Bridge). Also holds for
+a rain run (2026-11-03; `de_v2ap45_100m` `storm2022apr_intact_slr000_rain_hrrr` vs `..._hourlycheck`):
+`zsmax`, `tmax`, `cumprcp` (22 blocks) and every his series bit-identical, map 913 → 116 MB. `--link` hard-links static inputs at staging, which `link_static_inputs`
 allows: nothing writes them once staged.
 
 ## 57. Counting pasture as farmland: fewer false exits, but neither CDL measure is a clean exit on low ground (2026-11-02; `reports/exit_history.md`, `scripts/pasture_exit_spotcheck.py`, `reports/figs/pasture_exit_*.png`, `data/imagery/pasture_exit_{key,verdicts}.csv`)
@@ -1879,3 +1880,53 @@ At the run's peak, found rises (Apr 2011 78%, Jan 2024 54%, Mar 2024 60%) but th
 - **Reading:** do not read the field flags as observed floods. The flooded / not-flooded contrast is likely noisy, so a null is weak.
   Field-level noise of this size is a reason to report continuous `tide_share` and to prefer larger, deeper flooding.
 
+
+## 59. Dike pay-off, per system: the banks keep ~290 ha of water off farm fields today and at +0.3 m, ~80 ha by +0.6 m (2026-11-03; `reports/restore_payoff_e3v2a30brm65_100m_hrrr.md`, `data/analysis/restore_payoff_e3v2a30brm65_100m_hrrr.csv`, `scripts/compare_restore.py --payoff`)
+
+72 runs on m65 with HRRR wind, `tide2024oct_restore_<system>_mllw100_slr{000,030,060,100}_hrrr` (staged by job 63432268,
+daily maps; 4 launch failures resubmitted, 63445410-413). All 72 end `finished: True`, with both outputs and no NaN lines.
+Ten were preempted and resumed (close to, not bit-identical with, a straight run, §18); the straight repeat
+`_rep_hrrr` differs by exactly 0. Each run opens ONE farm system's outlet 100 m wide to local MLLW and removes its gate;
+every other bank stays as built. It is compared with the intact run at the same SLR. 18 systems, 1,762 ha of 2020 farm
+fields inside their NLD leveed areas.
+
+| SLR | water on the 18 systems' fields, as built (ha) | the same, each opened alone (summed) | kept off by the banks |
+|---|---:|---:|---:|
+| today | 37 | 322 | 285 |
+| +0.3 m | 270 | 563 | 293 |
+| +0.6 m | 872 | 956 | 84 |
+| +1.0 m | 1,317 | 1,340 | 23 |
+
+- **The banks pay off today and at +0.3 m; by +0.6 m most are already overtopped.** Opening the outlet then changes little,
+  because the as-built system floods anyway (§27's turning point, now system by system). Exceptions: Sheppard
+  Davis (crest 2.2-2.8 m) keeps 2 / 18 ha off at +0.6 / +1.0 m, Sayres Neck 13 ha at +0.6 m.
+- **Concentrated:** today Middle Neck alone is 131 ha (46%), then Hancocks Bridge Poplar 44, Silver Lake 24, Gibbstown 22,
+  Locust Island 19, Lighthouse 16, Sea Breeze Road 11, County Hwy 623 8. The rest are ≤ 5 ha. Richard Wood (53 of 57 ha
+  flooded as built), Back Neck, Sayres Neck, Sheppard Davis, Durham and Lower Alloways Creek: about nothing today.
+- **Locust Island and Silver Lake are one hydraulic system.** Opening Locust Island puts 51 ha more water on Silver Lake's
+  fields at +0.3 m (37 ha more on unleveed fields a median 0.5 km away); opening Silver Lake puts 19 ha on Locust Island's.
+  For the pay-off, count the pair together. Elsewhere the change on fields outside the bank is ≤ 15 ha, mostly < 10, so §30's
+  "outside the bank nothing measurable changes" holds there only roughly; it is not zero.
+- **Whole-field counts swing with the 10% line (§55):** Middle Neck today +422 ha at 10%, +111 at 50%; Jones Island Road +4 at
+  10%, +122 at 5%; Henby Creek 0 at 10%, +41 at 50%. Report the flooded ha, with the whole-field range beside it.
+- **Not yet a pay-off in dollars:** the only repair costs found are a range for the Cumberland bayshore ($0.75-14 M, §21's
+  literature), not per bank. Gibbstown (2,242 ha, mostly not farmed, 766 ha wet as built) has six outlets and is cut at one,
+  losing all its valves. One month of tides, no rain, no storm; the scoured MLLW sill is the worst case of a failure (§30).
+
+## 60. Dike repair costs: a public figure for 5 of the 18 systems, mostly gates; no per-bank cost to divide by (2026-11-03; `reports/dike_repair_costs.md`, web search by a background agent)
+
+- **Per system, only 5 of 18 have any figure, and most are for gates.** Middle Neck: Salem County's emergency repair
+  of the four sluice gates under Sinnickson's Landing Road, 2018-19, **$630,100** in total (Res. 2018-286, 2018-342,
+  2018-360, 2019-282; the 2018-286 and 2019-282 scans were checked by hand). Gibbstown: $12.5 M (listed 2013) for
+  the Repaupo gate plus 3,400 ft of levee. Mill Creek (Union Bank): > $500,000 for two gates plus levee repair (about 2009).
+  Silver Lake + Locust Island: $350,000 for the whole 1957 federal plan (12,400 ft of dike plus gates). 13 systems: none found.
+- **The 2010 NRCS *South Jersey Levee Inventory*** that the 2013 Cumberland plan cites was found (Wayback copy). It
+  gives bank lengths for most systems and gate upkeep costs, few repair costs.
+- **Proxies for scaling (the report's reading, not a published band):** a bank rebuild or raise costs about
+  $300-1,000 per foot locally. The Army Corps national guide (2023) gives $34-520/ft for a 5 ft levee, and local figures
+  sit at or above its top. A breach repair costs about $1,900 per foot of breach (Matt's Landing 2013). A gate costs
+  $15-50 k for a small farm flap gate, about $150 k each for a county sluice emergency repair (Middle Neck), and
+  $0.7-1.8 M for a full sluice rebuild.
+- **Against §59:** today Middle Neck's bank keeps about 131 ha of water off its 701 ha of fields in the tide month,
+  and its gates cost $630 k to repair once. That is one data point, not a pay-off rate: no upkeep history, no bank cost,
+  one month of tides.
