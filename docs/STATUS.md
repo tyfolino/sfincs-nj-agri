@@ -41,7 +41,8 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 5. **Farm → wetland options (only if the user wants them):** set-back variants, Middle Neck at
    marsh level, roughness, Sandy with rain, Durham's lidar marsh bias.
 5a. **Flood-map check done (§58):** place partly right, extent too wide, field flags barely match satellites. **Next:
-   salt tests:** done, NJ (§62) and pooled NJ + DE (§64): no salt signature. Open: why flooded DE fields keep MORE cropland than DE prone-dry (§64). **Exit measure:** both flags kept;
+   salt tests:** done, NJ (§62) and pooled NJ + DE (§64): no salt signature. Open: why flooded DE fields keep MORE cropland than DE prone-dry (§64);
+   rerun without the DE fields beside Bowers / Slaughter Beach only after the DE lower-bay storm peaks are fixed (user, 2026-11-04). **Exit measure:** both flags kept;
    noisy on low ground, and over half of flags return (§57). Ask Seowoo her definition; MOD-IV pilot.
 6. **NAIP validation of the exits**, NJ (`exit_spotcheck.py`, default tag cells_v2) and DE.
 7. **Check NLD** for levee condition / inspection fields.

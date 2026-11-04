@@ -2027,6 +2027,11 @@ area; the NJ rows equal §62. Both builds hold the same 18 storm tides, 7 spring
   zero; clean storms k = 1: +7.4 [+2.0, +12.3]). Unexplained. DE's prone-dry group is small and unusual (90% of DE
   main-sample fields flood in some storm, and the DE flood counts are probably high, §63), so this is a comparison-group
   question before it is a crop one.
+- **DE's model error sits in its saltier band.** Storm peaks run +0.2-0.3 m at Bowers (~27 km) and Slaughter Beach
+  (~10-20 km), both in the lower band, and are about right at Odessa (~83 km, upper) (§61, §63). Wrongly flooded fields
+  in the lower band would pull its contrasts toward zero; if they also differ from truly flooded ones (higher, better
+  drained, steadier cropland), they could make the DE-alone pattern above. Weak evidence either way; untested: rerun
+  without the DE fields on the creeks next to those two gauges.
 - **Tide vs rain-only, dose, recovery:** no pattern pooled; DE rain-only cells are few and noisy (e.g. next-season
   soybeans −23*). Rain flags up the Murderkill are likely too wet (§63).
 - Same limits as §62: a pattern here could be consistent with salt, never proof; a null says little (§58).
