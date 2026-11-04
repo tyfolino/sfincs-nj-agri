@@ -98,6 +98,13 @@ DOC_NOTE = """> **In this bundle:** these notes describe our working folders. `f
 > "FINDINGS §" points to our internal notes: ask us if you need one.
 
 """
+#: Added to DOC_NOTE when Delaware is stacked (claims review 2026-11-04).
+STACK_NOTE = """> **Two states:** `fields_README.md` and `storm_panel_README.md` describe the NJ rows, the `_DE` files the
+> Delaware rows; the counts in each are that state's. **Join on `field_key`** (or `state` + `field_id`): `field_id`
+> repeats across states, so where these notes say "join on `field_id`", read `field_key`. Paths under `data/analysis/`
+> are our working folders, not in this bundle.
+
+"""
 
 
 def readme(f: pd.DataFrame, fy: pd.DataFrame, fe: pd.DataFrame, est: pd.DataFrame, sens: pd.DataFrame) -> str:
@@ -150,8 +157,9 @@ grown on it (USDA Cropland Data Layer, CDL). Public data plus our model runs.
 |---|---|
 | `data/field_year.csv` | field x year ({len(fy):,} rows): flooding + crops. **Start here.** |
 | `data/fields.csv` | field ({len(f):,}): county, size, height, soils, sample flags. `fields.gpkg` = polygons |
-| `data/field_storm.csv` | field x storm tide it wets (no row = no modelled water over 5 cm in either run; key `event` + `peak`): flooded share and depth, the peak's date, month and season |
+| `data/field_storm.csv` | field x storm tide it wets (no row = no modelled water over 5 cm in either run; a share of 0 with a depth is a share under 0.00005, rounded; key `event` + `peak`): flooded share and depth, the peak's date, month and season |
 | `results/` | what we found so far (descriptive, no regression yet) |
+| `code/` | the scripts that made `results/`, for reference |
 | `docs/` | column definitions; the flood and land-use columns of the tables above |
 
 Join on `field_id` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`).
@@ -293,6 +301,9 @@ def with_delaware(text: str, f_nj: pd.DataFrame, fy_nj: pd.DataFrame, fe_nj: pd.
     main_nj = f_nj[f_nj.main_sample == 1]
     prone_nj = int((main_nj.n_storms_tide > 0).sum())
     hi, hi_nj = f[f.m_above_mhhw >= panel.MAX_H], f_nj[f_nj.m_above_mhhw >= panel.MAX_H]
+    back_any, back_end = back_rate(fy, main.field_id)
+    back_last = back_rate(fy, main.field_id, int(fy.year.max()))[0]
+    y24 = fy[(fy.year == 2024) & fy.field_id.isin(main.field_id)]
     section = f"""## Delaware
 
 The same tables for Delaware's bay-draining side, the C&D Canal to Lewes (New Castle, Kent and Sussex), stacked under
@@ -304,9 +315,15 @@ above and `docs/` (`fields_README_DE.md`, `storm_panel_README_DE.md`).
 - {len(f):,} fields (median {f.ha.median():.1f} ha against NJ's {f_nj.ha.median():.1f}); `main_sample = 1`: {len(main):,}, of which {len(prone_m):,}
   ({len(prone_m) / len(main):.0%}; {prone_m.ha.sum() / main.ha.sum():.0%} of the area) flood in at least one of the {n_tides} modelled storm tides at the
   10% line, against {prone_nj / len(main_nj):.0%} in NJ. Only {len(main) - len(prone_m)} Delaware main-sample fields never flood, so there is almost no
-  never-flooded comparison group. Of the {len(hi):,} fields at {panel.MAX_H} m or higher, {int((hi.n_storms_tide > 0).sum())} flood on a storm tide alone (NJ: {int((hi_nj.n_storms_tide > 0).sum())} of {len(hi_nj):,}).
+  never-flooded comparison group, and the 10 largest main-sample fields hold {main.ha.nlargest(10).sum() / main.ha.sum():.0%} of its area (NJ:
+  {main_nj.ha.nlargest(10).sum() / main_nj.ha.sum():.0%}), so area-weighted Delaware results rest on about 10 fields. Of the {len(hi):,} fields at {panel.MAX_H} m or higher, {int((hi.n_storms_tide > 0).sum())} flood on a storm tide alone (NJ: {int((hi_nj.n_storms_tide > 0).sum())} of {len(hi_nj):,}).
   `low_crop` fields wet on ordinary high tides (`chronic = 1`): {chronic}. With the model errors below, the Delaware flood counts
-  are probably too high.
+  are probably too high near the lower-bay creek mouths; up the Leipsic, where most of the fields wet on ordinary high
+  tides lie, the model's tide is unchecked (its tide station does not sit on a model channel cell), and up Blackbird
+  Creek the direction of any error is unknown.
+- **Exit flags in Delaware's main sample** (the NJ figures are in the key columns above): of `left_cropland` flags through
+  2022, {back_any:.0f}% come back to at least half cropland by 2023 ({back_last:.0f}% by {fy.year.max()}), and {back_end:.0f}% are there in 2023.
+  In 2024 (CDL's change) `left_cropland` is {100 * y24.left_cropland.mean():.0f}% and `main_changed` {100 * y24.main_changed.mean():.0f}%.
 - Same storm tides, same flood rule, same wind data as NJ, on Delaware's own model (`de_v2ap45o_100m`).
 - **Delaware's banks are different from NJ's dikes.** They are traced from a wetland map's diked / impounded outlines
   (much of each outline is marsh, not bank), and no tide gates or other water-control structures are modelled. Every
@@ -319,28 +336,33 @@ above and `docs/` (`fields_README_DE.md`, `storm_panel_README_DE.md`).
   water on fields). Over 8 calm days in May 2023, the modelled tide range at Woodland Beach and the Murderkill and
   Mispillion entrances is 0.99-1.06 of NOAA's published range, at St. Georges (canal) 1.21, and up Blackbird Creek
   (Taylors Bridge) 0.32. Three of the four creek gauges (Odessa, Bowers, Slaughter Beach) were used to tune the model;
-  only Frederica (upper Murderkill) is a fresh check. Over 7-13 storms per gauge, high tides are about right (within 0.07 m
-  on average), but low tides sit about 0.35-0.4 m too high at Odessa (Appoquinimink), Frederica and Slaughter Beach
+  only Frederica (upper Murderkill) is a fresh check. Over 7-14 storms per gauge, high tides are about right (within 0.07 m
+  on average; the highest five of each storm window, the ones that reach fields, +0.13 m at Bowers and +0.11 m at
+  Slaughter Beach), but low tides sit about 0.35-0.4 m too high at Odessa (Appoquinimink), Frederica and Slaughter Beach
   (Cedar Creek); only Bowers, at the Murderkill's mouth, is right. So in the model water may drain off fields up those
   creeks too slowly. In Irene (2011) and Sandy (2012), the with-rain run's highest water at Frederica is 0.7-0.8 m above
   the gauge's highest reading, so the with-rain columns (`grow_rain`, `spring_rain`, `off_rain`, `sandy_rain_*`) up the
   Murderkill are likely too wet. Storm peaks: about right at Odessa and Frederica (+0.03 and -0.07 m on average), but
   0.2-0.3 m too high at Bowers and Slaughter Beach near the lower-bay mouths. On the 7 recent storms with NJ records,
-  NJ's creek gauges average -0.09 to +0.11 m against +0.23 / +0.17 m at Bowers / Slaughter Beach. So the model may
+  NJ's creek gauges average -0.09 to +0.11 m against +0.22 / +0.17 m at Bowers / Slaughter Beach. So the model may
   over-flood low Delaware fields near the lower bay in storms.
 - As in NJ, the model moves surface water only: no salt, groundwater or crop response, so "flooded" does not mean salt
   damage, and it records the peak depth, not how long water stays. Do not read the field flags as observed floods.
-- **No estimates for Delaware yet:** `results/` and every number outside this section are NJ only.
+- **No Delaware estimates in this bundle:** `results/` is NJ only. A first internal look found flooded Delaware fields keeping *more*
+  cropland than the comparison fields (fields that flood in other storms but not this one); unexplained, probably the
+  comparison group (90% of main-sample fields flood, and the flood counts are probably high). Ask us before reading
+  Delaware contrasts.
 """
     for a, b in (("## Which fields to use", "## Which fields to use (NJ; Delaware at the end)"),
-                 ("## Key columns (`field_year.csv`)", "## Key columns (`field_year.csv`; definitions for both states, numbers NJ only)"),
+                 ("## Key columns (`field_year.csv`)", "## Key columns (`field_year.csv`; definitions and the storm list for both states, other numbers NJ only)"),
                  ("## What we found", "## What we found (NJ only)"),
                  (f"field x year ({len(fy_nj):,} rows)", f"field x year ({len(fy_nj) + len(fy):,} rows: NJ {len(fy_nj):,} + DE {len(fy):,})"),
                  (f"| field ({len(f_nj):,}):", f"| field ({len(f_nj) + len(f):,}: NJ {len(f_nj):,} + DE {len(f):,}):"),
                  ("| field x storm tide it wets (", f"| field x storm tide it wets ({len(fe_nj) + len(fe):,} rows: NJ {len(fe_nj):,} + DE {len(fe):,}; "),
                  ("Join on `field_id` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`).",
                   "Join on `field_key` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`). Every table starts with\n"
-                  "`state` (`NJ` / `DE`). Column definitions hold for both states; every number outside the Delaware section is NJ only."),
+                  "`state` (`NJ` / `DE`). Column definitions, the storm-tide cutoff and the storm list hold for both states;\n"
+                  "the aerial-photo check spans both; every other number outside the Delaware section is NJ only."),
                  ("grown on it (USDA Cropland Data Layer, CDL). Public data plus our model runs.",
                   "grown on it (USDA Cropland Data Layer, CDL). Public data plus our model runs. Delaware's bay side is stacked\n"
                   "under it: see Delaware, at the end."),):
@@ -380,8 +402,9 @@ def main() -> None:
         de = build(de_sandy, de_storm)
         tables = {k: stack(v, d) for (k, v), d in zip(tables.items(), de)}
         gpkg = stack(gpkg, gpd.read_file(de_sandy / "fields.gpkg"))
-        (out / "docs/fields_README_DE.md").write_text(DOC_NOTE + (de_sandy / "README.md").read_text())
-        (out / "docs/storm_panel_README_DE.md").write_text(DOC_NOTE + (de_storm / "README.md").read_text())
+        note = DOC_NOTE + STACK_NOTE
+        (out / "docs/fields_README_DE.md").write_text(note + (de_sandy / "README.md").read_text())
+        (out / "docs/storm_panel_README_DE.md").write_text(note + (de_storm / "README.md").read_text().replace(" (once all 18 are in)", ""))
     for k, v in tables.items():
         v.to_csv(out / f"data/{k}.csv", index=False)
     gpd.GeoDataFrame(gpkg, geometry="geometry").to_file(out / "data/fields.gpkg", driver="GPKG")
@@ -392,7 +415,8 @@ def main() -> None:
     shutil.copy2(config.ROOT / "scripts/plot_storm_panel.py", out / "code/plot_storm_panel.py")
     shutil.copy2(config.ROOT / "agri_sfincs/panel.py", out / "code/panel.py")
     for src, name in ((SANDY, "fields"), (STORM, "storm_panel")):
-        (out / f"docs/{name}_README.md").write_text(DOC_NOTE + (src / "README.md").read_text().replace(" (once all 18 are in)", ""))
+        (out / f"docs/{name}_README.md").write_text(DOC_NOTE + (STACK_NOTE if de is not None else "")
+                                                    + (src / "README.md").read_text().replace(" (once all 18 are in)", ""))
     shutil.copy2(STORM / "sensitivity.csv", out / "results/storm_panel_sensitivity.csv")
     text = readme(f, fy, fe, pd.read_csv(STORM / "estimates.csv"), pd.read_csv(STORM / "sensitivity.csv"))
     if de is not None:

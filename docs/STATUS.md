@@ -23,14 +23,16 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 - **Step 5, Delaware exits:** first look done without SFINCS (§44). DE storm panel code done (`build_sandy_panel.py
   --state DE`, `build_storm_panel.py --state DE`, `export_storm_panel.py --de-tag de`: stacked, `state` + `field_key`);
   built on `de_v2ap45o_100m` as tag `deo` and exported stacked (`--tag m65 --de-tag deo`, 2026-11-04);
-  `claims-reviewer` pass on the stacked bundle running, then it can go to the colleague and the advisor.
+  two `claims-reviewer` passes done and fixed (2026-11-04): **ready to go to the colleague and the advisor** once committed.
 
 ## Next, in order
 0. **Storm-history land-use test:** no clear crop response by area to the 7 spring storms, m65 (§53, §57). "Not
    detectable", not "no effect"; the next-season cropland gap is unexplained (every field once, also against prone-dry).
    Bundle README: see Step 5. User: storm tides only; growing season = Apr-Oct.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
-2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
+2. **Plan checks:** mass balance; where station peaks rise by more than the SLR; **do the NJ NLD dike weirs seal their
+   leveed areas at the ends?** (nj_bight_sfincs, 2026-11-04: none of theirs did without hand tie-ins; if ours leak round
+   the ends, §59's pay-off is overstated; check `dikes.weir` end gaps against `structures.gpkg` leveed areas).
 3. **Dike pay-off, per system: farmland done (§59,** `compare_restore.py --payoff`): the banks keep ~300 ha
    of water off fields today and at +0.3 m, ~90 ha at +0.6 m; Middle Neck is 43% of it. Locust Island + Silver Lake,
    opened together, is the second-largest system (59 ha today). Costs (§60): 5 of 18 systems have a figure, mostly gates;

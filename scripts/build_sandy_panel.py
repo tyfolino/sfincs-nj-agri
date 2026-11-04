@@ -233,6 +233,11 @@ def _shift(fy: pd.DataFrame, f: pd.DataFrame) -> str:
     cols = ["cropland", "share_developed", "share_idle", "share_pasture"]
     m = w[cols].mul(w.n_cdl_px, axis=0).groupby(w.year).sum().div(w.groupby("year").n_cdl_px.sum(), axis=0)
     p = lambda c, y: f"{100 * m.loc[y, c]:.0f}" if y in m.index else "?"  # noqa: E731
+    if STATE == "DE":  # claims review 2026-11-04: NJ's idle / developed wording does not fit Delaware's series
+        mid = m.loc[[y for y in range(2017, 2024) if y in m.index], "share_idle"] * 100
+        return (f"cropland {p('cropland', 2023)}% in 2023 vs {p('cropland', 2024)}% in 2024; idle {p('share_idle', 2016)}% "
+                f"in 2016, {mid.min():.1f}-{mid.max():.1f}% in 2017-23, {p('share_idle', 2024)}% in 2024; pasture "
+                f"{p('share_pasture', 2012)}% in 2012, {p('share_pasture', 2013)}% in 2013")  # fmt: skip
     return (f"cropland {p('cropland', 2023)}% in 2023 vs {p('cropland', 2024)}% in 2024; developed "
             f"{p('share_developed', 2023)}% vs {p('share_developed', 2024)}%; idle {p('share_idle', 2011)}% "
             f"in 2011 but {p('share_idle', 2016)}% from 2016; pasture {p('share_pasture', 2012)}% in 2012, "
