@@ -49,13 +49,7 @@ from agri_sfincs.report import md_table  # noqa: E402
 
 SANDY, STORM = config.ANALYSIS_DIR / "sandy_panel", config.ANALYSIS_DIR / "storm_panel"
 TAG = ""  # --tag, with its leading "_"
-OUTCOMES = {
-    "corn": ["share_corn"],
-    "soybeans": ["share_soybeans"],
-    "cropland": ["cropland"],
-    "grass (hay + pasture + idle)": ["share_hay", "share_pasture", "share_idle"],
-}
-EVENTS = ["main crop changed", "left cropland", "left farmland"]
+OUTCOMES, EVENTS = panel.OUTCOMES, panel.EVENTS
 CLASSES, CDL_CHANGE = panel.CLASSES, panel.CDL_CHANGE
 QUIET_WINDOW = panel.QUIET_WINDOW
 N_BOOT = 500
@@ -64,33 +58,8 @@ INK, MUTED = "#222222", "#6b6b6b"
 
 
 def load(keep_chronic: bool = False):
-    f = pd.read_csv(SANDY / "fields.csv").set_index("field_id")
-    fy = pd.read_csv(SANDY / "field_year.csv")
-    fs = pd.read_csv(STORM / "field_season.csv")
-    fl = pd.read_csv(STORM / "fields_storm.csv").set_index("field_id")
-    keep = panel.low_crop_fields(f, fy)
-    if not keep_chronic:
-        keep &= fl.chronic.reindex(f.index) == 0
-    f = f[keep].join(fl)
-    years = sorted(fy.year.unique())
-    y = {k: sum(fy.pivot(index="field_id", columns="year", values=c) for c in cols).reindex(index=f.index, columns=years)
-         for k, cols in OUTCOMES.items()}  # fmt: skip
-    main = fy.assign(main=fy[CLASSES].idxmax(axis=1)).pivot(index="field_id", columns="year", values="main")
-    main = main.reindex(index=f.index, columns=years)
-    late = [t for t in years if t >= CDL_CHANGE]
-    y["main crop changed"] = panel.switched(main)
-    y["left cropland"] = panel.left_cropland(y["cropland"])
-    pasture = fy.pivot(index="field_id", columns="year", values="share_pasture").reindex(index=f.index, columns=years)
-    y["left farmland"] = panel.left_cropland(y["cropland"] + pasture)
-    for e in EVENTS:
-        y[e][late] = np.nan
-    for e in ("left cropland", "left farmland"):
-        y[e][CDL_CHANGE - 1] = np.nan  # its flag reads the next year's map
-    yr = fs.groupby("year").agg(storm=("spring_storm", "first"), off=("off_tide", "max"))
-    quiet = [t for t in years if not isinstance(yr.storm[t], str) and yr.off[t] == 0]
-    spring = {t: s for t, s in yr.storm.items() if isinstance(s, str)}
-    sp = {k: fs.pivot(index="field_id", columns="year", values=f"spring_{k}").reindex(f.index) for k in ("tide", "rain")}
-    return f, y, sp, spring, quiet
+    """agri_sfincs.panel.load on this build's folders."""
+    return panel.load(SANDY, STORM, keep_chronic)
 
 
 def compare(f, y, sp, spring, quiet, kinds=("tide", "rain"), comps=("prone-dry", "never")) -> pd.DataFrame:

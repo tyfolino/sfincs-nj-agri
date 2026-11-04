@@ -23,8 +23,24 @@ runs.MODEL, storm_gauges_<model>.md and figs/storm_gauges_<model>.png.
 ``--storms`` scores a subset (e.g. the spring three with a Hancocks Bridge record,
 storm2022apr storm2023jun storm2024spr); by default, every storm the model has a tide-only run
 of. ``--suffix _hrrr`` (or ``_era5``) scores the wind runs (setup_scenarios.py --wind), with or without rain
-twins; the report name gets the suffix.
-Usage:  python scripts/validate_storm_gauges.py [--model v1_100m] [--storms storm2022apr ...] [--suffix _hrrr]
+twins; the report name gets the suffix. ``--spinup 24`` leaves the first day of each run out
+of the high / low scores (the runs start dry, zsini = -1 m, and the first flood overshoots: up to
++1.6 m at Bowers on DE, the scores' worst outlier; default 0 keeps NJ's reports as they were).
+``--wind`` scores each storm's own wind run
+(events.wind_suffix: ``_era5`` before HRRR's start, 2014-07, ``_hrrr`` after), for a model whose
+storm runs mix the two; names get ``_wind``.
+
+Delaware (a model built with ``--side de``, runs.model_side; 2026-11-04): the DE tidal gauges
+with a NAVD88 record, DE_GAUGES: Odessa (Appoquinimink, 01483158, from 2020-03), Bowers
+(Murderkill, 01484085, gage height from 2011-10, on NAVD88: its USGS gauge datum is 0.0 ft
+NAVD88, levelled), Frederica (Murderkill, 01484080, from 2007-10) and Cedar Creek near
+Slaughter Beach (01484235, from 2017-06). Odessa, Bowers and Slaughter Beach are the tide
+calibration's gauges (check_creek_tides.py, FINDINGS §51, §54); Frederica is held out. Not
+scored: St Jones at Lebanon / near Magnolia (gage height on a datum read from a DEM, +-1.6 ft;
+2023-25 only) and the non-tidal stream gauges. The storm peak is still timed at Ship John
+(Side.ref_gauge). By default every storm of ALL_STORMS the model has a run of (NJ keeps STORMS,
+so its reports stay as they were). Observations: fetch_usgs_event.py --event <storm> --side de.
+Usage:  python scripts/validate_storm_gauges.py [--model v1_100m] [--storms storm2022apr ...] [--suffix _hrrr | --wind] [--spinup 24]
 """
 
 from __future__ import annotations
@@ -40,27 +56,41 @@ import pandas as pd  # noqa: E402
 import xarray as xr  # noqa: E402
 
 from agri_sfincs import config, domain, runs, waterlevel  # noqa: E402
-from agri_sfincs.events import EVENTS  # noqa: E402
+from agri_sfincs.events import EVENTS, wind_suffix  # noqa: E402
 from agri_sfincs.report import md_table  # noqa: E402
 
 STORMS = ["storm2010mar", "storm2011apr", "storm2012jun", "storm2014apr", "storm2022apr", "storm2023jun", "storm2024spr",
           "storm2011aug", "storm2018oct", "storm2020aug", "storm2024jan", "storm2025aug"]
+#: the rest of the storm tides with runs (setup_scenarios.py STORMS and storm2018sep): scored by
+#: default on DE only, so NJ's default set, and its reports, stay as they were.
+ALL_STORMS = STORMS + ["sandy2012", "storm2012dec", "storm2016jan", "storm2018sep", "storm2021oct"]
 GAUGES = {"01412150": "Bivalve (Maurice)", "01413038": "Greenwich (Cohansey)", "01483050": "Hancocks Bridge (Alloway)"}
+#: Delaware's tidal gauges on NAVD88, north to south: site -> (name, USGS parameter)
+DE_GAUGES = {"01483158": ("Odessa (Appoquinimink)", "62620"), "01484085": ("Bowers (Murderkill)", "00065"),
+             "01484080": ("Frederica (Murderkill)", "62620"), "01484235": ("Slaughter Beach (Cedar Cr.)", "62620")}  # fmt: skip
 BLUE, ORANGE, INK, MUTED = "#2a78d6", "#eb6834", "#222222", "#6b6b6b"
 
 
-def score(storm: str, sj: pd.Series, model: str, suffix: str = "") -> tuple[pd.DataFrame, dict]:
+def gauges(side: str = "nj") -> dict[str, tuple[str, str]]:
+    """The side's scored gauges: site -> (name, USGS parameter)."""
+    return DE_GAUGES if side == "de" else {s: (n, "72279") for s, n in GAUGES.items()}
+
+
+def score(storm: str, sj: pd.Series, model: str, suffix: str = "", side: str = "nj",
+          spinup_h: float = 0) -> tuple[pd.DataFrame, dict]:
     ev = EVENTS[storm]
     peak_t = sj[ev.tstart : ev.tstop].idxmax()
     rd = {k: runs.run_dir(storm, "intact", 0, suffix=s + suffix, model=model) for k, s in (("tide", ""), ("rain", "_rain"))}
     has_rain = (rd["rain"] / "sfincs_his.nc").exists()
     rows, series = [], {}
-    for site, name in GAUGES.items():
-        o = waterlevel.usgs_event_series(storm, site)
+    for site, (name, param) in gauges(side).items():
+        o = waterlevel.usgs_event_series(storm, site, param)
         if o is None:
             continue
-        mt, src = waterlevel.gauge_series(rd["tide"], f"usgs_{site}")
-        mr = waterlevel.gauge_series(rd["rain"], f"usgs_{site}")[0] if has_rain else None
+        if spinup_h:
+            o = o[pd.Timestamp(ev.tstart) + pd.Timedelta(hours=spinup_h) :]
+        mt, src = waterlevel.gauge_series(rd["tide"], f"usgs_{site}", side)
+        mr = waterlevel.gauge_series(rd["rain"], f"usgs_{site}", side)[0] if has_rain else None
         series[name] = (o, mt, mr)
         r = {"storm": storm, "gauge": name, "series": src}
         hi = waterlevel.match_extremes(o, mt)
@@ -79,13 +109,13 @@ def score(storm: str, sj: pd.Series, model: str, suffix: str = "") -> tuple[pd.D
     return pd.DataFrame(rows), {"peak": peak_t, "sj": sj, "series": series}
 
 
-def figure(panels: dict, tag: str) -> None:
-    gauges = list(GAUGES.values())
-    fig, axes = plt.subplots(len(panels), len(gauges), figsize=(11, 2.0 * len(panels)), sharey=True, squeeze=False)
+def figure(panels: dict, tag: str, side: str = "nj") -> None:
+    names = [n for n, _ in gauges(side).values()]
+    fig, axes = plt.subplots(len(panels), len(names), figsize=(11, 2.0 * len(panels)), sharey=True, squeeze=False)
     for i, storm in enumerate(panels):
         p = panels[storm]
         t0, t1 = p["peak"] - pd.Timedelta("2D"), p["peak"] + pd.Timedelta("2D")
-        for j, g in enumerate(gauges):
+        for j, g in enumerate(names):
             ax = axes[i, j]
             if g in p["series"]:
                 o, mt, mr = p["series"][g]
@@ -107,8 +137,8 @@ def figure(panels: dict, tag: str) -> None:
             if i == 0:
                 ax.set_title(g, fontsize=9, color=INK)
             if j == 0:
-                ax.set_ylabel(f"{storm[5:]}\nm NAVD88", fontsize=8, color=MUTED)
-    axes[0, 0].legend(fontsize=7, frameon=False, loc="lower left")
+                ax.set_ylabel(f"{storm.removeprefix('storm')}\nm NAVD88", fontsize=8, color=MUTED)
+    next((ax for ax in axes.flat if ax.get_lines()), axes[0, 0]).legend(fontsize=7, frameon=False, loc="lower left")
     fig.suptitle("Interior tide gauges vs the model, 2 days either side of each storm's peak", fontsize=10, color=INK)
     fig.tight_layout()
     out = config.REPORTS / "figs" / f"storm_gauges{tag}.png"
@@ -116,39 +146,63 @@ def figure(panels: dict, tag: str) -> None:
     print(f"wrote {out}")
 
 
+SPINUP_NOTE = """
+The first {h:g} h of each run are left out of the tide scores: the runs start dry (zsini = -1 m) and
+the first flood overshoots at the lower-bay creek mouths (Bowers 2.46 m, model, on 2023-05-21)."""
+WIND_NOTE = """
+`<wind>` = each storm's wind run: `_era5` (x 1.3) before HRRR's start (2014-07), `_hrrr` after
+(`events.wind_suffix`, FINDINGS §50)."""
+DE_NOTE = """
+Delaware gauges, north to south: Odessa (Appoquinimink; record from 2020-03), Bowers and
+Frederica (Murderkill, from 2011-10 and 2007-10), Cedar Creek near Slaughter Beach (from
+2017-06). Odessa, Bowers and Slaughter Beach are the tide calibration's gauges (FINDINGS §51,
+§54); Frederica, ~7 km (straight line) up the Murderkill from Bowers, is held out. Bowers is gage height, on
+NAVD88 by its USGS gauge datum (0.0 ft NAVD88). The storm peak is timed at Ship John, as on NJ."""
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--model", default=runs.MODEL)
-    ap.add_argument("--storms", nargs="+", choices=STORMS)
-    ap.add_argument("--suffix", default="", help="run-name suffix, e.g. _hrrr: scores <storm>_intact_slr000_hrrr")
+    ap.add_argument("--storms", nargs="+", choices=ALL_STORMS)
+    wind = ap.add_mutually_exclusive_group()
+    wind.add_argument("--suffix", default="", help="run-name suffix, e.g. _hrrr: scores <storm>_intact_slr000_hrrr")
+    wind.add_argument("--wind", action="store_true", help="each storm's wind run, _era5 or _hrrr (events.wind_suffix)")
+    ap.add_argument("--spinup", type=float, default=0, help="hours at the run's start left out of the tide scores")
     a = ap.parse_args()
-    a.storms = a.storms or [s for s in STORMS
-                            if (runs.run_dir(s, "intact", 0, suffix=a.suffix, model=a.model) / "sfincs_his.nc").exists()]
-    tag = ("" if a.model == runs.MODEL else f"_{a.model}") + a.suffix
+    side = runs.model_side(a.model)
+
+    def sfx(storm: str) -> str:
+        return wind_suffix(storm) if a.wind else a.suffix
+
+    a.storms = a.storms or [s for s in (ALL_STORMS if side == "de" else STORMS)
+                            if (runs.run_dir(s, "intact", 0, suffix=sfx(s), model=a.model) / "sfincs_his.nc").exists()]
+    label = "_wind" if a.wind else a.suffix
+    tag = ("" if a.model == runs.MODEL else f"_{a.model}") + label
     with xr.open_dataset(config.GAUGE_DIR / "waterlevel_forcing_navd88.nc") as ds:
-        sj = ds["waterlevel"].sel(stations=domain.SHIP_JOHN).to_series()
+        sj = ds["waterlevel"].sel(stations=domain.side(side).ref_gauge).to_series()
     tabs, panels = [], {}
     for storm in a.storms:
-        t, panels[storm] = score(storm, sj, a.model, a.suffix)
+        t, panels[storm] = score(storm, sj, a.model, sfx(storm), side, a.spinup)
         tabs.append(t)
     d = pd.concat(tabs, ignore_index=True)
     d["storm_high_diff_m"] = d.storm_high_model_m - d.storm_high_obs_m
     d["rain_adds_m"] = d.storm_high_rain_m - d.storm_high_model_m
-    figure(panels, tag)
+    figure({s: p for s, p in panels.items() if p["series"]}, tag, side)  # storms with a record
     by_gauge = d.groupby("gauge")[["bias_all_m", "rmse_all_m", "bias_top5_m", "bias_lows_m", "storm_high_diff_m"]].mean()
     by_gauge["storms_with_peak_observed"] = d.groupby("gauge").storm_high_obs_m.count()
     cols = ["storm", "gauge", "series", "n_highs", "bias_all_m", "rmse_all_m", "bias_top5_m", "bias_lows_m", "storm_high_obs_m",
             "storm_high_model_m", "storm_high_diff_m", "rain_adds_m"]  # fmt: skip
-    md = f"""# Storm tides at the interior gauges ({a.model}{a.suffix})
+    runsfx = "<wind>" if a.wind else a.suffix
+    md = f"""# Storm tides at the interior gauges ({a.model}{label})
 
-Generated by `scripts/validate_storm_gauges.py --model {a.model}{" --suffix " + a.suffix if a.suffix else ""}`. The §33 Sandy check repeated for {len(a.storms)} storm tides
+Generated by `scripts/validate_storm_gauges.py --model {a.model}{" --suffix " + a.suffix if a.suffix else ""}{" --wind" if a.wind else ""}{f" --spinup {a.spinup:g}" if a.spinup else ""}`. The §33 Sandy check repeated for {len(a.storms)} storm tides
 of the storm panel (FINDINGS §37): every observed high tide in each run window against
-the model's highest level within ±3 h, runs `<storm>_intact_slr000{a.suffix}` (tide only) and `_rain{a.suffix}` (where staged).
+the model's highest level within ±3 h, runs `<storm>_intact_slr000{runsfx}` (tide only) and `_rain{runsfx}` (where staged).
 Metres NAVD88; diff and bias = model − observed. Highs and lows count only where the record is
 complete around them. "storm high" = the model's highest level within a day of the Ship John
 peak vs the observed maximum within ±3 h; blank where the gauge was out at that time (it often
-is). "map" rows are read hourly, so their storm highs can come out a few cm low. The gauges sit in the creek mouths: they test the water the creeks deliver to the banks,
-not flooding on the fields.
+is). "map" rows are read hourly, so their storm highs can come out a few cm low. {"The gauges sit in the creek mouths" if side != "de" else "The gauges sit in the creeks (Odessa and Frederica well up them)"}: they test the water the creeks deliver to the banks,
+not flooding on the fields.{SPINUP_NOTE.format(h=a.spinup) if a.spinup else ""}{WIND_NOTE if a.wind else ""}{DE_NOTE if side == "de" else ""}
 
 ## Per storm and gauge
 

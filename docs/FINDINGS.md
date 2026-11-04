@@ -1933,3 +1933,54 @@ fields inside their NLD leveed areas.
 - **Against §59:** today Middle Neck's bank keeps about 131 ha of water off its 701 ha of fields in the tide month,
   and its gates cost $630 k to repair once. That is one data point, not a pay-off rate: no upkeep history, no bank cost,
   one month of tides.
+
+## 61. Delaware storm peaks at the creek gauges: right at Odessa, 0.2-0.3 m high near the lower-bay mouths; NWI banks closed the Murderkill and Little River (2026-11-04; `reports/storm_gauges_de_v2ap45_100m_wind.md`, `scripts/validate_storm_gauges.py --model de_v2ap45_100m --wind --spinup 24`, `scripts/open_creek_links.py`)
+
+§50's storm gauge check on the DE model (`de_v2ap45_100m`), each storm's own wind run (ERA5 × 1.3 before 2014-07,
+HRRR after), first 24 h of each run left out (the dry start's first flood overshoots, up to +1.6 m at Bowers). Four DE
+tidal gauges on NAVD88: Odessa (Appoquinimink, 7 storms), Bowers and Frederica (Murderkill, 12 and 13 storm peaks;
+Frederica not used in calibration), Cedar Creek near Slaughter Beach (9). 16 of 17 storms have a record (not 2010mar).
+
+| gauge | ordinary highs, bias / rmse | lows | storm peak, mean (range) | with rain |
+|---|---:|---:|---|---:|
+| Odessa | +0.05 / 0.06 | +0.39 | +0.03 (−0.11 to +0.15) | +0.07 |
+| Bowers | +0.09 / 0.10 | −0.03 | +0.26 (+0.16 to +0.42) | +0.26 |
+| Frederica | −0.02 / 0.25 | +0.74 | +0.02 (−0.21 to +0.16) | +0.14 |
+| Slaughter Beach | +0.06 / 0.07 | +0.34 | +0.20 (+0.09 to +0.37) | +0.20 |
+
+- **Ordinary high tides are as good as NJ's or better; storm peaks at the two lower-bay mouths are not.** NJ's peaks on the
+  same 7 HRRR storms: Bivalve +0.11, Greenwich +0.09, Hancocks Bridge −0.09; DE on those 7: Bowers +0.23, Slaughter
+  Beach +0.17. Bowers' peak error grows with the observed Ship John − Lewes peak gap (r = 0.72, 12 storms): consistent
+  with the DE rail's Mahon point carrying Ship John's surge too far down-bay (as §48), not shown. Slaughter Beach does
+  not follow the gap (r = −0.42). Brandywine Shoal's peak is right (−0.16 to +0.16), so the error builds along the shore.
+- **Two NWI impoundment perimeters (`build_dikes_nwi.py`) closed the Murderkill and Little River.** Frederica's modelled
+  range is 0.02-0.05 m against ~0.8 m observed: `nwi_E0004_0` crosses the Murderkill channel twice ~5 km below Bowers'
+  position with a crest of −0.55 m (on the storm2023jun map the range drops from 1.58 m to 0.12-0.15 m across it);
+  Little River the same (`nwi_E0017_0`, `nwi_E0019_0`). Frederica's storm peak is right only because the reach fills
+  over that crest, and its rain response (+0.91 m in Irene) is a closed pond's. `open_creek_links.py` (§40's fix, now
+  with `--centrelines`) on the DE tidal centrelines and grid removes 19 segments: Murderkill 7 (`nwi_E0004_0`,
+  `nwi_L0031_0`), Little River 12 (`nwi_E0017_0`, `nwi_E0019_0`, `nwi_L0033_0`); the other 9 DE tidal reaches
+  are not crossed. → `data/structures/dikes_de_open.weir`, model `de_v2ap45o_100m` (user, 2026-11-04: fix before the
+  DE panel ships).
+- Rain moves the peaks ≤ 0.02 m except Odessa in Isaias (+0.18 m) and Frederica (the closed reach).
+- Not explained: the model's Lewes observation point, one cell inside the mouth boundary, reads ~0.8 m below the forcing
+  beside it on every tide (the bay 10 km in is fine); not used in any score. NJ also gains from `--spinup 24` (Bivalve
+  rmse 0.10 → 0.07); NJ's reports are left at the default 0 until they are next rerun.
+
+## 62. Salt tests on NJ: no consistent salt signature (2026-11-04; `reports/salt_tests_m65.md`, `scripts/salt_tests.py`)
+
+If a spring storm tide changed crops through salt rather than wetness, the response should be larger in saltier water,
+larger for tide water than rain water, and last more than one season. Each test is flooded vs prone-dry, height-reweighted,
+against quiet years, as §53 (user, 2026-11-04: salt proxy = distance up the estuary, `domain.up_estuary_km`; all three tests;
+NJ now, pooled with DE later).
+- **Bay position = county on NJ.** Flood-prone fields leave a gap at ~70 km up the estuary: Cumberland 33-72 km, Salem
+  71-119 (Gloucester ~120-140). So the saltier / fresher split is Cumberland vs Salem, with their farms, soils and dikes.
+- **The one salt-direction cell does not hold up:** next-season cropland is lower in the saltier band (−8.4 [−13.1, −2.0]
+  vs the upper), but it comes from storms whose next season held another spring storm (2010, 2011) or the CDL change
+  (2023); storms with a quiet next season (2012, 2014, 2024) show ~0 to +5. That reads as "flooded again", not lasting
+  damage. A same-season cell runs against salt (saltier flooded fields left cropland LESS, −8.6, mostly 2011, a CDL spike year).
+- **No dose pattern** with the flooded share of the field in either band. **Tide vs rain-only:** both null. **Recovery
+  (k = 0-3):** null; the clean checks (no spring storm in the following seasons) rest on 1-2 storms.
+- **Weak test:** flooded groups behave like 4-26 fields per storm; ~180 intervals in the report, so a few exclude zero by
+  chance. A pattern here could be consistent with salt, never proof; a null says little (§58).
+- Rerun pooled with DE when `de_v2ap45o_100m` is in: DE adds a salinity range not tied to one county (Appoquinimink to Broadkill).

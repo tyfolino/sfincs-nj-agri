@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-11-04** (§59: joint Locust Island + Silver Lake row).
+Last updated: **2026-11-04** (§59 joint row; §61 DE storm gauges, Murderkill bank fix running).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -17,18 +17,21 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   §52); storm panel on it (§53). **§29's rise explained (§55):** report flooded hectares and the
   threshold range beside any field-class number. Open: Bivalve's storm-peak scatter (§50); Stow / upper
   Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
-- **Step 3, Delaware: `de_v2ap45_100m` adopted** (§51, §54). The line differs from NJ's by ~0.11 m of
-  range at 39.0-39.2 N; say so in the bundle notes for Seowoo. **Storm runs:** 17 tide-only done
-  (logs clean, linked, no gauge check yet). 17 rain twins (`*_rain_{hrrr,era5}`, daily maps): logs clean,
-  no NaN; daily output is bit-identical on a rain run too (§56). Next: a DE gauge check of the storm peaks.
-- **Step 5, Delaware exits:** first look done without SFINCS (§44). Next: DE storm panel
-  (`build_storm_panel.py` side-aware) → one bundle with a `state` column for Seowoo.
+- **Step 3, Delaware: `de_v2ap45_100m` → `de_v2ap45o_100m`** (§51, §54, §61). Storm gauge check done (§61): ordinary
+  highs fine, storm peaks +0.2-0.3 m at Bowers / Slaughter Beach (DE rail carrying Ship John's surge down-bay? not shown),
+  and NWI banks closed the Murderkill and Little River. **Running:** rebuild on `dikes_de_open.weir` (job 63527189), then
+  stage + submit tidecal2023may_derail, the 17 storms × {tide, rain} (`--boundary chain --daily-map --link`, ERA5 ×1.3
+  before 2014-07 / HRRR after) and `tide2024oct_intact_slr000_hrrr`; then `check_creek_tides.py --side de` and
+  `validate_storm_gauges.py --wind --spinup 24` on it (Frederica's range should come back). Then delete `de_v2ap45_100m`.
+- **Step 5, Delaware exits:** first look done without SFINCS (§44). DE storm panel code done (`build_sandy_panel.py
+  --state DE`, `build_storm_panel.py --state DE`, `export_storm_panel.py --de-tag de`: stacked, `state` + `field_key`);
+  rebuild on `de_v2ap45o_100m`, then export. Bundle README: 2026-11-02 review fixes applied 2026-11-04 (in the generators);
+  one more `claims-reviewer` pass on the stacked bundle before it goes to the colleague and the advisor.
 
 ## Next, in order
 0. **Storm-history land-use test:** no clear crop response by area to the 7 spring storms, m65 (§53, §57). "Not
    detectable", not "no effect"; the next-season cropland gap is unexplained (every field once, also against prone-dry).
-   Bundle README: reviewed 2026-11-02, fixes staged, the new text needs one more `claims-reviewer` pass before it goes
-   to the colleague and the advisor. User: storm tides only; growing season = Apr-Oct.
+   Bundle README: see Step 5. User: storm tides only; growing season = Apr-Oct.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
 3. **Dike pay-off, per system: farmland done (§59,** `compare_restore.py --payoff`): the banks keep ~300 ha
@@ -41,7 +44,7 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 5. **Farm → wetland options (only if the user wants them):** set-back variants, Middle Neck at
    marsh level, roughness, Sandy with rain, Durham's lidar marsh bias.
 5a. **Flood-map check done (§58):** place partly right, extent too wide, field flags barely match satellites. **Next:
-   salt tests** (bay position, tide vs rain, recovery), using flooded share too. **Exit measure:** both flags kept;
+   salt tests:** NJ pass done (§62: no consistent salt signature); rerun `salt_tests.py` pooled with DE once the DE panel is rebuilt. **Exit measure:** both flags kept;
    noisy on low ground, and over half of flags return (§57). Ask Seowoo her definition; MOD-IV pilot.
 6. **NAIP validation of the exits**, NJ (`exit_spotcheck.py`, default tag cells_v2) and DE.
 7. **Check NLD** for levee condition / inspection fields.
@@ -56,6 +59,8 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   (`scripts/export_storm_panel.py`); the user makes it a private GitHub repo.
 
 ## Operational
+- **Amarel maintenance 11-10/11:** no model builds in that window. nj_bight_sfincs moves its data then and will message
+  before and after; afterwards check our 7 input paths read via `config.BIGHT_DATA`.
 - **Scratch quota (shared with nj_bight_sfincs):** 1 T soft; this repo 186 G on 2026-11-03 (of 581 G
   total) after deleting e9, the 23 superseded test models and the v1 runs re-done on m65. Models left:
   m65 (140 G), de_v2ap45 (16 G), v1 (v1-only runs: sep2023/evap, may2025, tidecal, y2023 staged, _rep).

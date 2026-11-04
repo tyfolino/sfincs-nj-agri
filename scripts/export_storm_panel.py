@@ -17,7 +17,12 @@ Writes, under the bundle directory:
   README.md
 Existing files in the bundle are overwritten; anything else there (e.g. .git) is left alone.
 ``--tag T``: the sandy_panel_T / storm_panel_T build and its storm_panel_T report.
-Usage:  python scripts/export_storm_panel.py [--out DIR] [--tag m65]
+``--de-tag D`` (2026-11-04): also stack Delaware's sandy_panel_D / storm_panel_D build (build_sandy_panel.py
+and build_storm_panel.py --state DE) under the NJ rows. Every data table then starts with ``state`` and
+``field_key`` ("NJ-123", "DE-45"); ``field_id`` is 1..N within a state, so join on field_key (or
+state + field_id). Columns one state lacks are blank (NJ lulc2015 / lulc2020, DE lulc2017 / lulc2022;
+motf_share is NJ only). The results and every number in the README's NJ sections stay NJ only.
+Usage:  python scripts/export_storm_panel.py [--out DIR] [--tag m65] [--de-tag de]
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ import argparse
 import shutil
 from pathlib import Path
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 
@@ -39,11 +45,11 @@ FLOOD_COLS = [*SEASON_COLS, "spring_peak_m", "spring_storm", "spring_tide", "spr
               "off_tide", "off_rain", "off_unmodelled_m", "floods_before_tide"]  # fmt: skip
 
 
-def build():
-    f = pd.read_csv(SANDY / "fields.csv").set_index("field_id")
-    fy = pd.read_csv(SANDY / "field_year.csv")
-    fs = pd.read_csv(STORM / "field_season.csv")
-    fl = pd.read_csv(STORM / "fields_storm.csv").set_index("field_id")
+def build(sandy: Path, storm: Path):
+    f = pd.read_csv(sandy / "fields.csv").set_index("field_id")
+    fy = pd.read_csv(sandy / "field_year.csv")
+    fs = pd.read_csv(storm / "field_season.csv", dtype={"grow_months_tide": str, "nongrow_months_tide": str})
+    fl = pd.read_csv(storm / "fields_storm.csv").set_index("field_id")
 
     f = f.join(fl[["n_storms_tide", "n_storms_rain", "chronic", "chronic_share"]])
     f["low_crop"] = panel.low_crop_fields(f, fy).astype(int)
@@ -66,8 +72,22 @@ def build():
     out = out.sort_values(["field_id", "year"])
     assert len(out) == len(fy) == len(fs), "field x year tables do not line up"
 
-    fe = pd.read_csv(SANDY / "field_event.csv").sort_values(["field_id", "peak"])
+    fe = pd.read_csv(sandy / "field_event.csv").sort_values(["field_id", "peak"])
     return f.reset_index().round(ROUND), out.round(ROUND), fe.round(ROUND)
+
+
+def keyed(d: pd.DataFrame, state: str) -> pd.DataFrame:
+    """``d`` with ``state`` and ``field_key`` ("NJ-123") in front."""
+    d = d.copy()
+    d.insert(0, "field_key", state + "-" + d.field_id.astype(str))
+    d.insert(0, "state", state)
+    return d
+
+
+def stack(nj: pd.DataFrame, de: pd.DataFrame) -> pd.DataFrame:
+    """NJ rows then DE rows, keyed; NJ's column order, then DE-only columns."""
+    a, b = keyed(nj, "NJ"), keyed(de, "DE")
+    return pd.concat([a, b], ignore_index=True)[[*a.columns, *[c for c in b.columns if c not in a.columns]]]
 
 
 #: Heads each copied column README: they describe our working folders, not this bundle's layout.
@@ -259,6 +279,45 @@ creeks, and much of its size in field counts comes from fields just crossing the
 """
 
 
+def with_delaware(text: str, f_nj: pd.DataFrame, f: pd.DataFrame, fy: pd.DataFrame, fe: pd.DataFrame) -> str:
+    """The NJ README plus Delaware: the intro, the join key, and a Delaware section before the key columns."""
+    main = f[f.main_sample == 1]
+    prone = int((main.n_storms_tide > 0).sum())
+    n_tides = fe.groupby(["event", "peak"]).ngroups
+    chronic = "not yet run" if f.chronic.isna().all() else f"{int((f.low_crop.eq(1) & f.chronic.eq(1)).sum())}"
+    section = f"""## Delaware
+
+The same tables for Delaware's bay-draining side, the C&D Canal to Lewes (New Castle, Kent and Sussex), stacked under
+the NJ rows: `state` = `DE`. Fields are Delaware's own land-use map polygons farmed in 2012 (FirstMap, editions 2012,
+2017, 2022, so the land-use columns are `lulc2017`, `lulc2022` instead of NJ's `lulc2015`, `lulc2020`), with Delaware CDL.
+**Join on `field_key`** (`NJ-123`, `DE-45`): `field_id` restarts at 1 in each state.
+
+- {len(f):,} fields (median {f.ha.median():.1f} ha against NJ's {f_nj.ha.median():.1f}); `main_sample = 1`: {len(main):,}, of which {prone:,} flood in
+  at least one of the {n_tides} modelled storm tides at the 10% line; `low_crop` fields wet on ordinary high tides: {chronic}.
+- Same storm tides, same flood rule, same wind data as NJ, on Delaware's own model grid.
+- **The two states' models are not forced on one bay water level.** Each is fitted to its own shore's tide; where they meet
+  in the bay off the Bowers - Port Mahon shore (39.0-39.2 N) their tidal ranges differ by about
+  0.11 m. Fine for comparing fields within a state; do not read a flood in NJ and one in DE as the same water.
+- **Checks so far:** in a calm month the Delaware shore's modelled tide range matches the tide stations (median ratio 1.00).
+  The Appoquinimink at Odessa is still off: high tides about right (+0.07 m), but low tides about 0.4 m too high, so in
+  the model water may drain off fields up that river too slowly. Storm peaks against Delaware's creek gauges
+  (16 storms): about right at Odessa (+0.03 m on average), but 0.2-0.3 m too high at Bowers and Slaughter Beach near the
+  lower-bay mouths, where NJ's gauges read -0.09 to +0.11 m. So the model may over-flood low Delaware fields near the
+  lower bay in storms.
+- **No estimates for Delaware yet:** `results/` and every number in the sections above are NJ only.
+
+"""
+    i = text.index("## Key columns")
+    text = text[:i] + section + text[i:]
+    a = "Join on `field_id` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`)."
+    assert a in text
+    text = text.replace(a, "Join on `field_key` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`). Every table starts with\n"
+                           "`state` (`NJ` / `DE`); the rest of this README up to the Delaware section describes the NJ rows.")
+    a = "grown on it (USDA Cropland Data Layer, CDL). Public data plus our model runs."
+    assert a in text
+    return text.replace(a, a + " Delaware's bay side is stacked under it (see Delaware).")
+
+
 def back_rate(fy: pd.DataFrame, ids, last: int = 2023) -> tuple[float, float]:
     """Of ``left_cropland`` flags through 2022 on these fields: % back at >= 50% cropland at some
     later year to ``last``, and % at >= 50% in 2023 itself."""
@@ -273,6 +332,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=config.RELEASE_DIR)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--de-tag", default="", help="Delaware's sandy_panel_D / storm_panel_D build (docstring)")
     a = ap.parse_args()
     global SANDY, STORM
     out, tag = a.out, f"_{a.tag}" if a.tag else ""
@@ -280,11 +340,19 @@ def main() -> None:
     for d in ("data", "results/figs", "code", "docs"):
         (out / d).mkdir(parents=True, exist_ok=True)
 
-    f, fy, fe = build()
-    f.to_csv(out / "data/fields.csv", index=False)
-    fy.to_csv(out / "data/field_year.csv", index=False)
-    fe.to_csv(out / "data/field_storm.csv", index=False)
-    shutil.copy2(SANDY / "fields.gpkg", out / "data/fields.gpkg")
+    f, fy, fe = build(SANDY, STORM)
+    tables = {"fields": f, "field_year": fy, "field_storm": fe}
+    gpkg = gpd.read_file(SANDY / "fields.gpkg")
+    de = None
+    if a.de_tag:
+        de_sandy, de_storm = SANDY.with_name(f"sandy_panel_{a.de_tag}"), STORM.with_name(f"storm_panel_{a.de_tag}")
+        de = build(de_sandy, de_storm)
+        tables = {k: stack(v, d) for (k, v), d in zip(tables.items(), de)}
+        gpkg = stack(gpkg, gpd.read_file(de_sandy / "fields.gpkg"))
+        (out / "docs/fields_README_DE.md").write_text(DOC_NOTE + (de_sandy / "README.md").read_text())
+    for k, v in tables.items():
+        v.to_csv(out / f"data/{k}.csv", index=False)
+    gpd.GeoDataFrame(gpkg, geometry="geometry").to_file(out / "data/fields.gpkg", driver="GPKG")
     md = (config.REPORTS / f"storm_panel{tag}.md").read_text()
     (out / "results/storm_panel.md").write_text(md.replace(f"figs/storm_panel{tag}.png", "figs/storm_panel.png"))
     shutil.copy2(config.REPORTS / f"figs/storm_panel{tag}.png", out / "results/figs/storm_panel.png")
@@ -294,8 +362,12 @@ def main() -> None:
     for src, name in ((SANDY, "fields"), (STORM, "storm_panel")):
         (out / f"docs/{name}_README.md").write_text(DOC_NOTE + (src / "README.md").read_text().replace(" (once all 18 are in)", ""))
     shutil.copy2(STORM / "sensitivity.csv", out / "results/storm_panel_sensitivity.csv")
-    (out / "README.md").write_text(readme(f, fy, fe, pd.read_csv(STORM / "estimates.csv"), pd.read_csv(STORM / "sensitivity.csv")))
-    print(f"wrote {out}: {len(f):,} fields, {len(fy):,} field-years, {len(fe):,} field-storms")
+    text = readme(f, fy, fe, pd.read_csv(STORM / "estimates.csv"), pd.read_csv(STORM / "sensitivity.csv"))
+    if de is not None:
+        text = with_delaware(text, f, *de)
+    (out / "README.md").write_text(text)
+    n = {k: len(v) for k, v in tables.items()}
+    print(f"wrote {out}: {n['fields']:,} fields, {n['field_year']:,} field-years, {n['field_storm']:,} field-storms")
 
 
 if __name__ == "__main__":

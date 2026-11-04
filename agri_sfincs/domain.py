@@ -113,6 +113,30 @@ NOAA_STATIONS = [
 SHIP_JOHN = "8537121"  # Ship John Shoal: the bay gauge nearest the Cumberland bayshore
 CAPE_MAY = "8536110"  # the one forcing gauge on the ocean side
 
+#: The estuary's axis for "how far up the bay" (scripts/salt_tests.py, user 2026-11-04: the salt
+#: proxy is distance up-estuary): lon, lat along the shipping channel from the bay mouth (midway
+#: between Cape May and Cape Henlopen) past Brandywine Shoal, Miah Maull, Ship John Shoal, Reedy
+#: Island, the Delaware Memorial Bridge and Marcus Hook to Philadelphia. Hand-placed, good to a
+#: km or two; salinity falls along it from near-ocean at the mouth to fresh above the salt front
+#: (on average near the Memorial Bridge, ~110 km).
+ESTUARY_AXIS = [(-75.03, 38.87), (-75.113, 38.987), (-75.18, 39.05), (-75.21, 39.13), (-75.376, 39.305),
+                (-75.57, 39.50), (-75.56, 39.59), (-75.52, 39.69), (-75.41, 39.80), (-75.35, 39.84),
+                (-75.17, 39.885), (-75.13, 39.95)]  # fmt: skip
+
+
+def up_estuary_km(x, y, crs=None):
+    """Distance (km) from the bay mouth along ESTUARY_AXIS of each point's projection onto it;
+    ``x``, ``y`` in ``crs`` (default EPSG, UTM 18N)."""
+    import numpy as np
+    from pyproj import Transformer
+    from shapely import LineString, line_locate_point, points
+
+    tr = Transformer.from_crs(4326, EPSG, always_xy=True)
+    axis = LineString([tr.transform(lo, la) for lo, la in ESTUARY_AXIS])
+    if crs is not None and crs != EPSG:
+        x, y = Transformer.from_crs(crs, EPSG, always_xy=True).transform(x, y)
+    return line_locate_point(axis, points(np.asarray(x), np.asarray(y))) / 1e3
+
 #: VIRTUAL forcing gauges (FINDINGS §41): NOAA harmonic stations with no observations here.
 #: On the Cumberland / Cape May shore, whose tide is bigger than Cape May's; their own NAVD88
 #: ties are set aside (Fortescue's sits ~0.08 m off Bivalve's, Ship John's and Cape May's);

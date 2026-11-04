@@ -104,3 +104,20 @@ class TestQuietEstimate(unittest.TestCase):
         boot = np.ones((4, 2))
         e = panel.estimate(d, w_t, w_c, boot, scale=1.0)  # (2 + 12) / 4 - 1 (NaN field drops out)
         self.assertEqual(e.tolist(), [2.5, 2.5, 2.5])
+
+
+class TestUpEstuary(unittest.TestCase):
+    """agri_sfincs.domain.up_estuary_km: the salt proxy of scripts/salt_tests.py."""
+
+    def test_landmarks_in_order(self):
+        from pyproj import Transformer
+
+        from agri_sfincs import domain
+
+        tr = Transformer.from_crs(4326, domain.EPSG, always_xy=True)
+        pts = [(-75.1193, 38.7828), (-75.3767, 39.3054), (-75.5719, 39.5583), (-75.13, 39.95)]  # Lewes .. Philadelphia
+        x, y = zip(*(tr.transform(lo, la) for lo, la in pts))
+        km = domain.up_estuary_km(list(x), list(y))
+        self.assertTrue((km[1:] > km[:-1]).all())
+        self.assertAlmostEqual(km[0], 0.0, places=3)
+        self.assertTrue(50 < km[1] < 65)  # Ship John, ~river mile 37

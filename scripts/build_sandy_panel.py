@@ -50,7 +50,12 @@ cell grid from ``--grid-run`` (default the model's tide2024oct run). ``--wind``:
 run (events.wind_suffix: _era5 before 2014-07, _hrrr after), as the m65 rerun names them.
 Writes data/analysis/sandy_panel/{fields.csv, fields.gpkg, field_year.csv, field_event.csv, README.md}
 (or ``--out``).
-Usage:  python scripts/build_sandy_panel.py [--model e3v2a30brm65_100m] [--out DIR] [--grid-run RUN] [--wind]
+Delaware (``--state DE``, 2026-11-04): the same table for agri_sfincs.fields.load("DE") (FirstMap
+DE_LULC 2012 farm polygons in the DE ring; lulc2012 / lulc2017 / lulc2022) on a DE model (e.g.
+de_v2ap45_100m), with DE CDL, the DE height grid (exposure side "de") and the _de soil files
+(fetch_ssurgo.py / fetch_ssurgo_drainage.py --side de). No MOTF there (motf_share blank), and
+sandy_nodikes_* stay blank unless the DE model has a removed-dikes Sandy run.
+Usage:  python scripts/build_sandy_panel.py [--model e3v2a30brm65_100m] [--out DIR] [--grid-run RUN] [--wind] [--state DE]
 """
 
 from __future__ import annotations
@@ -86,6 +91,11 @@ STORMS = ["sandy2012", "storm2012dec", "storm2016jan", "storm2021oct", "storm201
           "storm2011aug", "storm2018oct", "storm2020aug", "storm2024jan", "storm2025aug"]
 MODEL = runs.MODEL  # --model
 WIND = False  # --wind
+STATE = "NJ"  # --state
+
+
+def side() -> str:
+    return STATE.lower()
 
 
 def run_suffix(event: str, suffix: str = "") -> str:
@@ -96,7 +106,7 @@ def run_suffix(event: str, suffix: str = "") -> str:
 def load_fields() -> gpd.GeoDataFrame:
     """LU/LC farm polygons of 2012 in the study counties (agri_sfincs.fields): field_id 1..N,
     ha, county, behind_levee, lulc2012 / 2015 / 2020 (EPSG:32618)."""
-    return fields.load("NJ").drop(columns="state")
+    return fields.load(STATE).drop(columns="state")
 
 
 def sandy_columns(g: gpd.GeoDataFrame, px) -> pd.DataFrame:
@@ -169,7 +179,9 @@ def event_table(g: gpd.GeoDataFrame, px) -> pd.DataFrame:
 
 
 def motf_share(g: gpd.GeoDataFrame) -> pd.Series:
-    """Share of each field's MOTF pixels flooded, of those in MOTF's NJ-valid area."""
+    """Share of each field's MOTF pixels flooded, of those in MOTF's NJ-valid area (blank off NJ)."""
+    if STATE != "NJ":
+        return pd.Series(np.nan, index=g.field_id.values, name="motf_share")
     with rasterio.open(MOTF) as r:
         gg = g.to_crs(r.crs)
         win = from_bounds(*gg.total_bounds, transform=r.transform).round_offsets().round_lengths()
@@ -188,9 +200,10 @@ def motf_share(g: gpd.GeoDataFrame) -> pd.Series:
 def soil_columns(g: gpd.GeoDataFrame) -> pd.DataFrame:
     """hsg_* and drain_* (docstring) by area of SSURGO map-unit polygons."""
     bbox = tuple(g.to_crs(4326).total_bounds)
-    mu = gpd.read_file(config.SOILS_DIR / "ssurgo_mapunits.gpkg", bbox=bbox, columns=["mukey", "hsg"])
+    sfx = domain.side(side()).files
+    mu = gpd.read_file(config.SOILS_DIR / f"ssurgo_mapunits{sfx}.gpkg", bbox=bbox, columns=["mukey", "hsg"])
     mu = mu.to_crs(g.crs)
-    dr = pd.read_csv(config.SOILS_DIR / "ssurgo_drainage.csv", dtype={"mukey": str}, keep_default_na=False)
+    dr = pd.read_csv(config.SOILS_DIR / f"ssurgo_drainage{sfx}.csv", dtype={"mukey": str}, keep_default_na=False)
     mu = mu.merge(dr[["mukey", "drainagecl"]], on="mukey", how="left", validate="many_to_one")
     mu["hsg"] = mu.hsg.fillna("").replace("", "none")
     mu["drain"] = mu.drainagecl.fillna("").replace("", "none")
@@ -211,7 +224,7 @@ def soil_columns(g: gpd.GeoDataFrame) -> pd.DataFrame:
 def cdl_panel(g: gpd.GeoDataFrame) -> tuple[pd.DataFrame, pd.DataFrame, list[int]]:
     """Per field: n_cdl_px, cdl_px_fallback. Per field x year: group shares, cropland,
     dom_code, dom_name. Also the CDL years not on disk (agri_sfincs.cdl.field_years)."""
-    return cdl.field_years(g, YEARS)
+    return cdl.field_years(g, YEARS, domain.side(side()).state_fips)
 
 
 def _shift(fy: pd.DataFrame, f: pd.DataFrame) -> str:
@@ -237,7 +250,7 @@ def readme(f: pd.DataFrame, fy: pd.DataFrame, missing: list[int], fe: pd.DataFra
     yrs = f"{fy.year.min()}-{fy.year.max()}" + (f" (missing: {missing})" if missing else "")
     evs = ", ".join(f"{e} ({str(p)[:10]})" for e, p in sorted(set(zip(fe.event, fe.peak)), key=lambda t: str(t[1]))) if len(fe) else "none yet"
     gone = [e for e in STORMS if e not in set(fe.get("event", []))]
-    return f"""# Sandy panel: per-field Sandy flooding, height and CDL land use 2008-2025
+    text = f"""# Sandy panel: per-field Sandy flooding, height and CDL land use 2008-2025
 
 Data table for testing whether modelled Hurricane Sandy (October 2012) flooding explains farm
 land-use change better than ground height alone. Built by `scripts/build_sandy_panel.py`; no
@@ -359,17 +372,57 @@ over the peak's days only (the day before to the day after), so one run holding 
 - **Height.** {int(f.m_above_mhhw.isna().sum())} fields have no height. High tide is spread
   between bay gauges, so tide amplification up the creeks is missing.
 """
+    return text if STATE == "NJ" else de_readme(text)
+
+
+def de_readme(text: str) -> str:
+    """The NJ README, its NJ-only parts swapped for Delaware's (--state DE)."""
+    old_fields = text[text.index("## Fields\n"):text.index("## `fields.csv`")]
+    new_fields = """## Fields
+
+**Delaware build.** Every FirstMap DE_LULC polygon that was **farmland in 2012** (Delaware's 2012
+codes 211-290, carried on the 2012-2017 layer) whose representative point is inside the DE model
+ring (the bay-draining watersheds from the C&D Canal to Lewes). Fields that later left farming stay
+in the table; `lulc2017` / `lulc2022` say where they went. `field_id` is 1..N within Delaware: it
+is NOT the NJ table's id (key across states: state + field_id). Fields first farmed after 2012 are
+not in the table.
+
+"""
+    rep = [(old_fields, new_fields),
+           ("| county | Salem, Cumberland or Gloucester |", "| county | New Castle, Kent or Sussex |"),
+           ("| lulc2012 | NJDEP LU/LC 2012 farm code; 2140 = agricultural wetland (farmed mapped wetland) |",
+            "| lulc2012 | Delaware LULC 2012 farm code (211-290) |"),
+           ("| lulc2015 | LU/LC 2015 code of the same piece (farm codes are 2000-2999; e.g. 2150 = former agricultural wetland, 4xxx forest, 6xxx wetland, 1xxx urban) |",
+            "| lulc2017 | Delaware LULC 2017 code of the same piece (farm codes 2xx) |"),
+           ("| lulc2020 | LU/LC 2020 code with the largest overlap; blank when the piece was not farm in 2015 (the 2015-2020 layer holds only 2015 farm) |",
+            "| lulc2022 | Delaware LULC 2022 code with the largest overlap; blank when the piece was not farm in 2017 |"),
+           ("(15 m; of the pixels in MOTF's NJ-valid area; blank if none)", "(NJ only: blank in this Delaware table)"),
+           ("- Fields and land use: NJDEP LU/LC 2012-2015 and 2015-2020 layers, `data/landuse/`\n  (`scripts/fetch_njlulc.py`).",
+            "- Fields and land use: Delaware FirstMap DE_LULC 2012-2017 and 2017-2022 layers, `data/landuse/`\n  (`scripts/fetch_delulc.py`)."),
+           ("; MOTF from\n  `nj_bight_sfincs/data/validation_v4/` (FINDINGS §33).", "."),
+           ("`data/soils/ssurgo_mapunits.gpkg` (`scripts/fetch_ssurgo.py`, USDA SSURGO)",
+            "`data/soils/ssurgo_mapunits_de.gpkg` (`scripts/fetch_ssurgo.py --side de`, USDA SSURGO)"),
+           ("`data/soils/ssurgo_drainage.csv` (`scripts/fetch_ssurgo_drainage.py`, USDA SSURGO)",
+            "`data/soils/ssurgo_drainage_de.csv` (`scripts/fetch_ssurgo_drainage.py --side de`, USDA SSURGO)"),
+           ("Cropland Data Layer, NJ, `data/cdl/`", "Cropland Data Layer, Delaware"),
+           ("NJ CDL is less accurate", "CDL is less accurate"),
+           ("High tide is spread\n  between bay gauges", "High tide is spread\n  between Delaware's NAVD88-tied tide stations")]
+    for a, b in rep:
+        assert a in text, a[:60]
+        text = text.replace(a, b)
+    return text
 
 
 def main() -> None:
-    global MODEL, OUT, WIND
+    global MODEL, OUT, WIND, STATE
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--model", default=runs.MODEL)
     ap.add_argument("--out", default=None, help=f"output folder (default {OUT})")
     ap.add_argument("--grid-run", default=None, help="a run of --model whose map gives the cell grid")
     ap.add_argument("--wind", action="store_true", help="read each storm's _era5 / _hrrr wind run")
+    ap.add_argument("--state", default="NJ", choices=sorted(fields.SOURCES))
     a = ap.parse_args()
-    MODEL, OUT, WIND = a.model, (config.ROOT / a.out if a.out else OUT), a.wind
+    MODEL, OUT, WIND, STATE = a.model, (config.ROOT / a.out if a.out else OUT), a.wind, a.state
     t0 = time.time()
     g = load_fields()
     print(f"{len(g):,} fields ({time.time() - t0:.0f} s); model {MODEL}; Sandy runs and MOTF ...", flush=True)
@@ -379,7 +432,7 @@ def main() -> None:
     print(f"  {time.time() - t0:.0f} s; storms ...", flush=True)
     fe = event_table(g, px)
     print(f"  {time.time() - t0:.0f} s; height and leveed share ...", flush=True)
-    g = exposure.add_exposure(g)
+    g = exposure.add_exposure(g, side())
     print(f"  {time.time() - t0:.0f} s; soils ...", flush=True)
     soil = soil_columns(g)
     print(f"  {time.time() - t0:.0f} s; CDL ...", flush=True)
@@ -408,8 +461,9 @@ def main() -> None:
           f"sandy_flooded {int((low.sandy_flooded == True).sum())}, not {int((low.sandy_flooded == False).sum())}; "  # noqa: E712
           f"share >= 0.10: {int((low.sandy_share >= 0.10).sum())}; no Sandy value: "
           f"{int(low.sandy_share.isna().sum())}")  # fmt: skip
-    left = ~f.lulc2015.map(landuse.is_farmed) | (f.lulc2020.notna() & ~f.lulc2020.map(landuse.is_farmed))
-    print(f"  of those, left farming by LU/LC 2020: flooded {int(left[low.index][low.sandy_flooded == True].sum())}, "  # noqa: E712
+    _, _, _, mid, last = fields.EDITIONS[STATE]
+    left = ~f[f"lulc{mid}"].map(landuse.is_farmed) | (f[f"lulc{last}"].notna() & ~f[f"lulc{last}"].map(landuse.is_farmed))
+    print(f"  of those, left farming by LU/LC {last}: flooded {int(left[low.index][low.sandy_flooded == True].sum())}, "  # noqa: E712
           f"dry {int(left[low.index][low.sandy_flooded == False].sum())}")  # noqa: E712
     if "sandy_rain_flooded" in low:
         print(f"  with rain: flooded {int((low.sandy_rain_flooded == True).sum())}")  # noqa: E712

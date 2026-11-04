@@ -1,7 +1,8 @@
 """Shared pieces of the land-use panel analyses (scripts/build_sandy_panel.py,
 scripts/build_storm_panel.py, scripts/plot_storm_panel.py): the storm tides and their seasons,
 the low-crop-field set, height reweighting and the flooded - comparison estimate against quiet
-years. Pure, tested."""
+years. Pure and tested, except ``load`` (reads a build's tables; moved here from
+scripts/plot_storm_panel.py on 2026-11-04 so scripts/salt_tests.py reads the panel the same way)."""
 
 from __future__ import annotations
 
@@ -139,3 +140,49 @@ def estimate(d: pd.Series, w_t: pd.Series, w_c: pd.Series, boot: np.ndarray, sca
     dv, wt, wc = d.fillna(0).values, w_t.values * ok, w_c.values * ok
     W = np.column_stack([np.ones(len(dv)), boot])  # field x draw
     return scale * ((dv * wt) @ W / (wt @ W) - (dv * wc) @ W / (wc @ W))
+
+
+#: outcome name -> field_year.csv share columns summed (the share outcomes of the land-use panel)
+OUTCOMES = {
+    "corn": ["share_corn"],
+    "soybeans": ["share_soybeans"],
+    "cropland": ["cropland"],
+    "grass (hay + pasture + idle)": ["share_hay", "share_pasture", "share_idle"],
+}
+#: the yes/no outcomes (switched / left_cropland)
+EVENTS = ["main crop changed", "left cropland", "left farmland"]
+
+
+def load(sandy, storm, keep_chronic: bool = False):
+    """The storm panel's analysis tables from a build_sandy_panel.py folder ``sandy`` and a
+    build_storm_panel.py folder ``storm``: fields f (low crop fields, minus the chronic ones unless
+    ``keep_chronic``, joined with fields_storm.csv), outcomes y (name -> field x year; the yes/no
+    ones blank from CDL_CHANGE, the two left ones also in CDL_CHANGE - 1), sp ("tide" / "rain" ->
+    field x year spring flag), spring (year -> storm run) and the quiet years."""
+    f = pd.read_csv(sandy / "fields.csv").set_index("field_id")
+    fy = pd.read_csv(sandy / "field_year.csv")
+    fs = pd.read_csv(storm / "field_season.csv")
+    fl = pd.read_csv(storm / "fields_storm.csv").set_index("field_id")
+    keep = low_crop_fields(f, fy)
+    if not keep_chronic:
+        keep &= fl.chronic.reindex(f.index) == 0
+    f = f[keep].join(fl)
+    years = sorted(fy.year.unique())
+    y = {k: sum(fy.pivot(index="field_id", columns="year", values=c) for c in cols).reindex(index=f.index, columns=years)
+         for k, cols in OUTCOMES.items()}  # fmt: skip
+    main = fy.assign(main=fy[CLASSES].idxmax(axis=1)).pivot(index="field_id", columns="year", values="main")
+    main = main.reindex(index=f.index, columns=years)
+    late = [t for t in years if t >= CDL_CHANGE]
+    y["main crop changed"] = switched(main)
+    y["left cropland"] = left_cropland(y["cropland"])
+    pasture = fy.pivot(index="field_id", columns="year", values="share_pasture").reindex(index=f.index, columns=years)
+    y["left farmland"] = left_cropland(y["cropland"] + pasture)
+    for e in EVENTS:
+        y[e][late] = np.nan
+    for e in ("left cropland", "left farmland"):
+        y[e][CDL_CHANGE - 1] = np.nan  # its flag reads the next year's map
+    yr = fs.groupby("year").agg(storm=("spring_storm", "first"), off=("off_tide", "max"))
+    quiet = [t for t in years if not isinstance(yr.storm[t], str) and yr.off[t] == 0]
+    spring = {t: s for t, s in yr.storm.items() if isinstance(s, str)}
+    sp = {k: fs.pivot(index="field_id", columns="year", values=f"spring_{k}").reindex(f.index) for k in ("tide", "rain")}
+    return f, y, sp, spring, quiet

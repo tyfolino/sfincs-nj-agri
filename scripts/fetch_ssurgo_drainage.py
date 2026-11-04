@@ -11,20 +11,22 @@ poorly drained", "Moderately well drained", "Well drained", "Somewhat excessivel
 "Excessively drained", or blank (water, urban land, pits). Ditched or tiled fields drain
 better than their class says.
 
-Writes data/soils/ssurgo_drainage.csv (mukey, drainagecl, comppct_r).
-Usage:  python scripts/fetch_ssurgo_drainage.py
+Writes data/soils/ssurgo_drainage.csv (mukey, drainagecl, comppct_r). Delaware (``--side de``,
+2026-11-04): the map units of ssurgo_mapunits_de.gpkg, written to ssurgo_drainage_de.csv.
+Usage:  python scripts/fetch_ssurgo_drainage.py [--side de]
 """
 
 from __future__ import annotations
 
+import argparse
+
 import geopandas as gpd
 import pandas as pd
 
-from agri_sfincs import config
+from agri_sfincs import config, domain
 from agri_sfincs.net import post
 
 SDA = "https://sdmdataaccess.sc.egov.usda.gov/Tabular/post.rest"
-OUT = config.SOILS_DIR / "ssurgo_drainage.csv"
 
 
 def sda(sql: str) -> list[list]:
@@ -32,8 +34,17 @@ def sda(sql: str) -> list[list]:
     return post(SDA, {"format": "JSON", "query": sql}, timeout=300).json().get("Table", [])
 
 
+def path(side: str = "nj"):
+    """The side's drainage table."""
+    return config.SOILS_DIR / f"ssurgo_drainage{domain.side(side).files}.csv"
+
+
 def main() -> None:
-    mu = gpd.read_file(config.SOILS_DIR / "ssurgo_mapunits.gpkg", columns=["mukey"], ignore_geometry=True)
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--side", default="nj", choices=list(domain.SIDES))
+    a = ap.parse_args()
+    sfx, out_path = domain.side(a.side).files, path(a.side)
+    mu = gpd.read_file(config.SOILS_DIR / f"ssurgo_mapunits{sfx}.gpkg", columns=["mukey"], ignore_geometry=True)
     mukeys = sorted(mu.mukey.astype(str).unique())
     rows = []
     for i in range(0, len(mukeys), 500):
@@ -45,10 +56,10 @@ def main() -> None:
     dom["drainagecl"] = dom.drainagecl.fillna("")
     out = dom[["mukey", "drainagecl", "comppct_r"]].sort_values("mukey")
     missing = set(mukeys) - set(out.mukey)
-    out.to_csv(OUT, index=False)
+    out.to_csv(out_path, index=False)
     print(f"{len(out)} of {len(mukeys)} map units; no component: {len(missing)}")
     print(out.drainagecl.replace("", "(blank)").value_counts().to_string())
-    print(f"wrote {OUT}")
+    print(f"wrote {out_path}")
 
 
 if __name__ == "__main__":
