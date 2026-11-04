@@ -82,4 +82,8 @@ Largest |difference| on any wet cell: mean daily high water 0.0000 m, month max 
 | Sunset Road | 30 | 147 | 4 | 21 | 14 | 132 | 2 | 4 | 2 | 5 | +1 (+1 to +1) |
 | Sunset Road | 60 | 147 | 4 | 21 | 115 | 147 | 4 | 7 | 2 | 8 | +0 (+0 to +20) |
 | Sunset Road | 100 | 147 | 4 | 21 | 147 | 147 | 10 | 10 | 0 | 3 | +0 (+0 to +0) |
+| Locust Island + Silver Lake | 0 | 1,070 | 97 | 185 | 203 | 832 | 0 | 59 | 59 | 20 | +112 (+43 to +134) |
+| Locust Island + Silver Lake | 30 | 1,070 | 97 | 185 | 503 | 912 | 2 | 89 | 87 | 35 | +154 (+96 to +154) |
+| Locust Island + Silver Lake | 60 | 1,070 | 97 | 185 | 866 | 995 | 69 | 117 | 49 | 42 | +40 (+40 to +66) |
+| Locust Island + Silver Lake | 100 | 1,070 | 97 | 185 | 1,062 | 1,060 | 154 | 153 | -1 | -15 | +0 (-10 to +0) |
 

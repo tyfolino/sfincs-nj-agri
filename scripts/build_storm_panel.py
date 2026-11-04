@@ -248,7 +248,7 @@ The year is cut two ways. **By growing season**: `grow` = April-October of the y
 | column | meaning |
 |---|---|
 | n_storms_tide, n_storms_rain | of the {tides.shape[0]} modelled storm tides, how many flood the field |
-| chronic | 1 if ordinary monthly spring tides (October 2024, no storm) already flood it |
+| chronic | 1 if the highest ordinary tides of the month (October 2024, no storm) already flood it |
 | chronic_share | the share of the field those ordinary tides flood |
 
 ## Caveats

@@ -8,11 +8,12 @@ creek channels, NOAA gauge water levels, and wind: a 3 km analysis from 2016, an
 reanalysis scaled up 30% that still reads low at storm peaks. So the 2010-14 and 2022-24 storms are not
 forced alike. Peak water was compared with creek gauges only for 2018-25, so the 2010-14 storms are
 unchecked on this version. Where checked, peaks are mostly within 0.2 m (usually high near Bivalve, low
-in the Alloway), which matters on flat fields. More fields flood than on the earlier version, and we
-have not yet explained why.
+in the Alloway), which matters on flat fields. More fields flood than on the earlier version: on a
+one-month ordinary-tide test the rise was mostly the new bay water levels, with some from the rebuilt
+creeks, and much of its size in field counts comes from fields just crossing the 10% line.
 
 **Fields:** 891 low crop fields (farmed in NJDEP's 2012 land-use map, < 1.5 m above average
-higher high tide, at least half cropland 2008-12), not flooded by ordinary spring tides in the model.
+higher high tide, at least half cropland 2008-12), not flooded by the highest ordinary tides of the month in the model.
 On the storm tide alone, 435 are flooded by at least one of the 18 modelled storm tides;
 456 by none. These are map polygons, not farms: most are small, and the estimates are
 weighted by area, so a few large fields count for much.
@@ -50,7 +51,7 @@ fields carry each group, so the groups behave as far fewer fields than their cou
 k = 0: the season of the storm; k = 1: the next season. "never" = fields no modelled storm tide
 floods on its own (weighted to the same heights; 208 of these 456 flood when rain is counted).
 "rain" = flooded counting the storm's rain. "incl. chronic" = the
-152 fields wet on ordinary spring tides put back (125 of them flood in all 18 storm tides, so
+152 fields wet on the highest ordinary tides of the month put back (125 of them flood in all 18 storm tides, so
 they are almost always in the flooded group).
 
 | flooded by | comparison | k | corn | soybeans | cropland | grass (hay + pasture + idle) |
@@ -133,7 +134,7 @@ beside the next-season cropland gap. Not a finding.
 
 ## The chronic fields over time
 
-The 152 low crop fields where the model puts ordinary spring tides on at least 10% of the field in
+The 152 low crop fields where the model puts the highest ordinary tides of the month on at least 10% of the field in
 one simulated month (October 2024 with wind, today's dikes) are left out above. This may be partly a
 model artefact: they are small, and on the older version many were a couple of wet days on the low part
 of a marsh-edge field, where a 100 m model cannot see berms or ditches. The group grew from 100 to 152
@@ -158,9 +159,11 @@ year, and the chronic fields sit lower on average than the comparison fields.
 ## Caveats
 
 - **Not detectable is not "no effect".** "Flooded" is a model result, noisy field by field, which
-  pulls differences toward zero. Its flooded area has not been checked against satellite images on
-  this version; on an older version Landsat confirmed only a small part of the model's water at
-  overpass (mostly one informative storm, April 2011). CDL is USDA's satellite estimate of the crop, noisy
+  pulls differences toward zero. Against satellite water on this version (3 Landsat and 4 Sentinel-2
+  scenes), on low fields in the three informative cool-season scenes (April 2011, January and March
+  2024) the model's wet area is 5-7 times what the satellites see, and they confirm
+  only 4-11% of it; field by field at the 10% line few agree. Satellites miss water under crops and
+  water that has drained, so this is not an error rate, but the field flags are not observed floods. CDL is USDA's satellite estimate of the crop, noisy
   on small fields; it does not measure yield or salt damage.
 - **The model moves surface water only:** no salt, groundwater, crop or marsh processes, so "flooded"
   does not mean salt damage. Gate sizes are assumed (no public inventory).

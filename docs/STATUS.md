@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-11-03** (§59: dike pay-off per system; scratch cleared to 186 G).
+Last updated: **2026-11-04** (§59: joint Locust Island + Silver Lake row).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -31,12 +31,10 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
    to the colleague and the advisor. User: storm tides only; growing season = Apr-Oct.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR.
-3. **Dike pay-off, per system: farmland done (§59,** `compare_restore.py --payoff`): the banks keep ~290 ha
-   of water off fields today and at +0.3 m, ~80 ha at +0.6 m; Middle Neck is 46% of it. Locust Island +
-   Silver Lake act as one system. Costs (§60): 5 of 18 systems have a figure, mostly gates; scale banks by
-   length. **Running:** the pair opened together, `*_restore_locust_island_silver_lake_mllw100_slr*_hrrr`, jobs
-   63488553 63488560 63488571 63488591. When done: check logs, rerun `compare_restore.py --model e3v2a30brm65_100m
-   --suffix _hrrr --payoff` (adds the joint row), update §59. Gibbstown cut at 1 of 6 outlets.
+3. **Dike pay-off, per system: farmland done (§59,** `compare_restore.py --payoff`): the banks keep ~300 ha
+   of water off fields today and at +0.3 m, ~90 ha at +0.6 m; Middle Neck is 43% of it. Locust Island + Silver Lake,
+   opened together, is the second-largest system (59 ha today). Costs (§60): 5 of 18 systems have a figure, mostly gates;
+   scale banks by length. Gibbstown cut at 1 of 6 outlets.
 4. **Wetness exposure for the conversion model** (§31): rain-event ponding per field + SSURGO
    drainage → `data/analysis/farm_units.csv`. Decide first on open-water evaporation
    (`agri_sfincs/evap.py`; −40% cropland area-days wet on Sep 2023, §17).

@@ -1881,7 +1881,7 @@ At the run's peak, found rises (Apr 2011 78%, Jan 2024 54%, Mar 2024 60%) but th
   Field-level noise of this size is a reason to report continuous `tide_share` and to prefer larger, deeper flooding.
 
 
-## 59. Dike pay-off, per system: the banks keep ~290 ha of water off farm fields today and at +0.3 m, ~80 ha by +0.6 m (2026-11-03; `reports/restore_payoff_e3v2a30brm65_100m_hrrr.md`, `data/analysis/restore_payoff_e3v2a30brm65_100m_hrrr.csv`, `scripts/compare_restore.py --payoff`)
+## 59. Dike pay-off, per system: the banks keep ~300 ha of water off farm fields today and at +0.3 m, ~90 ha by +0.6 m (2026-11-03, joint pair 2026-11-04; `reports/restore_payoff_e3v2a30brm65_100m_hrrr.md`, `data/analysis/restore_payoff_e3v2a30brm65_100m_hrrr.csv`, `scripts/compare_restore.py --payoff`)
 
 72 runs on m65 with HRRR wind, `tide2024oct_restore_<system>_mllw100_slr{000,030,060,100}_hrrr` (staged by job 63432268,
 daily maps; 4 launch failures resubmitted, 63445410-413). All 72 end `finished: True`, with both outputs and no NaN lines.
@@ -1890,22 +1890,25 @@ Ten were preempted and resumed (close to, not bit-identical with, a straight run
 every other bank stays as built. It is compared with the intact run at the same SLR. 18 systems, 1,762 ha of 2020 farm
 fields inside their NLD leveed areas.
 
-| SLR | water on the 18 systems' fields, as built (ha) | the same, each opened alone (summed) | kept off by the banks |
-|---|---:|---:|---:|
-| today | 37 | 322 | 285 |
-| +0.3 m | 270 | 563 | 293 |
-| +0.6 m | 872 | 956 | 84 |
-| +1.0 m | 1,317 | 1,340 | 23 |
+| SLR | water on the 18 systems' fields, as built (ha) | the same, each opened alone (summed) | kept off by the banks | the same, Locust Island + Silver Lake opened as one |
+|---|---:|---:|---:|---:|
+| today | 37 | 322 | 285 | 302 |
+| +0.3 m | 270 | 563 | 293 | 306 |
+| +0.6 m | 872 | 956 | 84 | 89 |
+| +1.0 m | 1,317 | 1,340 | 23 | 22 |
 
 - **The banks pay off today and at +0.3 m; by +0.6 m most are already overtopped.** Opening the outlet then changes little,
   because the as-built system floods anyway (§27's turning point, now system by system). Exceptions: Sheppard
   Davis (crest 2.2-2.8 m) keeps 2 / 18 ha off at +0.6 / +1.0 m, Sayres Neck 13 ha at +0.6 m.
-- **Concentrated:** today Middle Neck alone is 131 ha (46%), then Hancocks Bridge Poplar 44, Silver Lake 24, Gibbstown 22,
+- **Concentrated:** today Middle Neck alone is 131 ha (43% of 302; 46% of 285), then Hancocks Bridge Poplar 44, Silver Lake 24, Gibbstown 22,
   Locust Island 19, Lighthouse 16, Sea Breeze Road 11, County Hwy 623 8. The rest are ≤ 5 ha. Richard Wood (53 of 57 ha
   flooded as built), Back Neck, Sayres Neck, Sheppard Davis, Durham and Lower Alloways Creek: about nothing today.
 - **Locust Island and Silver Lake are one hydraulic system.** Opening Locust Island puts 51 ha more water on Silver Lake's
   fields at +0.3 m (37 ha more on unleveed fields a median 0.5 km away); opening Silver Lake puts 19 ha on Locust Island's.
-  For the pay-off, count the pair together. Elsewhere the change on fields outside the bank is ≤ 15 ha, mostly < 10, so §30's
+  For the pay-off, count the pair together. **Opened together** (`*_restore_locust_island_silver_lake_mllw100_slr*_hrrr`,
+  jobs 63488553/560/571/591, all `finished: True`; `make_restore_scenarios.py --joint`): +59 ha on the pair's 185 ha of
+  fields today, +87 at +0.3 m, +49 at +0.6 m, ~0 at +1.0 m, against 43 / 73 / 44 / -1 for the two opened alone and added.
+  It is the second-largest system after Middle Neck. Fields outside both banks gain 20 / 35 / 42 ha. Elsewhere the change on fields outside the bank is ≤ 15 ha, mostly < 10, so §30's
   "outside the bank nothing measurable changes" holds there only roughly; it is not zero.
 - **Whole-field counts swing with the 10% line (§55):** Middle Neck today +422 ha at 10%, +111 at 50%; Jones Island Road +4 at
   10%, +122 at 5%; Henby Creek 0 at 10%, +41 at 50%. Report the flooded ha, with the whole-field range beside it.
