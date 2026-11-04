@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-11-04** (§59 joint row; §61 DE storm gauges, Murderkill bank fix running).
+Last updated: **2026-11-04** (§63 DE bank fix adopted; DE panel `deo` exported stacked).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -17,16 +17,13 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   §52); storm panel on it (§53). **§29's rise explained (§55):** report flooded hectares and the
   threshold range beside any field-class number. Open: Bivalve's storm-peak scatter (§50); Stow / upper
   Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
-- **Step 3, Delaware: `de_v2ap45_100m` → `de_v2ap45o_100m`** (§51, §54, §61). Storm gauge check done (§61): ordinary
-  highs fine, storm peaks +0.2-0.3 m at Bowers / Slaughter Beach (DE rail carrying Ship John's surge down-bay? not shown),
-  and NWI banks closed the Murderkill and Little River. **Running:** rebuild on `dikes_de_open.weir` (job 63527189), then
-  stage + submit tidecal2023may_derail, the 17 storms × {tide, rain} (`--boundary chain --daily-map --link`, ERA5 ×1.3
-  before 2014-07 / HRRR after) and `tide2024oct_intact_slr000_hrrr`; then `check_creek_tides.py --side de` and
-  `validate_storm_gauges.py --wind --spinup 24` on it (Frederica's range should come back). Then delete `de_v2ap45_100m`.
+- **Step 3, Delaware: `de_v2ap45o_100m` adopted** (§51, §54, §61, §63; old `de_v2ap45_100m` deleted). Banks opened:
+  Frederica's tide back at half range. Open: DE creek lows ~0.35-0.4 m high (all but Bowers), Frederica's rain response
+  (+0.7-0.8 m in Irene / Sandy), storm peaks +0.2-0.3 m at Bowers / Slaughter Beach (DE rail carrying Ship John's surge?).
 - **Step 5, Delaware exits:** first look done without SFINCS (§44). DE storm panel code done (`build_sandy_panel.py
   --state DE`, `build_storm_panel.py --state DE`, `export_storm_panel.py --de-tag de`: stacked, `state` + `field_key`);
-  rebuild on `de_v2ap45o_100m`, then export. Bundle README: 2026-11-02 review fixes applied 2026-11-04 (in the generators);
-  one more `claims-reviewer` pass on the stacked bundle before it goes to the colleague and the advisor.
+  built on `de_v2ap45o_100m` as tag `deo` and exported stacked (`--tag m65 --de-tag deo`, 2026-11-04);
+  `claims-reviewer` pass on the stacked bundle running, then it can go to the colleague and the advisor.
 
 ## Next, in order
 0. **Storm-history land-use test:** no clear crop response by area to the 7 spring storms, m65 (§53, §57). "Not
@@ -63,7 +60,7 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   before and after; afterwards check our 7 input paths read via `config.BIGHT_DATA`.
 - **Scratch quota (shared with nj_bight_sfincs):** 1 T soft; this repo 186 G on 2026-11-03 (of 581 G
   total) after deleting e9, the 23 superseded test models and the v1 runs re-done on m65. Models left:
-  m65 (140 G), de_v2ap45 (16 G), v1 (v1-only runs: sep2023/evap, may2025, tidecal, y2023 staged, _rep).
+  m65 (140 G), de_v2ap45o (DE), v1 (v1-only runs: sep2023/evap, may2025, tidecal, y2023 staged, _rep).
   Stage new sets with `--link`, and `--daily-map` where hourly maps are not read (§56);
   `scripts/link_run_inputs.py` for older runs. Never edit a run's linked inputs in place. Next lever
   if needed: thin m65 hourly maps to daily where nothing reads the hourly fields (lossy; check readers first).

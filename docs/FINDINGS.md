@@ -1984,3 +1984,27 @@ NJ now, pooled with DE later).
 - **Weak test:** flooded groups behave like 4-26 fields per storm; ~180 intervals in the report, so a few exclude zero by
   chance. A pattern here could be consistent with salt, never proof; a null says little (§58).
 - Rerun pooled with DE when `de_v2ap45o_100m` is in: DE adds a salinity range not tied to one county (Appoquinimink to Broadkill).
+
+## 63. Opening the Murderkill / Little River banks brings back half of Frederica's tide; Delaware creek lows and Frederica's rain response stay off (2026-11-04; `reports/storm_gauges_de_v2ap45o_100m_wind.md`, `reports/creek_tides_de.md`, `de_v2ap45o_100m`)
+
+§61's fix (`dikes_de_open.weir`: 19 NWI bank segments removed) on the 36 DE runs, same checks as §61 (`--wind --spinup 24`).
+`de_v2ap45o_100m` replaces `de_v2ap45_100m` (deleted 2026-11-04, user).
+
+| gauge | ordinary highs, bias / rmse | lows | storm peak, mean | range, model / observed (13 storms) |
+|---|---:|---:|---:|---|
+| Odessa | +0.05 / 0.06 | +0.39 | +0.03 | (unchanged from §61) |
+| Bowers | +0.07 / 0.08 | +0.06 | +0.25 | calm week 1.08 → 1.01 of observed |
+| Frederica | −0.06 / 0.09 (was 0.25) | +0.37 (was +0.74) | −0.07 | 0.36 / 0.79 m (was 0.03) |
+| Slaughter Beach | +0.06 / 0.07 | +0.34 | +0.20 | (unchanged) |
+
+- **Frederica's tide is back, half-size:** highs right, lows ~0.37 m high, the same as Odessa and Slaughter Beach. All DE
+  creek gauges but Bowers (at a mouth) hold their lows ~0.35-0.4 m high: a DE-wide creek-drainage limit (channels too
+  shallow or narrow at 100 m? as the Appoquinimink before §54's depth), not the banks.
+- **Frederica's rain response did not come from the closed banks:** the rain run's window maximum is ~0.8 m above the gauge's
+  in Irene (2.17 vs 1.34 m) and ~0.7 m in Sandy (1.91 vs 1.21), as before (2.04, 1.75). Read DE `*_rain` flags up the
+  Murderkill as likely too wet. Storm peaks at Bowers / Slaughter Beach unchanged (§61's open question).
+- **Panel effect is small and local** (`storm_panel_deo` vs `_de`): 22 of 4,443 DE fields change a flood flag in some
+  storm, all in Kent on the Murderkill and Little River, both directions (wetter up Little River and the lower Murderkill,
+  drier just around Bowers); fields flooded by ≥ 1 storm tide 357 → 359, with rain 1,343 → 1,339. The `deo` build is also
+  the first with the DE chronic run: 123 fields (1,255 ha) wet on ordinary October 2024 spring tides, 109 of them in all
+  18 storm tides, mostly nearest Leipsic (86) and Slaughter Beach (30).

@@ -298,12 +298,15 @@ the NJ rows: `state` = `DE`. Fields are Delaware's own land-use map polygons far
 - **The two states' models are not forced on one bay water level.** Each is fitted to its own shore's tide; where they meet
   in the bay off the Bowers - Port Mahon shore (39.0-39.2 N) their tidal ranges differ by about
   0.11 m. Fine for comparing fields within a state; do not read a flood in NJ and one in DE as the same water.
-- **Checks so far:** in a calm month the Delaware shore's modelled tide range matches the tide stations (median ratio 1.00).
-  The Appoquinimink at Odessa is still off: high tides about right (+0.07 m), but low tides about 0.4 m too high, so in
-  the model water may drain off fields up that river too slowly. Storm peaks against Delaware's creek gauges
-  (16 storms): about right at Odessa (+0.03 m on average), but 0.2-0.3 m too high at Bowers and Slaughter Beach near the
-  lower-bay mouths, where NJ's gauges read -0.09 to +0.11 m. So the model may over-flood low Delaware fields near the
-  lower bay in storms.
+- **Checks so far:** in a calm month the modelled tide range at the bay-shore tide stations matches the published one
+  (median ratio 1.00); up Blackbird Creek (Taylors Bridge) it is a third of it. At Delaware's creek gauges high tides are
+  about right (within 0.07 m), but low tides sit about 0.35-0.4 m too high at Odessa (Appoquinimink), Frederica (upper
+  Murderkill) and Slaughter Beach (Cedar Creek); only Bowers, at the Murderkill's mouth, is right. So in the model water
+  may drain off fields up those creeks too slowly. At Frederica the storm's rain also raises the modelled water about
+  0.7-0.8 m above the gauge's highest reading in the two wettest storms (Irene 2011, Sandy 2012), so `*_rain` flags up
+  the Murderkill are likely too wet. Storm peaks (16 storms): about right at Odessa and Frederica (+0.03 and -0.07 m on
+  average), but 0.2-0.3 m too high at Bowers and Slaughter Beach near the lower-bay mouths, where NJ's gauges read
+  -0.09 to +0.11 m. So the model may over-flood low Delaware fields near the lower bay in storms.
 - **No estimates for Delaware yet:** `results/` and every number in the sections above are NJ only.
 
 """
