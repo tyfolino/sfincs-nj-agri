@@ -2008,3 +2008,25 @@ NJ now, pooled with DE later).
   drier just around Bowers); fields flooded by ≥ 1 storm tide 357 → 359, with rain 1,343 → 1,339. The `deo` build is also
   the first with the DE chronic run: 123 fields (1,255 ha) wet on ordinary October 2024 spring tides, 109 of them in all
   18 storm tides, mostly nearest Leipsic (86) and Slaughter Beach (30).
+
+## 64. Salt tests pooled NJ + DE: still no salt signature; NJ's one salt-direction cell does not survive a moved split (2026-11-04; `reports/salt_tests_m65_deo.md`, `reports/salt_tests_m65_deo_split45.md`, `scripts/salt_tests.py --de-tag deo [--split-km 45]`)
+
+§62's three tests with Delaware's fields added (`storm_panel_deo`, §63). Each state's flooded fields are compared only
+with its own prone-dry fields (height bins × state, `panel.height_weights(strata=)`); "all" mixes the two by flooded
+area; the NJ rows equal §62. Both builds hold the same 18 storm tides, 7 spring storms and quiet years.
+- **DE does not break the county confound at 70 km.** DE's county line (Kent / New Castle, at the Smyrna) falls at
+  ~70 km up the estuary, as NJ's (Cumberland / Salem): each band is still whole counties, now from two states. DE adds
+  0-33 km (Broadkill to Mispillion, saltier than any NJ field) but has only 17 main-sample fields above 70 km
+  (1-12 prone-dry per storm), so its upper band is thin and many DE cells have empty resamples ("*").
+- **NJ's next-season cropland gap (lower − upper −8.4, §62) has the same sign in DE (−7.6) but an interval of
+  [−22.6, +9.3]*, and at a 45 km split (cuts Kent and Cumberland) it is gone (NJ −1.2*; pooled +7.3 [+1.8, +12.0], the
+  saltier band keeping MORE cropland, and fewer `left_cropland` exits, −6.8 [−15.2, −0.6]).** With ~516 intervals per
+  report and these group sizes, read neither split as a salt result.
+- **DE alone, opposite to salt damage:** flooded DE fields hold more cropland and less grass than DE prone-dry fields in
+  the seasons after a spring storm (all storms, k = 1-3: cropland +5.7 to +7.2, grass −3.6 to −6.7, intervals exclude
+  zero; clean storms k = 1: +7.4 [+2.0, +12.3]). Unexplained. DE's prone-dry group is small and unusual (90% of DE
+  main-sample fields flood in some storm, and the DE flood counts are probably high, §63), so this is a comparison-group
+  question before it is a crop one.
+- **Tide vs rain-only, dose, recovery:** no pattern pooled; DE rain-only cells are few and noisy (e.g. next-season
+  soybeans −23*). Rain flags up the Murderkill are likely too wet (§63).
+- Same limits as §62: a pattern here could be consistent with salt, never proof; a null says little (§58).

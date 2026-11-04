@@ -271,7 +271,7 @@ changes a lot with the 2-4 baseline years used. **Not a finding yet.** Results a
 fields, in effect, as the main comparison ({eff_r["never"]} vs {eff_r["prone-dry"]} per storm, since a few large fields dominate; the flooded groups as few as
 {eff_t:.0f}), so lean on neither. Details and caveats in `results/storm_panel.md`.
 
-Flood runs use the current model version (`e3v2a30brm65_100m`): rebuilt creek channels, water levels from NOAA gauges along the bay with
+NJ flood runs use the current NJ model version (`e3v2a30brm65_100m`): rebuilt creek channels, water levels from NOAA gauges along the bay with
 estimated points where there is no gauge, and wind (a 3 km weather product from 2016; before that, coarser wind data scaled up
 30%, which still underestimates peak winds). So the earlier and later storms are not treated alike. More fields flood than in
 the earlier tables. On a one-month ordinary-tide test the rise was mostly the new bay water levels, with some from the rebuilt
@@ -279,46 +279,74 @@ creeks, and much of its size in field counts comes from fields just crossing the
 """
 
 
-def with_delaware(text: str, f_nj: pd.DataFrame, f: pd.DataFrame, fy: pd.DataFrame, fe: pd.DataFrame) -> str:
-    """The NJ README plus Delaware: the intro, the join key, and a Delaware section before the key columns."""
+def with_delaware(text: str, f_nj: pd.DataFrame, fy_nj: pd.DataFrame, fe_nj: pd.DataFrame,
+                  f: pd.DataFrame, fy: pd.DataFrame, fe: pd.DataFrame) -> str:
+    """The NJ README plus Delaware: the intro, the join key, totals in the file table, NJ-only labels on the NJ
+    sections, and a Delaware section at the end (claims review 2026-11-04: placed before the key columns it made
+    every later NJ number read as pooled). The Delaware model checks are hard-coded from
+    reports/storm_gauges_de_v2ap45o_100m_wind.md and reports/creek_tides_de.md (FINDINGS §61, §63): rewrite them
+    when the Delaware model changes."""
     main = f[f.main_sample == 1]
-    prone = int((main.n_storms_tide > 0).sum())
+    prone_m = main[main.n_storms_tide > 0]
     n_tides = fe.groupby(["event", "peak"]).ngroups
     chronic = "not yet run" if f.chronic.isna().all() else f"{int((f.low_crop.eq(1) & f.chronic.eq(1)).sum())}"
+    main_nj = f_nj[f_nj.main_sample == 1]
+    prone_nj = int((main_nj.n_storms_tide > 0).sum())
+    hi, hi_nj = f[f.m_above_mhhw >= panel.MAX_H], f_nj[f_nj.m_above_mhhw >= panel.MAX_H]
     section = f"""## Delaware
 
 The same tables for Delaware's bay-draining side, the C&D Canal to Lewes (New Castle, Kent and Sussex), stacked under
 the NJ rows: `state` = `DE`. Fields are Delaware's own land-use map polygons farmed in 2012 (FirstMap, editions 2012,
 2017, 2022, so the land-use columns are `lulc2017`, `lulc2022` instead of NJ's `lulc2015`, `lulc2020`), with Delaware CDL.
-**Join on `field_key`** (`NJ-123`, `DE-45`): `field_id` restarts at 1 in each state.
+**Join on `field_key`** (`NJ-123`, `DE-45`): `field_id` restarts at 1 in each state. Column definitions: the key columns
+above and `docs/` (`fields_README_DE.md`, `storm_panel_README_DE.md`).
 
-- {len(f):,} fields (median {f.ha.median():.1f} ha against NJ's {f_nj.ha.median():.1f}); `main_sample = 1`: {len(main):,}, of which {prone:,} flood in
-  at least one of the {n_tides} modelled storm tides at the 10% line; `low_crop` fields wet on ordinary high tides: {chronic}.
-- Same storm tides, same flood rule, same wind data as NJ, on Delaware's own model grid.
-- **The two states' models are not forced on one bay water level.** Each is fitted to its own shore's tide; where they meet
-  in the bay off the Bowers - Port Mahon shore (39.0-39.2 N) their tidal ranges differ by about
-  0.11 m. Fine for comparing fields within a state; do not read a flood in NJ and one in DE as the same water.
-- **Checks so far:** in a calm month the modelled tide range at the bay-shore tide stations matches the published one
-  (median ratio 1.00); up Blackbird Creek (Taylors Bridge) it is a third of it. At Delaware's creek gauges high tides are
-  about right (within 0.07 m), but low tides sit about 0.35-0.4 m too high at Odessa (Appoquinimink), Frederica (upper
-  Murderkill) and Slaughter Beach (Cedar Creek); only Bowers, at the Murderkill's mouth, is right. So in the model water
-  may drain off fields up those creeks too slowly. At Frederica the storm's rain also raises the modelled water about
-  0.7-0.8 m above the gauge's highest reading in the two wettest storms (Irene 2011, Sandy 2012), so `*_rain` flags up
-  the Murderkill are likely too wet. Storm peaks (16 storms): about right at Odessa and Frederica (+0.03 and -0.07 m on
-  average), but 0.2-0.3 m too high at Bowers and Slaughter Beach near the lower-bay mouths, where NJ's gauges read
-  -0.09 to +0.11 m. So the model may over-flood low Delaware fields near the lower bay in storms.
-- **No estimates for Delaware yet:** `results/` and every number in the sections above are NJ only.
-
+- {len(f):,} fields (median {f.ha.median():.1f} ha against NJ's {f_nj.ha.median():.1f}); `main_sample = 1`: {len(main):,}, of which {len(prone_m):,}
+  ({len(prone_m) / len(main):.0%}; {prone_m.ha.sum() / main.ha.sum():.0%} of the area) flood in at least one of the {n_tides} modelled storm tides at the
+  10% line, against {prone_nj / len(main_nj):.0%} in NJ. Only {len(main) - len(prone_m)} Delaware main-sample fields never flood, so there is almost no
+  never-flooded comparison group. Of the {len(hi):,} fields at {panel.MAX_H} m or higher, {int((hi.n_storms_tide > 0).sum())} flood on a storm tide alone (NJ: {int((hi_nj.n_storms_tide > 0).sum())} of {len(hi_nj):,}).
+  `low_crop` fields wet on ordinary high tides (`chronic = 1`): {chronic}. With the model errors below, the Delaware flood counts
+  are probably too high.
+- Same storm tides, same flood rule, same wind data as NJ, on Delaware's own model (`de_v2ap45o_100m`).
+- **Delaware's banks are different from NJ's dikes.** They are traced from a wetland map's diked / impounded outlines
+  (much of each outline is marsh, not bank), and no tide gates or other water-control structures are modelled. Every
+  field has `behind_levee` = False and `leveed_share` = 0 (the federal levee map has almost nothing in Delaware), and the
+  `sandy_nodikes_*` columns are blank (no no-dikes Sandy run in Delaware).
+- **The two states' models are not driven by one bay water level.** Each is tuned to the tide gauges on its own shore; where
+  they meet in the bay off the Bowers - Port Mahon shore (39.0-39.2 N) their tidal ranges differ by about 0.11 m. Do not
+  read a flood in NJ and one in Delaware as the same water. Within Delaware, the model's errors below differ by place.
+- **Checks so far** (water levels in the creeks and bay, not water on fields: nothing yet checks Delaware's modelled
+  water on fields). Over 8 calm days in May 2023, the modelled tide range at Woodland Beach and the Murderkill and
+  Mispillion entrances is 0.99-1.06 of NOAA's published range, at St. Georges (canal) 1.21, and up Blackbird Creek
+  (Taylors Bridge) 0.32. Three of the four creek gauges (Odessa, Bowers, Slaughter Beach) were used to tune the model;
+  only Frederica (upper Murderkill) is a fresh check. Over 7-13 storms per gauge, high tides are about right (within 0.07 m
+  on average), but low tides sit about 0.35-0.4 m too high at Odessa (Appoquinimink), Frederica and Slaughter Beach
+  (Cedar Creek); only Bowers, at the Murderkill's mouth, is right. So in the model water may drain off fields up those
+  creeks too slowly. In Irene (2011) and Sandy (2012), the with-rain run's highest water at Frederica is 0.7-0.8 m above
+  the gauge's highest reading, so the with-rain columns (`grow_rain`, `spring_rain`, `off_rain`, `sandy_rain_*`) up the
+  Murderkill are likely too wet. Storm peaks: about right at Odessa and Frederica (+0.03 and -0.07 m on average), but
+  0.2-0.3 m too high at Bowers and Slaughter Beach near the lower-bay mouths. On the 7 recent storms with NJ records,
+  NJ's creek gauges average -0.09 to +0.11 m against +0.23 / +0.17 m at Bowers / Slaughter Beach. So the model may
+  over-flood low Delaware fields near the lower bay in storms.
+- As in NJ, the model moves surface water only: no salt, groundwater or crop response, so "flooded" does not mean salt
+  damage, and it records the peak depth, not how long water stays. Do not read the field flags as observed floods.
+- **No estimates for Delaware yet:** `results/` and every number outside this section are NJ only.
 """
-    i = text.index("## Key columns")
-    text = text[:i] + section + text[i:]
-    a = "Join on `field_id` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`)."
-    assert a in text
-    text = text.replace(a, "Join on `field_key` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`). Every table starts with\n"
-                           "`state` (`NJ` / `DE`); the rest of this README up to the Delaware section describes the NJ rows.")
-    a = "grown on it (USDA Cropland Data Layer, CDL). Public data plus our model runs."
-    assert a in text
-    return text.replace(a, a + " Delaware's bay side is stacked under it (see Delaware).")
+    for a, b in (("## Which fields to use", "## Which fields to use (NJ; Delaware at the end)"),
+                 ("## Key columns (`field_year.csv`)", "## Key columns (`field_year.csv`; definitions for both states, numbers NJ only)"),
+                 ("## What we found", "## What we found (NJ only)"),
+                 (f"field x year ({len(fy_nj):,} rows)", f"field x year ({len(fy_nj) + len(fy):,} rows: NJ {len(fy_nj):,} + DE {len(fy):,})"),
+                 (f"| field ({len(f_nj):,}):", f"| field ({len(f_nj) + len(f):,}: NJ {len(f_nj):,} + DE {len(f):,}):"),
+                 ("| field x storm tide it wets (", f"| field x storm tide it wets ({len(fe_nj) + len(fe):,} rows: NJ {len(fe_nj):,} + DE {len(fe):,}; "),
+                 ("Join on `field_id` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`).",
+                  "Join on `field_key` (and `year`; for `field_storm.csv`, `first_cdl_year` or `season_year`). Every table starts with\n"
+                  "`state` (`NJ` / `DE`). Column definitions hold for both states; every number outside the Delaware section is NJ only."),
+                 ("grown on it (USDA Cropland Data Layer, CDL). Public data plus our model runs.",
+                  "grown on it (USDA Cropland Data Layer, CDL). Public data plus our model runs. Delaware's bay side is stacked\n"
+                  "under it: see Delaware, at the end."),):
+        assert a in text, a
+        text = text.replace(a, b)
+    return text + "\n" + section
 
 
 def back_rate(fy: pd.DataFrame, ids, last: int = 2023) -> tuple[float, float]:
@@ -353,6 +381,7 @@ def main() -> None:
         tables = {k: stack(v, d) for (k, v), d in zip(tables.items(), de)}
         gpkg = stack(gpkg, gpd.read_file(de_sandy / "fields.gpkg"))
         (out / "docs/fields_README_DE.md").write_text(DOC_NOTE + (de_sandy / "README.md").read_text())
+        (out / "docs/storm_panel_README_DE.md").write_text(DOC_NOTE + (de_storm / "README.md").read_text())
     for k, v in tables.items():
         v.to_csv(out / f"data/{k}.csv", index=False)
     gpd.GeoDataFrame(gpkg, geometry="geometry").to_file(out / "data/fields.gpkg", driver="GPKG")
@@ -367,7 +396,7 @@ def main() -> None:
     shutil.copy2(STORM / "sensitivity.csv", out / "results/storm_panel_sensitivity.csv")
     text = readme(f, fy, fe, pd.read_csv(STORM / "estimates.csv"), pd.read_csv(STORM / "sensitivity.csv"))
     if de is not None:
-        text = with_delaware(text, f, *de)
+        text = with_delaware(text, f, fy, fe, *de)
     (out / "README.md").write_text(text)
     n = {k: len(v) for k, v in tables.items()}
     print(f"wrote {out}: {n['fields']:,} fields, {n['field_year']:,} field-years, {n['field_storm']:,} field-storms")

@@ -406,7 +406,21 @@ not in the table.
             "`data/soils/ssurgo_drainage_de.csv` (`scripts/fetch_ssurgo_drainage.py --side de`, USDA SSURGO)"),
            ("Cropland Data Layer, NJ, `data/cdl/`", "Cropland Data Layer, Delaware"),
            ("NJ CDL is less accurate", "CDL is less accurate"),
-           ("High tide is spread\n  between bay gauges", "High tide is spread\n  between Delaware's NAVD88-tied tide stations")]
+           ("High tide is spread\n  between bay gauges", "High tide is spread\n  between Delaware's NAVD88-tied tide stations"),
+           # claims review 2026-11-04: NJ's dike / levee wording does not hold in Delaware (FINDINGS §46, §61, §63)
+           ("USACE National Levee Database leveed area |",
+            "USACE National Levee Database leveed area; NLD maps almost none in Delaware, so False for every field here |"),
+           ("| leveed_share | share of the field's 30 m cells inside an NLD leveed area |",
+            "| leveed_share | share of the field's 30 m cells inside an NLD leveed area; 0 for every field here |"),
+           ("| the same with every dike removed (`sandy2012_removed_slr000",
+            "| blank in this Delaware table: the Delaware model has no removed-dikes Sandy run (NJ: every dike removed, `sandy2012_removed_slr000"),
+           ("`): what the banks kept off |", "`, what the banks kept off) |"),
+           ("Dikes and banks are as they stand in today's model\n  (NLD alignments, lidar crests), not as they stood in 2012; banks that failed or were\n  repaired since are not represented as of 2012.",
+            "Banks are as they stand in today's Delaware model: the National Wetlands\n  Inventory's diked / impounded outlines with lidar crests (much of each outline is marsh, not\n"
+            "  bank; 19 segments that crossed tidal creeks removed), not as they stood in 2012."),
+           ("No MOTF / gate operations beyond the model's check valves.",
+            "No tide gates or other water-control structures are modelled in Delaware."),
+           ("(notably 2019 and 2024 here, FINDINGS §21)", "(in NJ notably 2019 and 2024; Delaware's shares are below)")]
     for a, b in rep:
         assert a in text, a[:60]
         text = text.replace(a, b)

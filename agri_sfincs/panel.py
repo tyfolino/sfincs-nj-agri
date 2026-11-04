@@ -104,11 +104,15 @@ def left_cropland(crop: pd.DataFrame, thr: float = LEFT_THR) -> pd.DataFrame:
 
 
 def height_weights(height: pd.Series, ha: pd.Series, target: pd.Series, comp: pd.Series,
-                   bin_m: float = H_BIN) -> pd.Series:  # fmt: skip
+                   bin_m: float = H_BIN, strata: pd.Series | None = None) -> pd.Series:  # fmt: skip
     """Area weights: ``target`` fields keep their area; ``comp`` fields are rescaled so their
     area share per height bin matches the target's (bins the target lacks get 0). Fields in
-    neither get 0."""
+    neither get 0. ``strata`` (e.g. the state, scripts/salt_tests.py pooled NJ + DE): the bins
+    are stratum x height, so the comparison group also takes the target's mix of strata and a
+    target field is matched only by comparison fields of its own stratum."""
     b = np.floor(height / bin_m)
+    if strata is not None:
+        b = strata.astype(str) + "|" + b.astype(str)
     want = ha[target].groupby(b[target]).sum()
     want = want / want.sum()
     have = ha[comp].groupby(b[comp]).sum()
