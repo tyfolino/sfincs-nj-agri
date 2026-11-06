@@ -26,6 +26,9 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   calm window. Then: `validate_storm_gauges.py --wind --variant _m70 --spinup 24`, the DE panel with
   `build_sandy_panel.py` / `build_storm_panel.py --state DE --wind --variant _m70`, the export, and deleting the
   trial models and `de_v2ap45o_100m` (user OK). Before the 11-10 maintenance. Open: Frederica's rain response (+0.7-0.8 m in Irene / Sandy).
+  **Open (found 2026-11-06, fix after 11-10, user):** the bay east of ~75.0 W (off Cape May) is a flat 0.0 m bed in
+  both grids' subgrid (DE ~40 km² of active cells; likely a bathymetry tile edge at 75.0 W), so those mouth
+  cells are not open boundary. NJ land there is fine (lidar). Find the source, refill, rebuild, recheck the gauges.
 - **Step 5, Delaware exits:** first look done without SFINCS (§44). DE storm panel code done (`build_sandy_panel.py
   --state DE`, `build_storm_panel.py --state DE`, `export_storm_panel.py --de-tag de`: stacked, `state` + `field_key`);
   built on `de_v2ap45o_100m` as tag `deo` and exported stacked (`--tag m65 --de-tag deo`, 2026-11-04);
