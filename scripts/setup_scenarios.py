@@ -43,6 +43,10 @@ creeks at 100 m (FINDINGS §40). A model built on dikes_open.weir (e9_100m and l
 ``--open``: every scenario weir file is swapped for its ``<stem>_open.weir`` twin, made with
 ``scripts/open_creek_links.py --weir <file> --out <stem>_open.weir``.
 
+Boundary variant: ``--surge-scale ID=S`` gives virtual gauge ID S x its donor's surge
+(events.chain_forcing; e.g. 8554399=0.7, Mahon at 0.7 x Ship John's, 2026-11-05) and needs
+``--variant _<tag>``, which goes into every name before the wind suffix.
+
 Disk: ``--daily-map`` writes map snapshots daily instead of hourly (88 MB against 1.28 GB on a
 tide2024oct run; zsmax, tmax, cumprcp and the his series are bit-identical, FINDINGS §56). The hourly
 zs is gone, so use it only on a set whose reader wants daily maxima. ``--link`` hard-links each new
@@ -51,6 +55,7 @@ needs the unlinked copies' room.
 
 Usage:  python scripts/setup_scenarios.py [--model v1_100m] [--breaches] [--restore] [--storms] [--payoff] [--submit] [--only NAME...]
             [--boundary gauges|chain] [--open] [--wind SCALE [--wind-source era5|hrrr]] [--daily-map] [--link]
+            [--surge-scale ID=S --variant _TAG]
 """
 
 from __future__ import annotations
@@ -104,7 +109,8 @@ def payoff_runs() -> list[dict]:
              "drn": RESTORE / f"{sl}_nogate.drn", "slr": s, "precip": "none"} for sl in slugs for s in SLR]  # fmt: skip
 
 
-def matrix(breaches: bool, restore: bool = False, storms: bool = False, wind: str = "", payoff: bool = False) -> list[dict]:
+def matrix(breaches: bool, restore: bool = False, storms: bool = False, wind: str = "", payoff: bool = False,
+           variant: str = "") -> list[dict]:  # fmt: skip
     runs = []
     for ev, dk in (("tide2024oct", ["intact", "removed", "breach_all_farm"]), ("sandy2012", ["intact", "removed", "breach_all_farm"])):
         for d in dk:
@@ -129,7 +135,7 @@ def matrix(breaches: bool, restore: bool = False, storms: bool = False, wind: st
             runs.append({"event": ev, "dikes": "intact", "weir": None, "slr": 0.0, "precip": None})
     for r in runs:
         r["name"] = (f"{r['event']}_{r['dikes']}_slr{int(round(100 * r['slr'])):03d}"
-                     + ("_rain" if r["precip"] is None else "") + r.get("suffix", "") + (f"_{wind}" if wind else ""))  # fmt: skip
+                     + ("_rain" if r["precip"] is None else "") + r.get("suffix", "") + variant + (f"_{wind}" if wind else ""))  # fmt: skip
     return runs
 
 
@@ -149,9 +155,16 @@ def main() -> None:
     ap.add_argument("--wind-source", choices=("era5", "hrrr"), default="era5")  # fmt: skip
     ap.add_argument("--daily-map", action="store_true", help="map snapshots daily, not hourly (docstring)")
     ap.add_argument("--link", action="store_true", help="hard-link static inputs at staging (docstring)")
+    ap.add_argument("--surge-scale", nargs="*", default=[], metavar="ID=S",
+                    help="virtual gauge ID carries S x its donor's surge (docstring); needs --variant")
+    ap.add_argument("--variant", default="", help="name tag before the wind suffix, e.g. _m70")
     a = ap.parse_args()
+    surge = {k: float(v) for k, v in (x.split("=") for x in a.surge_scale)}
+    if surge and not a.variant:
+        raise SystemExit("--surge-scale needs --variant, or the runs would take the adopted names")
     static = config.MODELS / a.model
-    for r in matrix(a.breaches, a.restore, a.storms, wind=a.wind_source if a.wind is not None else "", payoff=a.payoff):
+    for r in matrix(a.breaches, a.restore, a.storms, wind=a.wind_source if a.wind is not None else "", payoff=a.payoff,
+                    variant=a.variant):  # fmt: skip
         if a.only and r["name"] not in a.only:
             continue
         if a.open and r.get("weir"):
@@ -164,7 +177,7 @@ def main() -> None:
             setup_event(static, dataclasses.replace(ev, dtmapout=DAY_S) if a.daily_map else ev, r["name"],
                         structures={k: r[v] for k, v in (("weirfile", "weir"), ("drnfile", "drn")) if r.get(v)} or None,
                         precip=r["precip"], wl_offset=r["slr"], boundary=a.boundary, wind_scale=a.wind,
-                        wind_source=a.wind_source)  # fmt: skip
+                        wind_source=a.wind_source, surge_scale=surge or None)  # fmt: skip
             if a.link:
                 link_static_inputs(static, run, apply=True)
         if a.submit and not (run / "sfincs_map.nc").exists():

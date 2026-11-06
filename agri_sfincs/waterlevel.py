@@ -197,6 +197,36 @@ def fill_virtual(pred: dict[str, pd.Series], levels: pd.DataFrame,
     return pd.DataFrame(out), pd.DataFrame(source)
 
 
+def scale_virtual_surge(levels: pd.DataFrame, pred: dict[str, pd.Series],
+                        scale: dict[str, float]) -> pd.DataFrame:  # fmt: skip
+    """``levels`` (columns = NOAA ids, m NAVD88) with each virtual station in ``scale`` given
+    ``scale`` x its donor's non-tidal residual instead of all of it (fill_virtual):
+    level + (s - 1) x (donor level - donor prediction). ``pred``: the donors' predicted tide on
+    NAVD88 (``predicted_navd88``). A test of how much of Ship John's surge reaches the DE shore
+    at Mahon (2026-11-05: Bowers' observed storm surge is ~0.7 x Ship John's)."""
+    out = levels.copy()
+    for st, s in scale.items():
+        d = VIRTUAL_DONOR[st]
+        resid = levels[d] - pred[d].reindex(levels.index)
+        if resid.isna().any():
+            raise ValueError(f"no prediction for donor {d} at some forcing times")
+        out[st] = levels[st] + (float(s) - 1.0) * resid
+    return out
+
+
+def predicted_navd88(station: str) -> pd.Series:
+    """The cached hourly predicted tide (data/gauges/noaa/<id>_pred_mllw.csv.gz, written by
+    scripts/build_waterlevels.py) on NAVD88, by the forcing file's NAVD88 - MLLW for ``station``."""
+    import xarray as xr
+
+    from agri_sfincs import config
+
+    with xr.open_dataset(config.GAUGE_DIR / "waterlevel_forcing_navd88.nc") as ds:
+        off = float(ds.attrs[f"navd88_minus_mllw_{station}"])
+    p = pd.read_csv(config.GAUGE_DIR / "noaa" / f"{station}_pred_mllw.csv.gz", index_col=0, parse_dates=True)
+    return p["pred_m_mllw"] - off
+
+
 def match_highs(obs: pd.Series, model: pd.Series, window: str = "3h", distance: int = 80) -> pd.DataFrame:
     """Every high tide of ``obs`` (find_peaks, peaks at least ``distance`` samples apart: ~8 h
     at 6 min) with the max of ``model`` within +-``window``: time, obs_m, model_m, diff_m

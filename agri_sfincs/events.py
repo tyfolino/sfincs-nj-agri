@@ -237,10 +237,11 @@ def boundary_points(root: Path) -> tuple[np.ndarray, np.ndarray]:
     return x[first], y[first]
 
 
-def chain_forcing(root: Path, t0, t1, epsg: int, side: str = "nj"):
+def chain_forcing(root: Path, t0, t1, epsg: int, side: str = "nj", surge_scale: dict | None = None):
     """The chain boundary (BND_STEP, ``root``'s boundary faces) as a hydromt GeoDataset like
     forcing_gauges(): integer stations, lon/lat, a ``pair`` label per point. ``side``'s chain
-    (waterlevel.CHAINS)."""
+    (waterlevel.CHAINS). ``surge_scale`` ({virtual id: s}): that virtual gauge carries s x its
+    donor's residual (waterlevel.scale_virtual_surge), e.g. {"8554399": 0.7} for Mahon."""
     import hydromt  # noqa: F401  (registers the .vector accessor)
     import xarray as xr
     from pyproj import Transformer
@@ -252,6 +253,10 @@ def chain_forcing(root: Path, t0, t1, epsg: int, side: str = "nj"):
     pad = pd.Timedelta("3h")
     lv = g.waterlevel.sel(time=slice(pd.Timestamp(t0) - pad, pd.Timestamp(t1) + pad)).to_pandas()
     lv.columns = g.noaa_id.values
+    if surge_scale:
+        lv = waterlevel.scale_virtual_surge(
+            lv, {waterlevel.VIRTUAL_DONOR[v]: waterlevel.predicted_navd88(waterlevel.VIRTUAL_DONOR[v])
+                 for v in surge_scale}, surge_scale)  # fmt: skip
     to_m = Transformer.from_crs(4326, epsg, always_xy=True)
     gx, gy = to_m.transform(g.lon.values, g.lat.values)
     x, y = boundary_points(root)
@@ -297,7 +302,7 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
                 structures: dict | None = None, zsini: float = ZSINI,
                 precip: str | None = None, wl_offset: float = 0.0,
                 boundary: str = "chain", wind_scale: float | None = None,
-                wind_source: str = "era5") -> Path:  # fmt: skip
+                wind_source: str = "era5", surge_scale: dict | None = None) -> Path:  # fmt: skip
     """Copy ``static_root`` to config.MODELS/<static>/runs/<run_name> and add forcing.
 
     ``structures`` ({"drnfile": path} ...) REPLACES the static model's structure files in
@@ -308,7 +313,7 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
     rise. ``boundary``: "chain" (default) or "gauges" (v1 before 2026-10-20, to reproduce
     older runs); see BND_STEP. ``wind_scale``: None = no wind (every run before 2026-10-27);
     a number = ``wind_source`` ("era5" / "hrrr") 10 m wind times that factor
-    (agri_sfincs.wind, FINDINGS §48)."""
+    (agri_sfincs.wind, FINDINGS §48). ``surge_scale``: chain boundary only, see chain_forcing."""
     from hydromt_sfincs import SfincsModel
 
     from agri_sfincs import waterlevel
@@ -316,6 +321,8 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
 
     if boundary not in ("chain", "gauges"):
         raise ValueError(f"boundary must be 'chain' or 'gauges', not {boundary!r}")
+    if surge_scale and boundary != "chain":
+        raise ValueError("surge_scale needs the chain boundary")
 
     run = static_root / "runs" / (run_name or event.name)
     if run.exists():
@@ -349,7 +356,7 @@ def setup_event(static_root: Path, event: Event, run_name: str | None = None,
         }
     )
     if boundary == "chain":
-        gauges = chain_forcing(run, t0, t1, domain.EPSG, model_side(static_root))
+        gauges = chain_forcing(run, t0, t1, domain.EPSG, model_side(static_root), surge_scale)
     else:
         gauges = forcing_gauges(waterlevel.FORCING)
     if wl_offset:

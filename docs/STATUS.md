@@ -18,12 +18,14 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   threshold range beside any field-class number. Open: Bivalve's storm-peak scatter (§50); Stow / upper
   Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
 - **Step 3, Delaware: `de_v2ap45o_100m` adopted** (§51, §54, §61, §63; old `de_v2ap45_100m` deleted). Banks opened:
-  Frederica's tide back at half range. Open: DE creek lows ~0.35-0.4 m high (all but Bowers), Frederica's rain response
+  Frederica's tide back at half range. Open: DE creek lows ~0.35-0.4 m high (all but Bowers; next: run nj_bight_sfincs's bed audit, `logs/bed_audit_2026-11-05/` `check.py --bed`, read-only on de_v2ap45o for bridge / hydro-flattened sills, 2026-11-06), Frederica's rain response
   (+0.7-0.8 m in Irene / Sandy), storm peaks +0.2-0.3 m at Bowers / Slaughter Beach (DE rail carrying Ship John's surge?).
 - **Step 5, Delaware exits:** first look done without SFINCS (§44). DE storm panel code done (`build_sandy_panel.py
   --state DE`, `build_storm_panel.py --state DE`, `export_storm_panel.py --de-tag de`: stacked, `state` + `field_key`);
   built on `de_v2ap45o_100m` as tag `deo` and exported stacked (`--tag m65 --de-tag deo`, 2026-11-04);
-  two `claims-reviewer` passes done and fixed (2026-11-04): **ready to go to the colleague and the advisor** once committed.
+  two `claims-reviewer` passes done and fixed (2026-11-04); bundle pushed to the private GitHub repo (`3b2a265`,
+  2026-11-04): **left: send it to Seowoo and the advisor.** Open: `field_year.csv` is 53 MB (GitHub soft warning;
+  leave it, or gzip if Seowoo uses Python / R).
 
 ## Next, in order
 0. **Storm-history land-use test:** no clear crop response by area to the 7 spring storms, m65 (§53, §57). "Not
@@ -32,7 +34,7 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR; **do the NJ NLD dike weirs seal their
    leveed areas at the ends?** (nj_bight_sfincs, 2026-11-04: none of theirs did without hand tie-ins; if ours leak round
-   the ends, §59's pay-off is overstated; check `dikes.weir` end gaps against `structures.gpkg` leveed areas).
+   the ends, the intact runs flood fields that stay dry, so §59's pay-off is UNDERstated (too small); check `dikes.weir` end gaps against `structures.gpkg` leveed areas).
 3. **Dike pay-off, per system: farmland done (§59,** `compare_restore.py --payoff`): the banks keep ~300 ha
    of water off fields today and at +0.3 m, ~90 ha at +0.6 m; Middle Neck is 43% of it. Locust Island + Silver Lake,
    opened together, is the second-largest system (59 ha today). Costs (§60): 5 of 18 systems have a figure, mostly gates;
@@ -56,7 +58,7 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 - Claude Doc "Water-related crop-insurance losses": https://claude.ai/artifact/P62Vj4zoqFzRJy7BDBb7Xy
 - The per-field sample (§32).
 - Storm panel bundle for Seowoo: `/cache/home/tpj8/bayshore-storm-panel`
-  (`scripts/export_storm_panel.py`); the user makes it a private GitHub repo.
+  (`scripts/export_storm_panel.py`); private GitHub repo, pushed.
 
 ## Operational
 - **Amarel maintenance 11-10/11:** no model builds in that window. nj_bight_sfincs moves its data then and will message

@@ -81,6 +81,24 @@ class TestFillVirtual(unittest.TestCase):
             self.assertEqual(list(src[st]), [f"virtual:{d}"] * 2 + [""] + [f"virtual:{d}"])
 
 
+class TestScaleVirtualSurge(unittest.TestCase):
+    def test_scales_only_the_borrowed_residual(self):
+        t = pd.date_range("2020-01-01", periods=48, freq="h")
+        tide = pd.Series(np.cos(2 * np.pi * np.arange(48) / 12.42), index=t)
+        surge = pd.Series(np.linspace(0, 1, 48), index=t)
+        sj, mahon = "8537121", "8554399"
+        lv = pd.DataFrame({sj: tide + surge, mahon: 0.9 * tide + surge, "8557380": tide})
+        out = waterlevel.scale_virtual_surge(lv, {sj: tide}, {mahon: 0.7})
+        np.testing.assert_allclose(out[mahon], 0.9 * tide + 0.7 * surge)
+        pd.testing.assert_frame_equal(out[[sj, "8557380"]], lv[[sj, "8557380"]])
+
+    def test_scale_one_is_unchanged(self):
+        t = pd.date_range("2020-01-01", periods=5, freq="h")
+        lv = pd.DataFrame({"8537121": [1.0, 2, 3, 4, 5], "8554399": [0.5, 1, 1.5, 2, 2.5]}, index=t)
+        pred = {"8537121": pd.Series(0.0, index=t)}
+        pd.testing.assert_frame_equal(waterlevel.scale_virtual_surge(lv, pred, {"8554399": 1.0}), lv)
+
+
 class TestSideChains(unittest.TestCase):
     def test_de_rail_then_nj_chain_from_ship_john(self):
         nj, nj_lag = waterlevel.CHAINS["nj"]
