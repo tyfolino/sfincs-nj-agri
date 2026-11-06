@@ -26,7 +26,7 @@ import matplotlib.patheffects as pe  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
-from agri_sfincs import config, domain, region, runs  # noqa: E402
+from agri_sfincs import config, domain, maps, region, runs  # noqa: E402
 
 OUT = config.ROOT / "reports" / "figs" / "model_regions.png"
 CRS = 32618
@@ -59,12 +59,7 @@ def creek_gauges() -> gpd.GeoDataFrame:
 
 
 def paint_water(ax, model: str, run: str) -> None:
-    """The grid's cells with bed at or below 0 m NAVD88 (regular or quadtree map, runs.MapGrid)."""
-    with xr.open_dataset(runs.resolve(f"{model}/{run}") / "sfincs_map.nc") as mp:
-        g = runs.MapGrid.from_map(mp)
-        zb, msk = g.as_grid(mp.zb.values), g.as_grid(mp.msk.values)
-    w = np.where((np.nan_to_num(msk) > 0) & (zb <= 0.0), 1.0, np.nan)  # the mouth cells sit at exactly 0.0
-    ext = (g.x0, g.x0 + g.m * g.dx, g.y0, g.y0 + g.n * g.dx)
+    w, ext = maps.model_water(model, run)
     ax.imshow(w, origin="lower", extent=ext, cmap=matplotlib.colors.ListedColormap([WATER]), zorder=3.5,
               interpolation="nearest")  # fmt: skip
 

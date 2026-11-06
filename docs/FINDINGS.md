@@ -2149,3 +2149,57 @@ and Bowers and Odessa hardly move, so the two are read one at a time. Storm mean
   DE model is `de_v2ap45mk45o_100m` (Murderkill 4.5 m only).
 - 4.5 m is an effective depth: it stands in for cross-section the 100 m grid and the 1.2 m convention miss (width,
   marsh-edge storage), not a sounding. 1.1 km of the Murderkill is surveyed (eHydro); the rest is uncharted (§67).
+
+## 70. Plain counts: few flooded fields leave farming; on the lowest ground flooded fields are out twice as often as diked ones (2026-11-06; `reports/exit_counts_m65.md`, `scripts/exit_counts.py`)
+
+For the write-up to Seowoo. The §34 low crop fields (1,043; < 1.5 m above MHHW, ≥ half cropland 2008-12),
+flooded = ≥ 10% wet in at least one of the 18 storm tides on m65 (587 fields) vs never (456). Descriptive:
+no height weighting, no timing.
+- **LU/LC (state survey) exits by 2020 are rare:** 6 of 587 flooded fields (1.0%), 10 of 456 never flooded (2.2%).
+- **CDL, under half cropland + pasture in 2023:** flooded 87 (14.8%), never 53 (11.6%). Below 0.5 m above
+  MHHW: flooded 55 of 328 (16.8%) vs never 10 of 128 (7.8%), and 88% of those never-flooded fields are behind
+  an NLD levee (34% of the flooded). 0.5-1.5 m: no gap (13.7 vs 13.2%; 8.7 vs 13.1%).
+- **Crop mix, 2008-12 → 2019-23 (area %):** corn rose on both (flooded 18 → 21, never 15 → 22), soybeans flat.
+- **Reading:** on the lowest ground, fields the storms reach are out of farming in 2023 about twice as often
+  as diked fields at the same height. That is a cross-section (unprotected vs diked land), not a storm effect:
+  the timed tests find no extra exits in or after a storm season (§53, §57), CDL exit flags are noisy (about
+  half return, §57), and 2023 is one CDL year. Not tested on Delaware.
+- **Every storm runs on today's ground and banks** (NJ 2021 lidar, today's NLD lines), so a bank let go after a field
+  left farming would flag that field as flooded in the earlier storms too, reversing the arrow (side-agent note,
+  2026-11-06). Below 0.5 m the gap is not in leveed fields: flooded and behind a levee 10 of 111 out (9%), never
+  flooded behind a levee 8 of 113 (7%); it is in flooded fields with no NLD bank, 45 of 217 (21%). Those flood in any
+  year a bank's state cannot change, which limits this bias for the §70 contrast; it does not rule out other
+  ground change (marsh edge, ditches) since 2010.
+
+## 71. §34's Sandy corn → soybean hint on the current model: same direction, interval now spans zero (2026-11-06; `reports/exit_counts_m65.md`, `scripts/exit_counts.py`)
+
+§34's method (the deleted `plot_sandy_panel.py`, from git `53001c1^`) rerun on `sandy_panel_m65` (Sandy floods 558 of the
+low crop fields, v1 428): flooded − same-height dry, 2013-16 change from each group's own 2008-12 mean, 500 field resamples.
+- **Soybeans +4.0 pp [−0.7, +8.7]** (v1 +5.5 [+1.0, +10.5]); **corn −2.5 [−6.7, +1.6]** (v1 −3.1 [−7.3, +1.3]); cropland
+  −2.5 [−4.3, −0.4] (v1 −2.1, a gap open before Sandy, §34).
+- On both builds the soybean gap is mostly the DRY fields losing soybeans (m65 −5.2 pp, v1 −6.2), not the flooded ones
+  gaining (−1.2, −0.8).
+- **Reading:** a hint in the corn → soybean direction, not a detectable shift; it does not recur storm by storm (§37, §53).
+- Same report: every other storm's flooded low crop fields lie 95-100% inside Sandy's; 166 of 587 flood in all 18 storm
+  tides. Out of farming in CDL 2023 by levee, 0.5-1.0 m: no levee 12% (263), behind a levee 20% (56); 1.0-1.5 m: 12%
+  (254) vs 7% (14). Only below 0.5 m does the levee gap run one way (20% vs 8%).
+
+## 72. Storm tides outside the planting season: no extra exits either; a lower soybean share only against flood-prone fields (2026-11-06; `reports/storm_panel_off_m65.md`, `data/analysis/storm_panel_m65/estimates_off.csv`, `plot_storm_panel.py` `off_season()`)
+
+§53's test covered the 8 planting-season storm tides only; the other 10 set the groups (side-agent note). Same
+test for every modelled July-February storm tide, by the first CDL year that can respond (2012 Irene; 2013 Sandy +
+Dec 2012; 2016; 2019 Sep + Oct 2018; 2021 Isaias; 2022 Oct 2021; 2024 Jan 2024; Aug 2025 has no CDL year yet).
+2012, 2022 and 2024 also hold a planting-season storm; pooled rows are given without them too. Pooled, pp:
+- **Exits: none extra.** Left cropland / left farmland, both comparisons, both seasons, with and without the mixed
+  years: every row spans zero but one, vs never-flooded the first season, left cropland −2.7 [−5.4, −0.3] (fewer exits).
+- **Crop mix, first season, vs prone-dry:** soybeans −7.2 [−11.2, −2.6] (−8.3 without the mixed years), corn +4.0
+  [−0.4, +7.6] (+7.0 [+1.2, +11.6]), cropland −3.4 [−5.7, −0.9] (−2.1 [−4.0, −0.1]). Soybeans are lower in all 7
+  storm years, mostly within noise each.
+- **It does not hold against never-flooded fields:** soybeans −0.2 [−3.6, +3.3], cropland −0.9 [−2.5, +1.1]; corn +3.2
+  [+0.2, +6.5]. The second season spans zero everywhere.
+- **The prone-dry group is thin where the storms are biggest:** Sandy + Dec 2012 leaves 22 flood-prone fields unflooded
+  (about 8 effective), Oct 2021 41 (about 20); the Sandy year alone reads soybeans −23 [−36, −5] against them and +0.9
+  against never-flooded fields. Per storm year, 15 of 78 results vs prone-dry exclude zero (about 4 by chance), with
+  signs mixed on exits.
+- **Reading:** no sign that autumn or winter storm tides push fields out of farming. The soybean / cropland dip rests
+  on one comparison and thin groups, and runs opposite to Sandy's corn → soybean hint from §71's design: not a finding.

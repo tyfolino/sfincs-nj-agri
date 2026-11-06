@@ -35,3 +35,14 @@ def label_places(ax, crs, ext=None, color: str = "#0b0b0b") -> None:
         if ext is None or (ext[0] < x < ext[1] and ext[2] < y < ext[3]):
             ax.plot(x, y, ".", color=color, ms=4)
             ax.annotate(n, (x, y), xytext=(3, 3), textcoords="offset points", fontsize=8)
+
+
+def model_water(model: str, run: str) -> tuple[np.ndarray, tuple[float, float, float, float]]:
+    """A grid's water as an image: 1 on active cells with bed at or below 0 m NAVD88 (the bay and tidal
+    creeks; the bay-mouth cells off Cape May sit at exactly 0.0), NaN elsewhere, and its extent.
+    Regular or quadtree map (runs.MapGrid); ``run`` = any run of ``model`` with a sfincs_map.nc."""
+    with xr.open_dataset(runs.resolve(f"{model}/{run}") / "sfincs_map.nc") as mp:
+        g = runs.MapGrid.from_map(mp)
+        zb, msk = g.as_grid(mp.zb.values), g.as_grid(mp.msk.values)
+    w = np.where((np.nan_to_num(msk) > 0) & (zb <= 0.0), 1.0, np.nan)
+    return w, (g.x0, g.x0 + g.m * g.dx, g.y0, g.y0 + g.n * g.dx)

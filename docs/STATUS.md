@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-11-06** (§65 Mahon ×0.7 adopted; §67 no sill in the DE creeks; §69 Murderkill 4.5 m, final DE model running; §66 / §68 dike seal and leak routes; scratch cleaned).
+Last updated: **2026-11-06** (final DE model 34/36 runs done; §70-§72 flood → exit tests all null; report figures for Seowoo; Cape May flat bay found).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -17,18 +17,16 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   §52); storm panel on it (§53). **§29's rise explained (§55):** report flooded hectares and the
   threshold range beside any field-class number. Open: Bivalve's storm-peak scatter (§50); Stow / upper
   Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
-- **Step 3, Delaware: `de_v2ap45o_100m` adopted** (§51, §54, §61, §63; old `de_v2ap45_100m` deleted). Banks opened:
-  Frederica's tide back at half range. **Mahon ×0.7 adopted (§65), not yet applied:** halves Bowers' storm-peak error,
-  Slaughter Beach better, Frederica worse (a creek problem). **No sill behind the high creek lows (§67): the creeks drain
-  too slowly.** Depth trials done (§69): **Murderkill 4.5 m below MLLW**; Cedar Creek kept at the convention (user,
-  2026-11-06). **Running:** the final DE model `de_v2ap45mk45o_100m` (job 63618971, driver
-  `/scratch/tpj8/sfincs-nj-agri/final_de/final_de.py`): all 17 storms tide + rain, tide2024oct, ×0.7 (`_m70`), and the
-  calm window. Then: `validate_storm_gauges.py --wind --variant _m70 --spinup 24`, the DE panel with
-  `build_sandy_panel.py` / `build_storm_panel.py --state DE --wind --variant _m70`, the export, and deleting the
-  trial models and `de_v2ap45o_100m` (user OK). Before the 11-10 maintenance. Open: Frederica's rain response (+0.7-0.8 m in Irene / Sandy).
-  **Open (found 2026-11-06, fix after 11-10, user):** the bay east of ~75.0 W (off Cape May) is a flat 0.0 m bed in
-  both grids' subgrid (DE ~40 km² of active cells; likely a bathymetry tile edge at 75.0 W), so those mouth
-  cells are not open boundary. NJ land there is fine (lidar). Find the source, refill, rebuild, recheck the gauges.
+- **Step 3, Delaware: final model `de_v2ap45mk45o_100m`** (Murderkill 4.5 m below MLLW, Cedar Creek at the convention,
+  §69; Mahon ×0.7, §65; banks opened, §63). **Resume here:** 34 of 36 runs done at 17:20 on 11-06 (driver
+  `/scratch/tpj8/sfincs-nj-agri/final_de/final_de.py`; runs named `_m70`). Then: `validate_storm_gauges.py --model
+  de_v2ap45mk45o_100m --wind --variant _m70 --spinup 24` and `check_creek_tides.py --side de` (Frederica no longer
+  held out); the DE panel `build_sandy_panel.py` / `build_storm_panel.py --state DE --wind --variant _m70` under a new
+  tag, compared with `deo`, then the export; then delete `de_v2ap45mc{30,45,60}o_100m` and `de_v2ap45o_100m` (ask the user).
+  Open: Frederica's rain response (+0.7-0.8 m in Irene / Sandy).
+  **Open (fix after 11-10, user):** the bay east of ~75.0 W (off Cape May) is a flat 0.0 m bed in both grids' subgrid
+  (DE ~40 km² of active cells; likely a bathymetry tile edge), so those mouth cells are not open boundary. NJ land
+  there is fine (lidar). Find the source, refill, rebuild, recheck the gauges.
 - **Step 5, Delaware exits:** first look done without SFINCS (§44). DE storm panel code done (`build_sandy_panel.py
   --state DE`, `build_storm_panel.py --state DE`, `export_storm_panel.py --de-tag de`: stacked, `state` + `field_key`);
   built on `de_v2ap45o_100m` as tag `deo` and exported stacked (`--tag m65 --de-tag deo`, 2026-11-04);
@@ -37,9 +35,12 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   leave it, or gzip if Seowoo uses Python / R).
 
 ## Next, in order
-0. **Storm-history land-use test:** no clear crop response by area to the 7 spring storms, m65 (§53, §57). "Not
-   detectable", not "no effect"; the next-season cropland gap is unexplained (every field once, also against prone-dry).
-   Bundle README: see Step 5. User: storm tides only; growing season = Apr-Oct.
+0. **Flood → farm exit: every test null** (§53, §57, §70-§72): no extra exits or crop change after planting-season or
+   autumn/winter storm tides; on ground < 0.5 m above MHHW, unprotected fields are out of farming in 2023 ~2.5× as often
+   as diked ones (a place difference, not timed). The user is drafting short bullets for Seowoo with
+   `reports/figs/{model_regions,dike_dependence_e3v2a30brm65_100m_hrrr,flood_response_m65}.png`, and weighing whether this
+   line is worth continuing (2026-11-06; options raised: lean on the dike pay-off, write the null up, or a better exit
+   source such as MOD-IV). `estimates_off.csv` is not in the bundle yet.
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR. **Dike seal done (§66, §68):** every
    leak route is open on the lidar; §59 stands. Left: **Gibbstown** (286 ha of bay water in the intact run through an
