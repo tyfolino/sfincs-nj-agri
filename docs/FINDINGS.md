@@ -2081,3 +2081,71 @@ Then the intact October 2024 tide run (`tide2024oct_intact_slr000_hrrr`): interi
   "kept off by the banks" is too SMALL for those systems at +0.3 m and above, if the gaps are model artefacts. If they
   are real (no bank, low road, open ditch), §59 stands. Next: check each leak face against lidar and aerial photos
   (layer `leak_faces` in the gpkg).
+
+## 67. Delaware creek lows: no sill in the bed; the creeks drain too slowly (2026-11-06; `reports/de_creek_drain_de_v2ap45o_100m.md`, `scripts/check_de_creek_drain.py`)
+
+The planned bed audit (nj_bight_sfincs's `logs/bed_audit_2026-11-05/` checks) is wired to that repo's own model box (its
+VDatum surface, NHD 0203, its Sandy run) and would find nothing on the DE bed, so the question behind it was asked
+directly: the lowest level each DE gauge's cell can drain to through the model's faces (minimax of subgrid `uv_zmin` /
+weir crest over paths to the open boundary, `agri_sfincs.faces`), against the observed and model lows of every DE storm
+run on disk (medians, 337-626 lows per gauge, after a 24 h spin-up). m NAVD88:
+
+| gauge | observed low | model low | drain level |
+|---|---:|---:|---:|
+| Odessa | −0.66 | −0.27 | −2.93 |
+| Bowers | −0.62 | −0.54 | −2.09 |
+| Frederica | −0.27 | +0.09 | −2.06 |
+| Slaughter Beach | −0.42 | −0.10 | −2.07 |
+
+- **No face on any gauge's path sits above the observed low.** Every creek could drain 1.5-2.3 m below it; nothing in
+  the bed (bridge, flattened water surface, bank) holds the lows up. They are high because the creeks carry too little
+  flow on the ebb (too shallow or narrow along their length), as §54 found for the Appoquinimink and §43 for the Cohansey.
+- The Murderkill and Cedar Creek beds are mostly the 1.2 m-below-MLLW convention (bed ~−2.1 m): 1.1 of 23 km of the
+  Murderkill is surveyed (eHydro) and 13.4 of Cedar Creek's 15.5 km is uncharted.
+- The drain level is generous by design: a face counts as open once its lowest 10 m subgrid strip is wet. That makes a
+  "no sill" result safe, not a "conveyance is fine" one.
+- **Next (user, 2026-11-06):** stated effective depths for the Murderkill (Frederica down) and Cedar Creek (Slaughter
+  Beach gauge down), 3.0 / 4.5 / 6.0 m below MLLW, on the calm-window tide; then one rebuild + rerun with §65's ×0.7.
+
+## 68. Dike leak routes against the lidar: all 18 are open on the ground; Gibbstown is the one to check on site (2026-11-06; `reports/dike_leaks_e3v2a30brm65_100m.md`, `scripts/check_dike_leaks.py`, `reports/figs/dike_leak_*.png`)
+
+§66's walls-closed spill rerun with every face near the 18 systems raised to the lowest NJ 10 ft lidar level at which
+ground connects its two cells across the face. The lidar spill matches the model's within 0.05 m for 17 systems; the
+leak routes are not grid artefacts. Lidar cannot see culverts, pipes, tide gates or narrow walls: "open" here means open
+on the lidar ground, not proven open.
+- **Gibbstown, unclear:** −0.75 m (model) → −0.41 m (lidar) rel MHHW. Past the west end of the river levee, then ~1 km
+  of wooded swamp with no NLD bank (photos show canopy only). The public gate notes (DVRPC 2004) say Repaupo Creek is
+  not tidal above its outlet gates; if so, something neither lidar nor model sees closes this route, and the intact run's
+  286 ha of bay water there is wrong. Needs someone who knows the site.
+- **Richard Wood:** a creek does cross the 58 m of bank `open_creek_links.py` dropped (banks beside it +0.14 to +0.48 m
+  rel MHHW); NAIP 2023 shows open marsh with tidal creeks inside, no fields. A gated outlet cannot be told from an open
+  mouth on lidar.
+- **Middle Neck, Henby Creek, Silver Lake / Locust Island, Lower Alloways Creek, the small systems:** open at the
+  model's level (0-5 cm). Photos were read for the four largest systems only; the other 14 are lidar-only.
+- **For §59:** no reason from this check to raise the pay-off. It is too small only where gates or culverts the lidar
+  cannot see close these openings; Gibbstown is the only system with outside evidence of that.
+
+## 69. Delaware creek depth trials: the Murderkill wants ~4.5 m below MLLW; deeper Cedar Creek beds make its highs worse (2026-11-06; `reports/storm_gauges_de_v2ap45mc{30,45,60}o_100m_m70_wind.md`, `reports/creek_tides_de.md`, driver `/scratch/tpj8/sfincs-nj-agri/depth_test/depth_test.py`)
+
+§67's next step. The Murderkill (from Frederica's gauge to the mouth, 12.1-12.5 km) and Cedar Creek (from the Slaughter
+Beach gauge to the mouth, 2.0 km) were each burned to 3.0, 4.5 and 6.0 m below MLLW (`build_riverbeds.py --stated`),
+replacing the 1.2 m convention, and rebuilt as `de_v2ap45mc{30,45,60}o_100m`. They were scored on the calm-window
+tide and on §65's five storm tides at ×0.7. In each trial both creeks changed together; they are separate creeks
+and Bowers and Odessa hardly move, so the two are read one at a time. Storm means, m (model − observed):
+
+| model | Frederica all / top-5 / lows / peak | Slaughter Beach all / top-5 / lows / peak | Bowers peak |
+|---|---|---|---:|
+| convention (`de_v2ap45o`) | −0.09 / −0.16 / +0.30 / −0.19 | +0.03 / +0.05 / +0.28 / +0.08 | +0.16 |
+| 3.0 m | −0.02 / −0.08 / +0.10 / −0.09 | +0.09 / +0.13 / −0.06 / +0.18 | +0.15 |
+| 4.5 m | +0.02 / −0.03 / −0.03 / −0.03 | +0.13 / +0.20 / −0.13 / +0.25 | +0.16 |
+| 6.0 m | +0.07 / +0.02 / −0.18 / +0.02 | +0.15 / +0.24 / −0.16 / +0.30 | +0.15 |
+
+- **Murderkill: 4.5 m.** Frederica's highs, lows and storm peaks all come within ±0.03 m (RMSE 0.11 → 0.05 m); 6.0 m
+  overshoots the lows. Bowers, at the mouth, does not change. Frederica was held out of the tide calibration (§51);
+  this uses it to pick the depth, so it is no longer an independent check of the Murderkill.
+- **Cedar Creek: every depth tried makes the highs worse.** The calm window's lows are fixed already at 3.0 m (+0.19 →
+  0.00) but its range overshoots (×0.80 → ×1.10), and on the storms the peak error rises +0.08 → +0.18 m. The highs are
+  what reach the fields, so the recommendation is to keep the convention (user to decide) and leave the lows ~0.3 m
+  high there.
+- 4.5 m is an effective depth: it stands in for cross-section the 100 m grid and the 1.2 m convention miss (width,
+  marsh-edge storage), not a sounding. 1.1 km of the Murderkill is surveyed (eHydro); the rest is uncharted (§67).
