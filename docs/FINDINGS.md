@@ -2145,7 +2145,7 @@ and Bowers and Odessa hardly move, so the two are read one at a time. Storm mean
   this uses it to pick the depth, so it is no longer an independent check of the Murderkill.
 - **Cedar Creek: every depth tried makes the highs worse.** The calm window's lows are fixed already at 3.0 m (+0.19 →
   0.00) but its range overshoots (×0.80 → ×1.10), and on the storms the peak error rises +0.08 → +0.18 m. The highs are
-  what reach the fields, so the recommendation is to keep the convention (user to decide) and leave the lows ~0.3 m
-  high there.
+  what reach the fields, so the convention stays (user, 2026-11-06) and the lows stay ~0.3 m high there. The final
+  DE model is `de_v2ap45mk45o_100m` (Murderkill 4.5 m only).
 - 4.5 m is an effective depth: it stands in for cross-section the 100 m grid and the 1.2 m convention miss (width,
   marsh-edge storage), not a sounding. 1.1 km of the Murderkill is surveyed (eHydro); the rest is uncharted (§67).

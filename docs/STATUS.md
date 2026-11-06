@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-11-06** (§65 Mahon ×0.7 adopted; §67 no sill in the DE creeks; §69 Murderkill 4.5 m; §66 / §68 dike seal and leak routes; scratch cleaned).
+Last updated: **2026-11-06** (§65 Mahon ×0.7 adopted; §67 no sill in the DE creeks; §69 Murderkill 4.5 m, final DE model running; §66 / §68 dike seal and leak routes; scratch cleaned).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -20,11 +20,12 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
 - **Step 3, Delaware: `de_v2ap45o_100m` adopted** (§51, §54, §61, §63; old `de_v2ap45_100m` deleted). Banks opened:
   Frederica's tide back at half range. **Mahon ×0.7 adopted (§65), not yet applied:** halves Bowers' storm-peak error,
   Slaughter Beach better, Frederica worse (a creek problem). **No sill behind the high creek lows (§67): the creeks drain
-  too slowly.** Depth trials done (§69): **Murderkill 4.5 m below MLLW** brings Frederica within ±0.03 m; deeper Cedar
-  Creek beds make Slaughter Beach's highs worse (recommend: keep the convention; user to decide). Next: ONE rebuild
-  with that bed + rerun with `--surge-scale 8554399=0.7`, and the `deo` panel on it; then delete the
-  `de_v2ap45mc{30,45,60}o_100m` trial models. Any rebuild
-  before the 11-10 maintenance. Open: Frederica's rain response (+0.7-0.8 m in Irene / Sandy).
+  too slowly.** Depth trials done (§69): **Murderkill 4.5 m below MLLW**; Cedar Creek kept at the convention (user,
+  2026-11-06). **Running:** the final DE model `de_v2ap45mk45o_100m` (job 63618971, driver
+  `/scratch/tpj8/sfincs-nj-agri/final_de/final_de.py`): all 17 storms tide + rain, tide2024oct, ×0.7 (`_m70`), and the
+  calm window. Then: `validate_storm_gauges.py --wind --variant _m70 --spinup 24`, the DE panel with
+  `build_sandy_panel.py` / `build_storm_panel.py --state DE --wind --variant _m70`, the export, and deleting the
+  trial models and `de_v2ap45o_100m` (user OK). Before the 11-10 maintenance. Open: Frederica's rain response (+0.7-0.8 m in Irene / Sandy).
 - **Step 5, Delaware exits:** first look done without SFINCS (§44). DE storm panel code done (`build_sandy_panel.py
   --state DE`, `build_storm_panel.py --state DE`, `export_storm_panel.py --de-tag de`: stacked, `state` + `field_key`);
   built on `de_v2ap45o_100m` as tag `deo` and exported stacked (`--tag m65 --de-tag deo`, 2026-11-04);

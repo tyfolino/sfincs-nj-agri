@@ -48,6 +48,8 @@ two rows. Rows only for fields wet in either run (share > 0); a missing pair mea
 Runs are read from ``--model`` (default runs.MODEL, v1_100m; the m65 rerun replaces it), its
 cell grid from ``--grid-run`` (default the model's tide2024oct run). ``--wind``: each storm's wind
 run (events.wind_suffix: _era5 before 2014-07, _hrrr after), as the m65 rerun names them.
+``--variant _TAG`` reads the runs setup_scenarios.py staged with that ``--variant`` (e.g. ``_m70``,
+Mahon at 0.7 x Ship John's surge, FINDINGS §65), and takes the grid from that tide2024oct run.
 Writes data/analysis/sandy_panel/{fields.csv, fields.gpkg, field_year.csv, field_event.csv, README.md}
 (or ``--out``).
 Delaware (``--state DE``, 2026-11-04): the same table for agri_sfincs.fields.load("DE") (FirstMap
@@ -55,7 +57,7 @@ DE_LULC 2012 farm polygons in the DE ring; lulc2012 / lulc2017 / lulc2022) on a 
 de_v2ap45_100m), with DE CDL, the DE height grid (exposure side "de") and the _de soil files
 (fetch_ssurgo.py / fetch_ssurgo_drainage.py --side de). No MOTF there (motf_share blank), and
 sandy_nodikes_* stay blank unless the DE model has a removed-dikes Sandy run.
-Usage:  python scripts/build_sandy_panel.py [--model e3v2a30brm65_100m] [--out DIR] [--grid-run RUN] [--wind] [--state DE]
+Usage:  python scripts/build_sandy_panel.py [--model e3v2a30brm65_100m] [--out DIR] [--grid-run RUN] [--wind] [--variant _m70] [--state DE]
 """
 
 from __future__ import annotations
@@ -91,6 +93,7 @@ STORMS = ["sandy2012", "storm2012dec", "storm2016jan", "storm2021oct", "storm201
           "storm2011aug", "storm2018oct", "storm2020aug", "storm2024jan", "storm2025aug"]
 MODEL = runs.MODEL  # --model
 WIND = False  # --wind
+VARIANT = ""  # --variant
 STATE = "NJ"  # --state
 
 
@@ -99,8 +102,8 @@ def side() -> str:
 
 
 def run_suffix(event: str, suffix: str = "") -> str:
-    """``suffix``, plus ``event``'s wind suffix under --wind."""
-    return suffix + (wind_suffix(event) if WIND else "")
+    """``suffix``, then --variant, then ``event``'s wind suffix under --wind (setup_scenarios.py's order)."""
+    return suffix + VARIANT + (wind_suffix(event) if WIND else "")
 
 
 def load_fields() -> gpd.GeoDataFrame:
@@ -433,19 +436,22 @@ not in the table.
 
 
 def main() -> None:
-    global MODEL, OUT, WIND, STATE
+    global MODEL, OUT, WIND, VARIANT, STATE
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--model", default=runs.MODEL)
     ap.add_argument("--out", default=None, help=f"output folder (default {OUT})")
     ap.add_argument("--grid-run", default=None, help="a run of --model whose map gives the cell grid")
     ap.add_argument("--wind", action="store_true", help="read each storm's _era5 / _hrrr wind run")
+    ap.add_argument("--variant", default="", help="run-name tag of setup_scenarios.py --variant, e.g. _m70")
     ap.add_argument("--state", default="NJ", choices=sorted(fields.SOURCES))
     a = ap.parse_args()
-    MODEL, OUT, WIND, STATE = a.model, (config.ROOT / a.out if a.out else OUT), a.wind, a.state
+    MODEL, OUT, WIND, VARIANT, STATE = a.model, (config.ROOT / a.out if a.out else OUT), a.wind, a.variant, a.state
     t0 = time.time()
     g = load_fields()
     print(f"{len(g):,} fields ({time.time() - t0:.0f} s); model {MODEL}; Sandy runs and MOTF ...", flush=True)
     grid_run = runs.resolve(f"{MODEL}/{a.grid_run}") if a.grid_run else None
+    if grid_run is None and VARIANT:
+        grid_run = runs.run_dir("tide2024oct", "intact", 0, run_suffix("tide2024oct"), model=MODEL)
     px = fieldflood.field_pixels(g.to_crs(rasterio.open(runs.subgrid_dep(MODEL)).crs), MODEL, grid_run)
     sandy = sandy_columns(g, px).join(motf_share(g))
     print(f"  {time.time() - t0:.0f} s; storms ...", flush=True)

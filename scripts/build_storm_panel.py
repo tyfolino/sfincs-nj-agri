@@ -40,11 +40,12 @@ fields_storm.csv (one row per field):
 
 Runs are read from config.MODELS (the Piscataway /scratch: run on a hal* node), on ``--model``
 (default runs.MODEL); ``--panel`` is build_sandy_panel.py's folder for the same model;
-``--wind`` reads the chronic run's wind twin (build_sandy_panel.py --wind).
+``--wind`` reads the chronic run's wind twin (build_sandy_panel.py --wind); ``--variant _TAG`` its
+setup_scenarios.py --variant twin (e.g. _m70), as build_sandy_panel.py --variant.
 Writes data/analysis/storm_panel/{field_season.csv, fields_storm.csv, README.md} (or ``--out``).
 ``--state DE`` (2026-11-04) only changes the README's field description: the fields and runs come
 from ``--panel`` (build_sandy_panel.py --state DE) and ``--model`` (a DE model).
-Usage:  python scripts/build_storm_panel.py [--model M --panel DIR --out DIR --wind --state NJ|DE]
+Usage:  python scripts/build_storm_panel.py [--model M --panel DIR --out DIR --wind --variant _m70 --state NJ|DE]
 """
 
 from __future__ import annotations
@@ -154,6 +155,7 @@ def main() -> None:
     ap.add_argument("--panel", default=None, help=f"build_sandy_panel.py output (default {PANEL})")
     ap.add_argument("--out", default=None, help=f"output folder (default {OUT})")
     ap.add_argument("--wind", action="store_true", help="the chronic run's _era5 / _hrrr wind twin")
+    ap.add_argument("--variant", default="", help="run-name tag of setup_scenarios.py --variant, e.g. _m70")
     ap.add_argument("--state", default="NJ", choices=("NJ", "DE"), help="README wording (docstring)")
     a = ap.parse_args()
     src = config.ROOT / a.panel if a.panel else PANEL
@@ -171,7 +173,7 @@ def main() -> None:
     fl = pd.DataFrame({"field_id": f.field_id.values})
     for k in ("tide", "rain"):
         fl[f"n_storms_{k}"] = fl.field_id.map(n[k]).fillna(0).astype(int)
-    run = runs.run_dir(*CHRONIC_RUN, wind_suffix(CHRONIC_RUN[0]) if a.wind else "", model=a.model)
+    run = runs.run_dir(*CHRONIC_RUN, a.variant + (wind_suffix(CHRONIC_RUN[0]) if a.wind else ""), model=a.model)
     if runs.finished(run):
         print(f"{len(f):,} fields; chronic run ...", flush=True)
         px = fieldflood.field_pixels(f.to_crs(rasterio.open(runs.subgrid_dep(a.model)).crs), a.model, run)
