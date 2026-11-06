@@ -2035,3 +2035,49 @@ area; the NJ rows equal §62. Both builds hold the same 18 storm tides, 7 spring
 - **Tide vs rain-only, dose, recovery:** no pattern pooled; DE rain-only cells are few and noisy (e.g. next-season
   soybeans −23*). Rain flags up the Murderkill are likely too wet (§63).
 - Same limits as §62: a pattern here could be consistent with salt, never proof; a null says little (§58).
+
+## 65. Mahon at 0.7 × Ship John's surge: lower-bay storm peaks halve at Bowers, Frederica gets worse; adopted for the next DE rerun (2026-11-05, decided 2026-11-06; `reports/storm_gauges_de_v2ap45o_100m_m70_wind.md`, `setup_scenarios.py --surge-scale 8554399=0.7 --variant _m70`)
+
+The DE rail's virtual Mahon River station (`waterlevel.CHAINS`) took ALL of Ship John's non-tidal residual. Bowers'
+observed storm surge is ~0.7 × Ship John's, so the test gives Mahon 0.7 × it (`waterlevel.scale_virtual_surge`; the
+tide is unchanged). Five storm tides on `de_v2ap45o_100m`, tide only, with wind (Sandy, Dec 2012, Aug 2020, Apr 2022,
+Jan 2024), against the same five storms of §63's runs. Model − observed, m, mean over the storms with data:
+
+| gauge (storms) | storm peak | top-5 highs | all highs | lows |
+|---|---:|---:|---:|---:|
+| Bowers (5) | +0.32 → +0.16 | +0.16 → +0.09 | +0.07 → +0.04 | +0.05 → +0.02 |
+| Slaughter Beach (3) | +0.13 → +0.08 | +0.07 → +0.05 | +0.05 → +0.03 | +0.30 → +0.28 |
+| Frederica (4) | −0.11 → −0.19 | −0.11 → −0.16 | −0.06 → −0.09 | +0.36 → +0.30 |
+| Odessa (3, control) | −0.02 → −0.03 | +0.02 → +0.02 | +0.04 → +0.04 | +0.39 → +0.38 |
+
+- **Bowers is not a fair test:** 0.7 came from Bowers itself. Sandy at Bowers is still +0.35 m (was +0.39). Slaughter
+  Beach is the fair test, better, on three storms only.
+- **Frederica gets worse.** Read as a creek problem the high Bowers peaks used to hide: its tide already reaches only
+  half its range up the Murderkill (§63). Not fixed by the boundary.
+- Ordinary high tides move ~0.03 m; the creek lows (+0.3-0.4 m) are not a boundary problem.
+- **Adopted (user, 2026-11-06), not yet applied:** the DE storm panel (`deo`) and §63's runs are still on the full
+  surge. The rerun waits for the DE bed audit (STATUS), so one rerun takes both fixes. NJ is not affected (its chain
+  has no Mahon).
+
+## 66. Do the farm dikes seal? Mostly today in the run; at +0.3 m most small systems are reached round bank ends or unbanked sides (2026-11-05; `reports/dike_seal_e3v2a30brm65_100m.md`, `data/analysis/dike_seal_e3v2a30brm65_100m.{csv,gpkg}`, `scripts/check_dike_seal.py`)
+
+The plan check from nj_bight_sfincs (none of its NLD weirs sealed without hand tie-ins). For each of §59's 18 systems,
+the lowest bay level that can reach the leveed area through the m65 grid (every face path from open water; a face opens
+once its lowest subgrid strip is wet, which is generous), with banks as walls (only openings count) and at their crests.
+Then the intact October 2024 tide run (`tide2024oct_intact_slr000_hrrr`): interior hectares that got bay water.
+- **Today, in the run, mostly sealed.** Bay water reaches 286 ha of Gibbstown (133 ha of it with a tide), 44 ha of
+  Middle Neck, 31 ha of Henby Creek, 11 of Lighthouse, a few elsewhere. Gibbstown's route is a side of its leveed area
+  with no NLD bank at all (~1 km from a weir end), 0.75 m below MHHW.
+- **Richard Wood (24.5 ha) is fully tidal because `open_creek_links.py` dropped one of its bank segments** (§40's
+  creek opening). Real breach or wrong drop: unchecked.
+- **The static check is wider than the run:** paths below MHHW exist into Gibbstown, Middle Neck, Silver Lake, Henby
+  Creek, Locust Island and Lower Alloways Creek (most of each interior), but the tide month mostly doesn't fill them
+  through those narrow openings. "A path exists" is not "it floods".
+- **At MHHW + 0.1-0.25 m, ten smaller systems are reached through an end gap or an unbanked side** (Lighthouse,
+  Mill Creek, Sunset Road, Hancocks Bridge Poplar, Back Neck, Sea Breeze Road, County Hwy 623, Durham and Sayres Neck
+  partly, Jones Island Road by +0.6 m). Annual maxima are ~0.6 m above MHHW, so with +0.3 m of SLR these routes carry
+  water whether or not the bank holds. Only Sheppard Davis holds to ~+0.9 m.
+- **For §59:** where the intact run already leaks round a bank, the gap between intact and opened shrinks, so §59's
+  "kept off by the banks" is too SMALL for those systems at +0.3 m and above, if the gaps are model artefacts. If they
+  are real (no bank, low road, open ditch), §59 stands. Next: check each leak face against lidar and aerial photos
+  (layer `leak_faces` in the gpkg).
