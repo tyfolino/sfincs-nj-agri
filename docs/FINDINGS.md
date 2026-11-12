@@ -2203,3 +2203,53 @@ Dec 2012; 2016; 2019 Sep + Oct 2018; 2021 Isaias; 2022 Oct 2021; 2024 Jan 2024; 
   signs mixed on exits.
 - **Reading:** no sign that autumn or winter storm tides push fields out of farming. The soybean / cropland dip rests
   on one comparison and thin groups, and runs opposite to Sandy's corn → soybean hint from §71's design: not a finding.
+
+## 73. Final Delaware model on the storms: Murderkill right, lower-bay peaks ~0.15 m high; `dek` panel exported with the dike tables (2026-11-12; `reports/storm_gauges_de_v2ap45mk45o_100m_m70_wind.md`, `reports/creek_tides_de.md`, `data/analysis/{sandy,storm}_panel_dek/`)
+
+All 36 `_m70` runs on `de_v2ap45mk45o_100m` (§69) finished (11-06). Storm means, model − observed (m), 7-14 storms per gauge:
+
+| gauge | all highs | top-5 highs | lows | storm high (storms) |
+|---|---:|---:|---:|---:|
+| Odessa | +0.05 | +0.03 | +0.38 | +0.02 (7) |
+| Bowers | +0.04 | +0.07 | +0.04 | +0.15 (12) |
+| Frederica | +0.03 | −0.00 | +0.00 | +0.00 (13) |
+| Slaughter Beach | +0.05 | +0.09 | +0.33 | +0.16 (9) |
+
+- **The Murderkill is right end to end; the lows at Odessa and Slaughter Beach stay ~0.35 m high** (§67, §69). Frederica
+  set the Murderkill's depth, so no DE creek gauge is an independent check any more.
+- **Frederica's rain response:** Irene's with-rain peak is still ~0.7 m over the gauge (rain adds +0.72 m); Sandy's is now
+  ~0.3 m (+0.18 m). Calm window unchanged by the trials (CO-OPS ranges 0.98-1.06, St. Georges 1.21, Taylors Bridge 0.32).
+- **Panel `dek` against `deo`:** fields flooded by ≥ 1 storm tide (tide alone) 359 → 327; fields ≥ 1.5 m above MHHW doing
+  so 112 → 85; main sample 120 → 122 (`chronic` 64 → 62), of which flooded 108 → 105 (86%, 96% of the area).
+- **Exported** (`export_storm_panel.py --tag m65 --de-tag dek`), adding `data/field_dikes.csv` (NJ per-field class and
+  dike × SLR shares, §52, with the NLD system the field's point is in), `data/dike_systems.csv` (§59) and the off-season
+  results (§72); the README became a short guide, the old one `docs/details.md`. NJ rows identical to the 11-04 push.
+- The pay-off's field counts are on the OLD LU/LC 2020 field set (`field_flood_classes.gpkg`, 13,699 fields), the
+  bundle's per-field table on the panel's 2012 set (12,726): Middle Neck 98 fields / 701 ha against 97 / 709 ha.
+
+## 74. Seowoo's hay lag on the storm panel: no shift to hay timed to floods; a possible slow drift on the most-flooded NJ fields (2026-11-12; `reports/hay_lag_m65_dek.md`, `reports/hay_lag_m65_dek_chronic.md`, `scripts/hay_lag_test.py`)
+
+Her county data show a shift to hay / lower-intensity crops ~3 years after flooding (STATUS item 0). Tested here on our own
+assumptions, without her definitions (user, 2026-11-12): hay = CDL alfalfa + other hay (36/37); "low-intensity" = hay +
+pasture + idle; a field floods in crop year t when a modelled storm tide (tide only, >= 10% of the field) reaches it
+between the planting of crop t-1 and of crop t; lags 0-4; field and county x year effects; outcome years 2012-23 (before
+CDL's 2024 change); 95% intervals from resampling whole HUC12s (22 NJ, 19 DE).
+- **No shift to hay timed to floods.** NJ, each field once, sum of lags 1-3: hay −1.7 pp [−6.3, +2.6], low-intensity
+  −5.4 [−11.9, +0.6]; by area hay +1.5 [−6.4, +5.4]. If anything flooded NJ fields hold MORE cropland in the three years
+  after (+4.6 [−0.2, +8.2]; +1.5 [+0.1, +2.6] per extra flood year among the three before). The same with the fields wet
+  on ordinary tides put in (`--keep-chronic`).
+- **Delaware fails the placebo:** a flood one or two years AFTER the crop "predicts" less hay (lead 2 −1.8 [−3.3, −0.7],
+  lead 1 −1.3 [−2.2, −0.4]), so DE fields that will flood were already moving differently and DE's lags cannot be read.
+  NJ's lead 2 on hay is +0.9 [+0.4, +2.3], the size of its lag estimates: ~1 pp per lag is the noise floor.
+- **The slow version** (change from 2009-12 to 2020-23, by flood years in 2010-19, against never-flooded fields of the
+  same county and 0.25 m height bin): NJ fields flooded in 4+ years gained 3.8 pp more hay [+0.3, +6.9] and 5.3 pp less
+  cropland [−9.1, +0.2], each field once. It weakens with the field's 2009-12 share held (hay +2.8 [−1.0, +6.0],
+  cropland −5.4 [−9.2, −0.3]; those fields started with less hay, 7.6% vs 10.5%) and by area (hay +1.9 [−0.6, +5.7]).
+  Fields wet on ordinary tides: same direction, wider (by area cropland −8.0 [−15.0, −1.2]). DE: nothing (20
+  never-flooded fields; its cropland moves the other way).
+- **Reading:** consistent with a slow drift toward hay and out of crops on the most often flooded NJ ground, not with a
+  response a few years after a given flood. The slow version compares places, not times (drainage, soils, owners are
+  not held), and CDL "Other Hay" includes abandoned grass (§57), so a hay rise cannot be told from a field let go.
+  ~200 intervals per report: a few bold cells by chance.
+- **What decides her test:** her hay definition (NASS hay acres? alfalfa?) and whether her lag is to one flood or to
+  repeated flooding: the first is the lag model above (null), the second the slow version (weak, NJ only).

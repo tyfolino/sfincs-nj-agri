@@ -27,7 +27,7 @@ riverbed_source_<bed tag>.tif (scripts/build_riverbeds.py codes, 0 = not burned)
 Writes reports/de_creek_drain_<model>.md, reports/figs/de_creek_drain_<model>.png and
 data/analysis/de_creek_drain_<model>.gpkg (layers ``path``: every face on each gauge's path;
 ``sills``).
-Usage:  python scripts/check_de_creek_drain.py [--model de_v2ap45o_100m] [--bed-tag de_v2ap45] [--spinup 24]
+Usage:  python scripts/check_de_creek_drain.py [--model de_v2ap45mk45o_100m] [--bed-tag de_v2ap45mk45] [--spinup 24]
 """
 
 from __future__ import annotations
@@ -123,8 +123,8 @@ class Sampler:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--model", default="de_v2ap45o_100m")
-    ap.add_argument("--bed-tag", default="de_v2ap45", help="riverbed_burn_<tag>.tif / riverbed_source_<tag>.tif")
+    ap.add_argument("--model", default="de_v2ap45mk45o_100m")
+    ap.add_argument("--bed-tag", default="de_v2ap45mk45", help="riverbed_burn_<tag>.tif / riverbed_source_<tag>.tif")
     ap.add_argument("--spinup", type=float, default=24.0)
     a = ap.parse_args()
     root = config.MODELS / a.model

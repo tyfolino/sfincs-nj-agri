@@ -32,7 +32,7 @@ OUT = config.ROOT / "reports" / "figs" / "model_regions.png"
 CRS = 32618
 #: a run of each adopted grid whose map gives the water (bed < 0 m NAVD88; the bay and tidal creeks)
 WATER_RUNS = {"nj": ("e3v2a30brm65_100m", "tide2024oct_intact_slr000_hrrr"),
-              "de": ("de_v2ap45o_100m", "tide2024oct_intact_slr000_hrrr")}
+              "de": ("de_v2ap45mk45o_100m", "tide2024oct_intact_slr000_m70_hrrr")}
 HALO = [pe.withStroke(linewidth=2.2, foreground="white")]
 #: the creek gauges scored by validate_storm_gauges.py and check_creek_tides.py (USGS, lon / lat
 #: from data/gauges/usgs_series*.csv), label offset in points

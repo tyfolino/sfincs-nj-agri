@@ -92,6 +92,13 @@ def load_huc12(layer: str = "domain", side: str = "nj") -> gpd.GeoDataFrame:
     return gpd.read_file(HUC12_FILE, layer=huc12_layer(side) if layer == "domain" else layer)
 
 
+def huc12_names(points: gpd.GeoSeries, side: str = "nj"):
+    """Name of the side's domain HUC12 holding each point (same index), "(outside)" if none."""
+    h = load_huc12(side=side).to_crs(points.crs)
+    j = gpd.sjoin(gpd.GeoDataFrame(geometry=points), h[["name", "geometry"]], how="left", predicate="within")
+    return j[~j.index.duplicated()]["name"].reindex(points.index).fillna("(outside)")
+
+
 def load_counties() -> gpd.GeoDataFrame:
     return gpd.read_file(COUNTIES_FILE)
 

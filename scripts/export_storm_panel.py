@@ -11,10 +11,14 @@ Writes, under the bundle directory:
   data/fields.csv, data/fields.gpkg   one row per field: static attributes + sample flags
   data/field_year.csv                 one row per field x CDL year: flooding + land use
   data/field_storm.csv                one row per field x modelled storm it wets
-  results/                            reports/storm_panel.md, its figure and estimates.csv
+  results/                            reports/storm_panel.md, its figure and estimates.csv; storm_panel_off.md
+                                      and its estimates (July-February storms, FINDINGS §72)
+  data/field_dikes.csv                NJ field: dike class + dike x SLR runs (field_flood_classes.py, DIKE_TAG)
+  data/dike_systems.csv               NJ dike system x SLR pay-off (compare_restore.py --payoff, FINDINGS §59)
+  docs/details.md                     the full notes (sample rules, flag caveats, results, model checks)
   code/                               plot_storm_panel.py and agri_sfincs/panel.py (reference)
   docs/                               those two folders' READMEs (every column)
-  README.md
+  README.md                           a short guide (short_readme(); CHANGES is hand-written per release)
 Existing files in the bundle are overwritten; anything else there (e.g. .git) is left alone.
 ``--tag T``: the sandy_panel_T / storm_panel_T build and its storm_panel_T report.
 ``--de-tag D`` (2026-11-04): also stack Delaware's sandy_panel_D / storm_panel_D build (build_sandy_panel.py
@@ -35,7 +39,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 
-from agri_sfincs import config, panel
+from agri_sfincs import config, dikes, panel
 
 SANDY, STORM = config.ANALYSIS_DIR / "sandy_panel", config.ANALYSIS_DIR / "storm_panel"
 ROUND = 4  # decimals kept for shares and metres
@@ -74,6 +78,41 @@ def build(sandy: Path, storm: Path):
 
     fe = pd.read_csv(sandy / "field_event.csv").sort_values(["field_id", "peak"])
     return f.reset_index().round(ROUND), out.round(ROUND), fe.round(ROUND)
+
+
+#: the dike scenario build exported with the panel (FINDINGS §52, §59): field_flood_classes_<tag> and restore_payoff_<tag>
+DIKE_TAG = "e3v2a30brm65_100m_hrrr"
+DIKE_RUNS = [f"{d}_slr{s:03d}" for d in ("intact", "removed", "breach_all_farm") for s in (0, 30, 60, 100)]
+PAYOFF_COLS = {"system": "system", "slr_cm": "slr_cm", "leveed ha": "leveed_ha", "fields": "n_fields_2020",
+               "field ha": "field_ha_2020", "leveed flooded ha, built": "leveed_wet_ha_built",
+               "opened": "leveed_wet_ha_opened", "field flooded ha, built": "field_wet_ha_built",
+               "field flooded ha, opened": "field_wet_ha_opened", "Δ field flooded ha": "kept_off_ha",
+               "Δ whole-field ha @5%": "whole_field_ha_5", "Δ whole-field ha @10%": "whole_field_ha_10",
+               "Δ whole-field ha @25%": "whole_field_ha_25", "Δ whole-field ha @50%": "whole_field_ha_50",
+               "Δ nbr field flooded ha": "neighbour_change_ha"}  # fmt: skip
+
+
+def dike_tables(ids: pd.Series, tag: str = DIKE_TAG) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """NJ per-field dike scenarios (scripts/field_flood_classes.py) on the panel's field ids, with the NLD
+    system the field's representative point lies in (compare_restore.py's rule), and the per-system pay-off
+    (compare_restore.py --payoff), columns renamed. The pay-off counted fields on the 2020 land-use map
+    (field_flood_classes.gpkg), so its field counts differ slightly from the panel's 2012 fields."""
+    g = gpd.read_file(config.ANALYSIS_DIR / f"field_flood_classes_{tag}.gpkg")
+    assert set(g.field_id) == set(ids), "dike classes and panel fields are different field sets"
+    lev = dikes.leveed_areas(g.crs)[["SYSTEM_NAME", "geometry"]]
+    pt = gpd.GeoDataFrame(g[["field_id"]], geometry=g.representative_point(), crs=g.crs)
+    sys_ = gpd.sjoin(pt, lev, predicate="within").drop_duplicates("field_id").set_index("field_id").SYSTEM_NAME
+    out = pd.DataFrame({"field_id": g.field_id, "dike_system": g.field_id.map(sys_),
+                        "farmed2020": g.farmed2020.astype(int),
+                        "dike_class": g.cls, "flooded_ha_first": g.flooded_ha_first, "first_flood_slr_m_dikes": g.first_intact,
+                        "first_flood_slr_m_no_dikes": g.first_removed, "first_flood_slr_m_one_gap": g.first_breach,
+                        **{f"share_{r}": g[f"share_{r}"] for r in DIKE_RUNS},
+                        **{f"wetdays_{r}": g[f"wetdays_{r}"] for r in DIKE_RUNS}})  # fmt: skip
+    out = out.sort_values("field_id").round(ROUND)
+    p = pd.read_csv(config.ANALYSIS_DIR / f"restore_payoff_{tag}.csv")
+    assert set(p.columns) == set(PAYOFF_COLS), set(p.columns) ^ set(PAYOFF_COLS)
+    p = p.rename(columns=PAYOFF_COLS)[list(PAYOFF_COLS.values())].round(1)
+    return keyed(out, "NJ"), p
 
 
 def keyed(d: pd.DataFrame, state: str) -> pd.DataFrame:
@@ -292,8 +331,8 @@ def with_delaware(text: str, f_nj: pd.DataFrame, fy_nj: pd.DataFrame, fe_nj: pd.
     """The NJ README plus Delaware: the intro, the join key, totals in the file table, NJ-only labels on the NJ
     sections, and a Delaware section at the end (claims review 2026-11-04: placed before the key columns it made
     every later NJ number read as pooled). The Delaware model checks are hard-coded from
-    reports/storm_gauges_de_v2ap45o_100m_wind.md and reports/creek_tides_de.md (FINDINGS §61, §63): rewrite them
-    when the Delaware model changes."""
+    reports/storm_gauges_de_v2ap45mk45o_100m_m70_wind.md and reports/creek_tides_de.md (FINDINGS §69, §73): rewrite
+    them when the Delaware model changes."""
     main = f[f.main_sample == 1]
     prone_m = main[main.n_storms_tide > 0]
     n_tides = fe.groupby(["event", "peak"]).ngroups
@@ -319,12 +358,14 @@ above and `docs/` (`fields_README_DE.md`, `storm_panel_README_DE.md`).
   {main_nj.ha.nlargest(10).sum() / main_nj.ha.sum():.0%}), so area-weighted Delaware results rest on about 10 fields. Of the {len(hi):,} fields at {panel.MAX_H} m or higher, {int((hi.n_storms_tide > 0).sum())} flood on a storm tide alone (NJ: {int((hi_nj.n_storms_tide > 0).sum())} of {len(hi_nj):,}).
   `low_crop` fields wet on ordinary high tides (`chronic = 1`): {chronic}. With the model errors below, the Delaware flood counts
   are probably too high near the lower-bay creek mouths; up the Leipsic, where most of the fields wet on ordinary high
-  tides lie, the model's tide is unchecked (its tide station does not sit on a model channel cell), and up Blackbird
+  tides lie, the model's tide is unchecked (the model's creek is too coarse there to read the tide at the station), and up Blackbird
   Creek the direction of any error is unknown.
 - **Exit flags in Delaware's main sample** (the NJ figures are in the key columns above): of `left_cropland` flags through
   2022, {back_any:.0f}% come back to at least half cropland by 2023 ({back_last:.0f}% by {fy.year.max()}), and {back_end:.0f}% are there in 2023.
   In 2024 (CDL's change) `left_cropland` is {100 * y24.left_cropland.mean():.0f}% and `main_changed` {100 * y24.main_changed.mean():.0f}%.
-- Same storm tides, same flood rule, same wind data as NJ, on Delaware's own model (`de_v2ap45o_100m`).
+- Same storm tides, same flood rule, same wind data as NJ, on Delaware's own model (`de_v2ap45mk45o_100m`, current
+  version: the Murderkill's channel deepened to match its Frederica gauge, and the storm surge fed in at the model's
+  bay edge off Port Mahon cut to 70% of Ship John Shoal's, matched to the Bowers gauge).
 - **Delaware's banks are different from NJ's dikes.** They are traced from a wetland map's diked / impounded outlines
   (much of each outline is marsh, not bank), and no tide gates or other water-control structures are modelled. Every
   field has `behind_levee` = False and `leveed_share` = 0 (the federal levee map has almost nothing in Delaware), and the
@@ -334,21 +375,26 @@ above and `docs/` (`fields_README_DE.md`, `storm_panel_README_DE.md`).
   read a flood in NJ and one in Delaware as the same water. Within Delaware, the model's errors below differ by place.
 - **Checks so far** (water levels in the creeks and bay, not water on fields: nothing yet checks Delaware's modelled
   water on fields). Over 8 calm days in May 2023, the modelled tide range at Woodland Beach and the Murderkill and
-  Mispillion entrances is 0.99-1.06 of NOAA's published range, at St. Georges (canal) 1.21, and up Blackbird Creek
-  (Taylors Bridge) 0.32. Three of the four creek gauges (Odessa, Bowers, Slaughter Beach) were used to tune the model;
-  only Frederica (upper Murderkill) is a fresh check. Over 7-14 storms per gauge, high tides are about right (within 0.07 m
-  on average; the highest five of each storm window, the ones that reach fields, +0.13 m at Bowers and +0.11 m at
-  Slaughter Beach), but low tides sit about 0.35-0.4 m too high at Odessa (Appoquinimink), Frederica and Slaughter Beach
-  (Cedar Creek); only Bowers, at the Murderkill's mouth, is right. So in the model water may drain off fields up those
-  creeks too slowly. In Irene (2011) and Sandy (2012), the with-rain run's highest water at Frederica is 0.7-0.8 m above
-  the gauge's highest reading, so the with-rain columns (`grow_rain`, `spring_rain`, `off_rain`, `sandy_rain_*`) up the
-  Murderkill are likely too wet. Storm peaks: about right at Odessa and Frederica (+0.03 and -0.07 m on average), but
-  0.2-0.3 m too high at Bowers and Slaughter Beach near the lower-bay mouths. On the 7 recent storms with NJ records,
-  NJ's creek gauges average -0.09 to +0.11 m against +0.22 / +0.17 m at Bowers / Slaughter Beach. So the model may
-  over-flood low Delaware fields near the lower bay in storms.
+  Mispillion entrances is 0.98-1.06 of NOAA's published range, at St. Georges (canal) 1.21, and up Blackbird Creek
+  (Taylors Bridge) 0.32. All four creek gauges (Odessa, Bowers, Frederica, Slaughter Beach) were used to tune the
+  model (Frederica to set the Murderkill's depth), so none of them is an independent check. Over 7-14 storms per
+  gauge, high tides are about right (within 0.05 m on average; the highest five of each storm window, the ones that
+  reach fields, +0.07 m at Bowers and +0.09 m at Slaughter Beach), and so are low tides on the Murderkill (Bowers,
+  Frederica), but low tides sit about 0.33-0.38 m too high at Odessa (Appoquinimink) and Slaughter Beach (Cedar
+  Creek). So in the model water may drain off fields up those two creeks too slowly. In Irene (2011) the with-rain
+  run's highest water at Frederica is about 0.7 m above the gauge's highest reading (Sandy, 2012: about 0.3 m), so the
+  with-rain columns (`grow_rain`, `spring_rain`, `off_rain`, `sandy_rain_*`) up the Murderkill are likely too wet.
+  Storm peaks: about right at Odessa and Frederica (+0.02 and +0.00 m on average), but about 0.15 m too high on
+  average at Bowers and Slaughter Beach near the lower-bay mouths, up to +0.35 m in single storms (Sandy at Bowers).
+  NJ's creek gauges average -0.09 to +0.11 m each over 7 recent storms. So the model may over-flood low Delaware fields
+  near the lower bay in storms. Before 2017 only the Murderkill gauges have records: the 2010-14 storms are unchecked
+  at Odessa and Slaughter Beach, and March 2010 everywhere.
+- **A known input error, to be fixed:** the bay floor at the bay mouth off Cape May (east of about 75.0 W) is set flat
+  at about sea level instead of its real depth in both states' models (probably where two depth datasets meet). Its
+  effect on field flooding has not been measured yet.
 - As in NJ, the model moves surface water only: no salt, groundwater or crop response, so "flooded" does not mean salt
   damage, and it records the peak depth, not how long water stays. Do not read the field flags as observed floods.
-- **No Delaware estimates in this bundle:** `results/` is NJ only. A first internal look found flooded Delaware fields keeping *more*
+- **No Delaware estimates in this bundle:** `results/` is NJ only. A first internal look (on the previous Delaware model version) found flooded Delaware fields keeping *more*
   cropland than the comparison fields (fields that flood in other storms but not this one); unexplained, probably the
   comparison group (90% of main-sample fields flood, and the flood counts are probably high). Ask us before reading
   Delaware contrasts.
@@ -369,6 +415,220 @@ above and `docs/` (`fields_README_DE.md`, `storm_panel_README_DE.md`).
         assert a in text, a
         text = text.replace(a, b)
     return text + "\n" + section
+
+
+#: Hand-written per release: what changed since the last push (the claims-reviewed details stay in docs/details.md).
+CHANGES = """## What changed in this version (2026-11-12)
+
+- **Dikes, new:** `data/field_dikes.csv`, `data/dike_systems.csv` and `docs/dikes_README.md` (NJ only).
+- **Storm tides outside the planting season (July-February), new:** `results/storm_panel_off.md`, NJ.
+- **Delaware rebuilt on the current Delaware model** (the Murderkill's channel deepened; the storm surge fed in at the
+  model's lower-bay edge reduced). Fewer Delaware fields flood: 327 flood in at least one storm tide on tide alone,
+  against 359 before; the Delaware main sample is now 122 fields (was 120). NJ rows are unchanged.
+- **This README is now a short guide.** The full notes moved to `docs/details.md` (Delaware numbers and model checks
+  updated there).
+"""
+
+#: docs/dikes_README.md (claims review 2026-11-12, items 5, 10, 15)
+DIKES_DOC = """# Dike tables: columns (NJ only)
+
+Model: the NJ flood model (`e3v2a30brm65_100m`, wind from HRRR), one month of ordinary tides (October 2024: no storm,
+no rain), at today's sea level and +0.3, +0.6, +1.0 m. "Dikes" are the federal levee map's (USACE National Levee
+Database) banks, with crests from elevation data (not surveyed) and assumed gate sizes. Flooded = water over 5 cm at
+least once in the month.
+
+## `field_dikes.csv` (one row per NJ field; join on `field_key`)
+
+| column | meaning |
+|---|---|
+| `dike_system` | the levee-map system whose leveed area holds the field's centre point; blank = not inside one. **Blank does not mean no dike protects it:** a bank can keep water off ground outside the area drawn behind it (142 of the 466 dike-dependent fields farmed in 2020 are blank) |
+| `farmed2020` | 1 if the field was still farmland on NJ's 2020 land-use map (the class tables count only these) |
+| `dike_class` | see below; from the as-built and all-dikes-removed runs at the 10% line |
+| `flooded_ha_first` | hectares of the field under water in the run and at the sea level that set its class |
+| `first_flood_slr_m_dikes` | lowest sea-level rise (m) at which at least 10% of the field floods with dikes as built; blank = not by +1.0 m |
+| `first_flood_slr_m_no_dikes` | the same with every levee-map crest lowered to about marsh level (0.9 m NAVD88) |
+| `first_flood_slr_m_one_gap` | the same with one 100 m gap in every farm dike (not used in the class) |
+| `share_<run>` | share of the field's 10 m pixels flooded in that run |
+| `wetdays_<run>` | days wet in the month, averaged over all the field's pixels (dry ones count as 0): not "days the field was wet" |
+
+`<run>` = `intact` (as built), `removed` (crests lowered), `breach_all_farm` (one gap per farm dike), then `_slr000`,
+`_slr030`, `_slr060`, `_slr100` (sea-level rise in cm). `behind_levee` (at least half the field in a leveed area) is in
+`fields.csv`.
+
+`dike_class`, earliest threat first:
+- `flooded today`: floods with the dikes as built, today.
+- `dike-dependent today` / `+0.3 m` / ...: floods only without the dikes, first at that sea level.
+- `overtopped +L`: floods at +L even with the dikes (over them or round their ends), inside a leveed area.
+- `exposed +L`: the same, outside any leveed area.
+- `safe to +1.0 m`: dry in every run. `outside model`: the field lies mostly outside the model's area.
+
+## `dike_systems.csv` (one row per dike system and sea level)
+
+Each of 18 farm dike systems was opened alone at its outlet: a 100 m cut down to local low tide (MLLW), gate removed,
+every other dike as built (a worst-case failure). Compared with the as-built run at the same sea level. Fields here are
+those on NJ's 2020 land-use map whose centre point is in the leveed area, a slightly different field set from
+`field_dikes.csv` (built on fields farmed in 2012), so counts differ: Middle Neck 98 here against 88 farmed-2020 fields
+there, Gibbstown 58 against 51. The 13 other systems named in `field_dikes.csv` were not opened one at a time.
+
+| column | meaning |
+|---|---|
+| `system`, `slr_cm` | system name; sea-level rise (cm) |
+| `leveed_ha` | area of the system's leveed area |
+| `leveed_wet_ha_built`, `leveed_wet_ha_opened` | ha of the leveed area flooded, as built and opened |
+| `n_fields_2020`, `field_ha_2020` | farm fields inside, and their area |
+| `field_wet_ha_built`, `field_wet_ha_opened` | ha of those fields flooded, as built and opened |
+| `kept_off_ha` | opened minus built: the water the dike keeps off its fields. Small negatives (to -2 ha) mean no effect |
+| `whole_field_ha_5`, `_10`, `_25`, `_50` | change in ha of whole fields counted flooded at a 5, 10, 25 or 50% line: swings a lot with the line |
+| `neighbour_change_ha` | change in flooded ha on fields outside the bank, within 3 km (up to 88 ha, Locust Island at +0.3 m) |
+
+**Do not sum all rows.** `Locust Island + Silver Lake` is the two opened together (they drain as one). Use either that
+row or its two parts. With the joint row, the dikes keep about 302 ha off today, 306 at +0.3 m, 89 at +0.6 m, 22 at +1.0 m.
+
+Known problems: Gibbstown has six outlets and was cut at one; in the as-built run bay water enters it through a swamp
+side with no bank, and a 2004 regional planning report says its creek is not tidal above its gates, so its row and
+its fields' classes are doubtful. Richard Wood's fields flood as built because the model dropped one of its bank
+segments (aerial photos show marsh there). From +0.3 m most small systems are reached round bank ends or unbanked
+sides; the elevation data show those routes open but cannot see gates or culverts. No repair costs per dike: a public
+figure exists for 5 of the 18 systems, mostly for gates.
+"""
+
+CLASS_ORDER = ["flooded today", "dike-dependent today", "dike-dependent +0.3 m", "dike-dependent +0.6 m",
+               "dike-dependent +1.0 m", "overtopped +0.3 m", "overtopped +0.6 m", "overtopped +1.0 m",
+               "exposed +0.3 m", "exposed +0.6 m", "exposed +1.0 m", "safe to +1.0 m", "outside model"]  # fmt: skip
+
+
+def short_readme(f: pd.DataFrame, fy: pd.DataFrame, fd: pd.DataFrame, ds: pd.DataFrame) -> str:
+    """The top README: a short guide for someone opening the bundle cold (keyed, possibly stacked tables).
+    Claims review 2026-11-12 applied (Delaware pooling, Cape May, the joint dike row, flooded ha beside field ha)."""
+    ms = f[f.main_sample == 1].groupby("state").size()
+    n_ms = " + ".join(f"{ms[s]:,} {s}" for s in ("NJ", "DE") if s in ms)
+    yrs = f"{fy.year.min()}-{fy.year.max()}"
+    d = fd.merge(f[["field_key", "ha"]], on="field_key")
+    d = d[d.farmed2020 == 1]
+    cls = d.groupby("dike_class").agg(fields=("field_key", "size"), ha=("ha", "sum"), wet=("flooded_ha_first", "sum"))
+    cls = cls.reindex(CLASS_ORDER).dropna()
+    cls_rows = "\n".join(f"| {c} | {int(r.fields):,} | {r.ha:,.0f} | {r.wet:,.0f} |" for c, r in cls.iterrows())
+    big = d.loc[d[d.dike_class == "dike-dependent +1.0 m"].ha.idxmax()]
+    joint = ds[~ds.system.isin(["Locust Island", "Silver Lake"])].groupby("slr_cm").kept_off_ha.sum()
+    mn = ds[(ds.system == "Middle Neck") & (ds.slr_cm == 0)].kept_off_ha.iloc[0]
+    de_main = f[(f.state == "DE") & (f.main_sample == 1)]
+    de_note = (f"\n   **Delaware:** {int((de_main.n_storms_tide > 0).sum())} of its {len(de_main)} main-sample fields flood in some "
+               "storm, so it has almost no never-flooded comparison group, and its flood counts are probably high near the\n"
+               "   lower-bay creek mouths. Analyse NJ alone first, or keep the states apart (state x year effects at least)."
+               ) if len(de_main) else ""  # fmt: skip
+    states = "New Jersey (Salem, Cumberland, Gloucester)" + (" and Delaware (New Castle, Kent, Sussex)" if "DE" in ms else "")
+    return f"""# Bayshore storm panel
+
+Farm fields (land-use map polygons farmed in 2012, not farms) on the Delaware Bay side of {states}, {yrs}. For each
+field and year: did a storm tide flood it in our computer flood model (SFINCS), and what was grown on it (USDA Cropland
+Data Layer, CDL). For New Jersey, also what the farm dikes do for each field, today and with sea-level rise, on
+ordinary tides (not storms). Public data plus our model runs; all flooding here is modelled, not observed.
+
+## Start here
+
+1. Open `data/field_year.csv` (one row per field per year) and join `data/fields.csv` on `field_key` (`NJ-123`,
+   `DE-45`; `field_id` restarts in each state).
+2. Keep `main_sample == 1` ({n_ms} fields): low ground (median height under 1.5 m above the usual high tide), mostly
+   cropland in 2008-12, and not wet on ordinary high tides in the model.{de_note}
+3. Storms: every storm tide of at least 1.68 m (NAVD88) at the Ship John Shoal gauge in the bay, 2008-2025 (18). Flood
+   columns are 1 when the model puts more than 5 cm of water on at least 10% of the field. **0 means no modelled flood,
+   not dry**: smaller storm tides were not modelled. `spring_tide`: flooded by a storm tide in March-June of that year
+   (the season, not the twice-monthly "spring tide"). `off_tide`: by one the previous July-February (for 2008 only
+   January-February 2008 is covered). `*_rain`: the same with the storm's own rain added; not a general rain-flood
+   measure, and not checked against observations.
+4. Land use is a share of the field each year: `share_corn`, `share_soybeans`, `share_hay`, `share_pasture`,
+   `share_idle`, ..., and `cropland` (all crops, including hay and idle land).
+5. Use year effects: CDL changed its method in 2024, with smaller jumps in 2011-13 and 2019.
+
+```python
+import pandas as pd
+fy = pd.read_csv("data/field_year.csv", low_memory=False).merge(
+    pd.read_csv("data/fields.csv", low_memory=False), on=["state", "field_key", "field_id"])
+main = fy[fy.main_sample == 1]
+```
+```r
+fy <- merge(read.csv("data/field_year.csv"), read.csv("data/fields.csv"), by = c("state", "field_key", "field_id"))
+main <- subset(fy, main_sample == 1)
+```
+
+## Files
+
+| file | one row per | what |
+|---|---|---|
+| `data/field_year.csv` | field x year | storm-tide flooding by season, crop shares, exit flags |
+| `data/fields.csv` | field | state, county, area, ground height, soils, sample flags, Hurricane Sandy flooding; `fields.gpkg` = the polygons |
+| `data/field_storm.csv` | field x storm tide that wets it | flooded share and depth, date of the peak |
+| `data/field_dikes.csv` | NJ field | dike class, the dike system it sits in, flooding with and without dikes at 4 sea levels |
+| `data/dike_systems.csv` | NJ dike system x sea level | water each system's dike keeps off its farm fields |
+| `results/` | | NJ storm-tide results so far (descriptive): spring storms (`storm_panel.md`), July-February storms (`storm_panel_off.md`) |
+| `docs/details.md` | | the full notes: sample rules, flag caveats, results, model checks. **Read before using a result.** |
+| `docs/dikes_README.md` | | the dike tables' columns and known problems |
+| `docs/*_README*.md` | | every column of the panel tables, per state |
+
+## Dikes (NJ only)
+
+One month of ordinary tides (October 2024: no storm, no rain) at today's sea level and +0.3, +0.6 and +1.0 m, run three
+ways: dikes as built, every dike crest lowered to about marsh level, and one 100 m gap in every farm dike. Separately,
+each of 18 farm dike systems was opened alone at its outlet (a 100 m cut to low-tide level, gate removed: a worst-case
+failure) with every other dike as built.
+
+**`field_dikes.csv`**: `dike_class` sums each field up. "Dike-dependent" fields stay dry only because of a dike;
+"overtopped" fields flood even with the dike (over it or round its ends); "exposed" fields flood with no dike in the
+way; the level (+0.3 m, ...) is the lowest sea-level rise at which it happens. On fields farmed in 2020, with the
+whole fields' area and the area actually under water:
+
+| dike_class | fields | ha (whole fields) | ha under water |
+|---|---:|---:|---:|
+{cls_rows}
+
+A field counts at 10% wet, so whole-field hectares swing with that line: dike-dependent today is about 1,500 ha at a 5%
+line and under 400 ha at 50%. Single large fields drive some rows: `{big.field_key}` ({big.ha:,.0f} ha) is
+{big.ha / cls.loc["dike-dependent +1.0 m", "ha"]:.0%} of "dike-dependent +1.0 m" and sits right on the 10% line. Report the
+area under water first.
+
+**`dike_systems.csv`**, per system and sea level: `kept_off_ha` is the water the dike keeps off its farm fields.
+**Do not sum all rows:** "Locust Island + Silver Lake" is those two opened together (they drain as one); use either it or
+its two parts. With the joint row, the dikes keep about {joint[0]:,.0f} ha of water off farm fields today,
+{joint[30]:,.0f} ha at +0.3 m, {joint[60]:,.0f} ha at +0.6 m and {joint[100]:,.0f} ha at +1.0 m: by +0.6 m most are
+overtopped anyway. Middle Neck alone is {mn:,.0f} ha today ({mn / joint[0]:.0%}).
+
+Limits: dikes are mapped from elevation data, not surveyed; gate sizes are assumed; ordinary tides only; no repair
+costs per dike yet. Gibbstown and Richard Wood are doubtful, and a blank `dike_system` does not mean no dike: see
+`docs/dikes_README.md`. Delaware has no dike runs.
+
+## Before you test something
+
+- **Hay and slow responses:** `share_hay`, `share_pasture` and `share_idle` are there every year, so a shift to hay one to
+  three years after a flood can be built by lagging within `field_key`. `left_cropland` counts hay as cropland, so it
+  cannot see such a shift, and CDL labels abandoned grass "Other Hay", so a move to hay can also be a field let go.
+- **Exit flags are noisy:** of the `left_cropland` flags through 2022 on low NJ fields, 58% return to at least half
+  cropland in some later year to 2023, and 39% are there in 2023 itself.
+- **Floods are modelled:** in NJ a satellite check found the right places in part, but little field-by-field agreement;
+  Delaware's modelled water on fields has not been checked.
+- **A known input error, to be fixed:** the bay floor at the bay mouth off Cape May is set flat at about sea level
+  instead of its real depth in both states' models. Its effect on field flooding has not been measured; these tables
+  may change when it is fixed.
+- **Compare within a state:** the two states' models are tuned to their own shores; where they meet in the bay their
+  tide ranges differ by about 0.1 m.
+
+## What we found so far
+
+- NJ, spring storm tides: no clear change in crop mix and no extra exits, that season or the next. The intervals are
+  wide and the flood map is noisy, so this is not evidence of no effect. One exception, unexplained and not stable:
+  against never-flooded fields, next-season cropland is about 3 points lower. Details: `docs/details.md`,
+  `results/storm_panel.md`.
+- NJ, storm tides outside the planting season: no extra exits either. Lower soybean and cropland shares the first
+  season show only against flood-prone fields, on thin groups, and not against never-flooded fields: not a finding
+  (`results/storm_panel_off.md`).
+- Same-season grass (hay + pasture + idle) was tested above; later seasons only inside a salt test not included here
+  (up to three seasons; null).
+- NJ, place rather than timing: among low crop fields under 0.5 m above the usual high tide, those mostly outside a
+  leveed area were out of farming (under half cropland + pasture) in 2023 about 2.5 times as often as those behind one
+  (20% against 8%). At 0.5-1.0 m it runs the other way (12% against 20%). It is a difference between places, not a
+  response to a storm, and not tested in Delaware.
+- Delaware: no estimates yet; ask us before reading Delaware contrasts.
+
+{CHANGES}"""
 
 
 def back_rate(fy: pd.DataFrame, ids, last: int = 2023) -> tuple[float, float]:
@@ -403,6 +663,9 @@ def main() -> None:
         tables = {k: stack(v, d) for (k, v), d in zip(tables.items(), de)}
         gpkg = stack(gpkg, gpd.read_file(de_sandy / "fields.gpkg"))
         note = DOC_NOTE + STACK_NOTE
+    else:
+        tables, gpkg = {k: keyed(v, "NJ") for k, v in tables.items()}, keyed(gpkg, "NJ")
+    if de is not None:
         (out / "docs/fields_README_DE.md").write_text(note + (de_sandy / "README.md").read_text())
         (out / "docs/storm_panel_README_DE.md").write_text(note + (de_storm / "README.md").read_text().replace(" (once all 18 are in)", ""))
     for k, v in tables.items():
@@ -412,6 +675,10 @@ def main() -> None:
     (out / "results/storm_panel.md").write_text(md.replace(f"figs/storm_panel{tag}.png", "figs/storm_panel.png"))
     shutil.copy2(config.REPORTS / f"figs/storm_panel{tag}.png", out / "results/figs/storm_panel.png")
     shutil.copy2(STORM / "estimates.csv", out / "results/storm_panel_estimates.csv")
+    off = config.REPORTS / f"storm_panel_off{tag}.md"  # FINDINGS §72 (plot_storm_panel.py off_season())
+    if off.exists():
+        (out / "results/storm_panel_off.md").write_text(off.read_text().replace(f"storm_panel{tag}.md", "storm_panel.md"))
+        shutil.copy2(STORM / "estimates_off.csv", out / "results/storm_panel_off_estimates.csv")
     shutil.copy2(config.ROOT / "scripts/plot_storm_panel.py", out / "code/plot_storm_panel.py")
     shutil.copy2(config.ROOT / "agri_sfincs/panel.py", out / "code/panel.py")
     for src, name in ((SANDY, "fields"), (STORM, "storm_panel")):
@@ -421,7 +688,14 @@ def main() -> None:
     text = readme(f, fy, fe, pd.read_csv(STORM / "estimates.csv"), pd.read_csv(STORM / "sensitivity.csv"))
     if de is not None:
         text = with_delaware(text, f, fy, fe, *de)
-    (out / "README.md").write_text(text)
+    text = text.replace("# Bayshore storm panel\n", "# Bayshore storm panel: full notes\n\n"
+                        "Paths are from the bundle's top folder. The short guide is `README.md`.\n", 1)
+    (out / "docs/details.md").write_text(text)
+    fd, ds = dike_tables(f.field_id)
+    fd.to_csv(out / "data/field_dikes.csv", index=False)
+    ds.to_csv(out / "data/dike_systems.csv", index=False)
+    (out / "docs/dikes_README.md").write_text(DIKES_DOC)
+    (out / "README.md").write_text(short_readme(tables["fields"], tables["field_year"], fd, ds))
     n = {k: len(v) for k, v in tables.items()}
     print(f"wrote {out}: {n['fields']:,} fields, {n['field_year']:,} field-years, {n['field_storm']:,} field-storms")
 

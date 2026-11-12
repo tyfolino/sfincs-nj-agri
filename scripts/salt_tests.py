@@ -302,10 +302,8 @@ def field_hucs(parts: dict) -> pd.Series:
     """field_key -> name of the HUC12 holding the field's centroid (the side's own domain HUC12s)."""
     out = []
     for st, p in parts.items():
-        h = region.load_huc12(side=st.lower()).to_crs(p["crs"])
-        pts = gpd.GeoDataFrame(geometry=p["centroids"].values, index=key_index(p["f"].index, st), crs=p["crs"])
-        j = gpd.sjoin(pts, h[["name", "geometry"]], how="left", predicate="within")
-        out.append(j[~j.index.duplicated()]["name"].fillna("(outside)"))
+        pts = gpd.GeoSeries(p["centroids"].values, index=key_index(p["f"].index, st), crs=p["crs"])
+        out.append(region.huc12_names(pts, side=st.lower()))
     return pd.concat(out)
 
 

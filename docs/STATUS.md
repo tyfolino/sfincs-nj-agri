@@ -3,7 +3,7 @@
 Keep this short and forward-looking. When an item closes, move its durable fact to FINDINGS
 and delete it here. History lives in git.
 
-Last updated: **2026-11-06** (final DE model 34/36 runs done; §70-§72 flood → exit tests all null; report figures for Seowoo; Cape May flat bay found).
+Last updated: **2026-11-12** (final DE model checked, §73; bundle refreshed: DE `dek`, dike tables, short README; Seowoo's reply; hay lag test, §74).
 
 ## Goal
 A map of bayshore farmland: current, threatened by sea-level rise, and dike-dependent, from
@@ -18,29 +18,23 @@ result holds on 2008-23). Plan: `~/.claude/plans/no-need-to-draft-idempotent-gob
   threshold range beside any field-class number. Open: Bivalve's storm-peak scatter (§50); Stow / upper
   Oldmans still short (no data). USGS 2022 Alloway survey email: on hold (user).
 - **Step 3, Delaware: final model `de_v2ap45mk45o_100m`** (Murderkill 4.5 m below MLLW, Cedar Creek at the convention,
-  §69; Mahon ×0.7, §65; banks opened, §63). **Resume here:** 34 of 36 runs done at 17:20 on 11-06 (driver
-  `/scratch/tpj8/sfincs-nj-agri/final_de/final_de.py`; runs named `_m70`). Then: `validate_storm_gauges.py --model
-  de_v2ap45mk45o_100m --wind --variant _m70 --spinup 24` and `check_creek_tides.py --side de` (Frederica no longer
-  held out); the DE panel `build_sandy_panel.py` / `build_storm_panel.py --state DE --wind --variant _m70` under a new
-  tag, compared with `deo`, then the export; then delete `de_v2ap45mc{30,45,60}o_100m` and `de_v2ap45o_100m` (ask the user).
-  Open: Frederica's rain response (+0.7-0.8 m in Irene / Sandy).
+  §69; Mahon ×0.7, §65; banks opened, §63). **Done (§73):** checks and panel `dek`, exported; the trial
+  models (`de_v2ap45o_100m`, `mc30/45/60`) deleted from scratch 11-12 (the `deo` panel tables stay in data/analysis).
+  Open: Frederica's rain response (Irene +0.7 m; Sandy now +0.3 m).
   **Open (fix after 11-10, user):** the bay east of ~75.0 W (off Cape May) is a flat 0.0 m bed in both grids' subgrid
   (DE ~40 km² of active cells; likely a bathymetry tile edge), so those mouth cells are not open boundary. NJ land
   there is fine (lidar). Find the source, refill, rebuild, recheck the gauges.
 - **Step 5, Delaware exits:** first look done without SFINCS (§44). DE storm panel code done (`build_sandy_panel.py
   --state DE`, `build_storm_panel.py --state DE`, `export_storm_panel.py --de-tag de`: stacked, `state` + `field_key`);
-  built on `de_v2ap45o_100m` as tag `deo` and exported stacked (`--tag m65 --de-tag deo`, 2026-11-04);
-  two `claims-reviewer` passes done and fixed (2026-11-04); bundle pushed to the private GitHub repo (`3b2a265`,
-  2026-11-04): **left: send it to Seowoo and the advisor.** Open: `field_year.csv` is 53 MB (GitHub soft warning;
-  leave it, or gzip if Seowoo uses Python / R).
+  rebuilt on the final model as `dek` and re-exported with the dike tables and the off-season results (§73,
+  2026-11-12), staged in the bundle: **left: the user pushes and sends it to Seowoo.** `field_year.csv` is 53 MB.
 
 ## Next, in order
-0. **Flood → farm exit: every test null** (§53, §57, §70-§72): no extra exits or crop change after planting-season or
-   autumn/winter storm tides; on ground < 0.5 m above MHHW, unprotected fields are out of farming in 2023 ~2.5× as often
-   as diked ones (a place difference, not timed). The user is drafting short bullets for Seowoo with
-   `reports/figs/{model_regions,dike_dependence_e3v2a30brm65_100m_hrrr,flood_response_m65}.png`, and weighing whether this
-   line is worth continuing (2026-11-06; options raised: lean on the dike pay-off, write the null up, or a better exit
-   source such as MOD-IV). `estimates_off.csv` is not in the bundle yet.
+0. **Seowoo's reply (2026-11-12):** the dike question leads; she will ask Salem farmers on her visit; her county data
+   show a shift to hay / lower-intensity crops with a ~3-year lag, not exit. Busy until Thanksgiving. **Hay lag tested
+   on our assumptions (§74):** nothing timed to floods; a possible slow drift on the most-flooded NJ fields. Ask her hay
+   definition and whether her lag is to an event or to repeated flooding before going further. Kept out of the bundle (user).
+   Exit tests so far all null (§53, §57, §70-§72); the dike pay-off is the main line (user + Seowoo, 2026-11-12).
 1. **Tide gates:** public search done (§36); the leads that need a person are the user's call.
 2. **Plan checks:** mass balance; where station peaks rise by more than the SLR. **Dike seal done (§66, §68):** every
    leak route is open on the lidar; §59 stands. Left: **Gibbstown** (286 ha of bay water in the intact run through an
